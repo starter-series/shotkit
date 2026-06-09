@@ -1,0 +1,63 @@
+{
+  "name": "@starter-series/shotkit",
+  "version": "1.0.0",
+  "description": "Capture Chrome Web Store + social promo assets (screenshots, promo images, demo video) from a built browser extension with Playwright.",
+  "main": "src/index.js",
+  "exports": {
+    ".": "./src/index.js"
+  },
+  "bin": {
+    "shotkit": "bin/shotkit.js"
+  },
+  "files": [
+    "src",
+    "bin"
+  ],
+  "scripts": {
+    "lint": "eslint src/ bin/ test/",
+    "test": "jest --verbose --coverage",
+    "install:browser": "playwright install chromium",
+    "version:patch": "node scripts/bump-version.js patch",
+    "version:minor": "node scripts/bump-version.js minor",
+    "version:major": "node scripts/bump-version.js major"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/starter-series/shotkit.git"
+  },
+  "keywords": [
+    "playwright",
+    "screenshot",
+    "chrome-web-store",
+    "browser-extension",
+    "promo",
+    "og-image",
+    "store-assets"
+  ],
+  "author": "heznpc",
+  "license": "MIT",
+  "engines": {
+    "node": ">=22"
+  },
+  "dependencies": {
+    "playwright": "^1.60.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.4.1",
+    "globals": "^17.5.0",
+    "jest": "^30.3.0"
+  },
+  "jest": {
+    "collectCoverageFrom": [
+      "src/presets.js",
+      "src/describe.js",
+      "src/extension.js",
+      "src/serve.js"
+    ],
+    "coverageReporters": [
+      "text",
+      "text-summary"
+    ]
+  }
+}

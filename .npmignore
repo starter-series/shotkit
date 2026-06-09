@@ -1,0 +1,6 @@
+test/
+examples/
+coverage/
+.github/
+*.test.js
+eslint.config.js
