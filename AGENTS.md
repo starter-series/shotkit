@@ -1,8 +1,25 @@
 # shotkit
 
 A Playwright capture engine for store/social assets, used via the `shotkit` CLI,
-`capture()` programmatically, or (planned) an MCP tool. Vanilla JS, CommonJS, no
-build step.
+`capture()` programmatically, or the `skills/capture/` Claude Code skill.
+Vanilla JS, CommonJS, no build step.
+
+## Run this tool (for agents)
+
+To capture store/social assets from a repo that has a `shotkit.config.js`
+(or legacy `store.config.js`):
+
+```bash
+npx @starter-series/shotkit --json          # all assets; stdout = {ok, outDir, produced[]}
+npx @starter-series/shotkit <path> --json   # run against another checkout
+```
+
+Prereqs: `npx playwright install chromium` (one-time); the config's `build`
+command must succeed. Loading an MV3 extension needs a **headed** Chromium —
+works as-is locally, `xvfb-run` in CI. Exit codes: `0` ok · `1` runtime
+failure · `2` usage / no config. In `--json` mode progress logs go to stderr;
+stdout is exactly one JSON object. Useful flags: `--scene <name>`,
+`--no-video`, `--no-build`.
 
 ## Structure
 
@@ -16,8 +33,10 @@ src/
   promo.js       → renderPromoTile (HTML template → image)
   describe.js    → extractListing / renderDescriptionDoc (STORE_LISTING.md → copy)
   presets.js     → PRESETS / resolveSize (CWS + SNS sizes)
+  cli.js         → CLI arg parsing + config resolution (unit-tested)
   index.js       → public API (the contract — don't break exports)
-bin/shotkit.js   → CLI (thin wrapper over capture())
+bin/shotkit.js   → CLI (thin wrapper over capture(); --json agent contract)
+skills/capture/  → Claude Code skill wrapping the CLI (Agent Skills format)
 test/            → unit tests for the pure/safe modules (no browser)
 ```
 
@@ -41,11 +60,14 @@ test/            → unit tests for the pure/safe modules (no browser)
 ## Generalization rule (for the next starter-series capability)
 
 One npm package (engine + thin CLI), one `*.config.js` seam for irreducible
-per-repo intent, one MCP tool taking a `path`, one Claude Code skill, one
-marketplace entry. **The engine never reads project specifics except through the
-config seam.** shotkit is the reference implementation of this pattern; mirror
+per-repo intent, **agent surfaces matched to the tool's nature** — fast /
+structured-data tools get an MCP tool taking a `path` (like `create-starter`'s
+audits); heavy, file-producing build tools like shotkit get a `--json` CLI +
+Claude Code skill + AGENTS.md run-block instead — plus one marketplace entry.
+**The engine never reads project specifics except through the config seam.**
+shotkit is the reference implementation of the non-MCP branch; mirror
 [`create-starter`](https://github.com/starter-series/create-starter) for the
-CLI+MCP+plugin surfaces when adding them.
+MCP branch.
 
 ## Dev
 
