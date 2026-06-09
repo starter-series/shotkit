@@ -1,6 +1,6 @@
 {
   "name": "@starter-series/shotkit",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Capture Chrome Web Store + social promo assets (screenshots, promo images, demo video) from a built browser extension with Playwright.",
   "main": "src/index.js",
   "exports": {
@@ -11,15 +11,13 @@
   },
   "files": [
     "src",
-    "bin"
+    "bin",
+    "skills"
   ],
   "scripts": {
     "lint": "eslint src/ bin/ test/",
     "test": "jest --verbose --coverage",
-    "install:browser": "playwright install chromium",
-    "version:patch": "node scripts/bump-version.js patch",
-    "version:minor": "node scripts/bump-version.js minor",
-    "version:major": "node scripts/bump-version.js major"
+    "install:browser": "playwright install chromium"
   },
   "repository": {
     "type": "git",
@@ -53,7 +51,8 @@
       "src/presets.js",
       "src/describe.js",
       "src/extension.js",
-      "src/serve.js"
+      "src/serve.js",
+      "src/cli.js"
     ],
     "coverageReporters": [
       "text",

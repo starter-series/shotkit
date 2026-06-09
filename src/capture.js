@@ -47,7 +47,7 @@ function normalizeSetup(result) {
  * @param {boolean} [opts.freeze]    passed to config hooks as flags.freeze
  * @param {string}  [opts.cwd]       project root for build / outDir / description.from
  * @param {(msg:string)=>void} [opts.log]
- * @returns {Promise<{produced: string[]}>}
+ * @returns {Promise<{produced: string[], outDir: string}>}
  */
 async function capture(config, opts = {}) {
   const cwd = opts.cwd || process.cwd();
@@ -68,7 +68,9 @@ async function capture(config, opts = {}) {
   // a shell so projects can write `npm run build:bundle`; never user input.
   if (config.build && !opts.noBuild) {
     log(`build: ${config.build}`);
-    execSync(config.build, { stdio: 'inherit', cwd });
+    // In --json mode stdout must stay a single JSON object, so route the build
+    // command's stdout to our stderr (fd 2) instead of inheriting it.
+    execSync(config.build, { stdio: opts.json ? ['ignore', 2, 2] : 'inherit', cwd });
   }
 
   // 2. Prepare the unpacked extension dir to load.
@@ -183,7 +185,7 @@ async function capture(config, opts = {}) {
   for (const d of tempDirs) fs.rmSync(d, { recursive: true, force: true });
 
   log(`done — ${produced.length} asset(s) in ${path.relative(cwd, outDir) || '.'}/`);
-  return { produced };
+  return { produced, outDir };
 }
 
 module.exports = { capture, DEFAULT_VIEWPORT };
