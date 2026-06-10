@@ -1,6 +1,6 @@
 {
   "name": "@starter-series/shotkit",
-  "version": "1.1.1",
+  "version": "1.2.0",
   "description": "Capture Chrome Web Store + social promo assets (screenshots, promo images, demo video) from a built browser extension with Playwright.",
   "main": "src/index.js",
   "exports": {
@@ -52,7 +52,8 @@
       "src/describe.js",
       "src/extension.js",
       "src/serve.js",
-      "src/cli.js"
+      "src/cli.js",
+      "src/video.js"
     ],
     "coverageReporters": [
       "text",

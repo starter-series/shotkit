@@ -33,6 +33,7 @@ src/
   promo.js       → renderPromoTile (HTML template → image)
   describe.js    → extractListing / renderDescriptionDoc (STORE_LISTING.md → copy)
   presets.js     → PRESETS / resolveSize (CWS + SNS sizes)
+  video.js       → demo post-processing: webm→H.264 mp4 + trim (real ffmpeg required)
   cli.js         → CLI arg parsing + config resolution (unit-tested)
   index.js       → public API (the contract — don't break exports)
 bin/shotkit.js   → CLI (thin wrapper over capture(); --json agent contract)

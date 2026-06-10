@@ -22,8 +22,8 @@ Screenshots · promo images · demo screencast · listing copy. One command.
 
 ## Status & Scope
 
-- **Currently implemented** — A Playwright capture **engine** (build → launch the *built* extension via `launchPersistentContext(--load-extension)` → drive scenes → screenshot → caption/disclaimer band → promo tile from HTML → demo `webm` → listing copy from `STORE_LISTING.md`), a **CLI** (`shotkit`) with an **agent contract** (`--json` machine output, optional `path` argument, `0/1/2` exit codes), **size presets** for both audiences (CWS `1280×800`/`440×280`, SNS `1200×675`/`1200×630`/`1080×1080`), a **path-traversal-safe** localhost fixture server, a programmatic API (`capture()`), a **Claude Code plugin + skill** ([`skills/capture/`](skills/capture/SKILL.md); `/plugin install shotkit@starter-series`), an **AGENTS.md run-block** so any shell-having coding agent can invoke it, and the **npm package** [`@starter-series/shotkit`](https://www.npmjs.com/package/@starter-series/shotkit). Consumed by `browser-extension-starter` and `skillBridge`.
-- **Planned** — **video editing** (`webm → mp4`, trim, captions) for SNS.
+- **Currently implemented** — A Playwright capture **engine** (build → launch the *built* extension via `launchPersistentContext(--load-extension)` → drive scenes → screenshot → caption/disclaimer band → promo tile from HTML → demo `webm` → listing copy from `STORE_LISTING.md`), a **CLI** (`shotkit`) with an **agent contract** (`--json` machine output, optional `path` argument, `0/1/2` exit codes), **size presets** for both audiences (CWS `1280×800`/`440×280`, SNS `1200×675`/`1200×630`/`1080×1080`), a **path-traversal-safe** localhost fixture server, a programmatic API (`capture()`), a **Claude Code plugin + skill** ([`skills/capture/`](skills/capture/SKILL.md); `/plugin install shotkit@starter-series`), an **AGENTS.md run-block** so any shell-having coding agent can invoke it, the **npm package** [`@starter-series/shotkit`](https://www.npmjs.com/package/@starter-series/shotkit), and **demo post-processing** for SNS (`webm → H.264 mp4` with `+faststart`, frame-accurate **trim** — needs an ffmpeg on PATH or `SHOTKIT_FFMPEG`; GitHub ubuntu runners ship one). Consumed by `browser-extension-starter` and `skillBridge`.
+- **Planned** — caption overlays for demo clips.
 - **Design intent** — *One engine, many surfaces — matched to the tool's nature.* shotkit is a heavy, file-producing build tool, so its surfaces are CLI (+`--json`), skill, and CI — not MCP (see Non-goals). Captures are **deterministic** (login-free fixtures, frozen data) and the run **doubles as a real-bundle smoke test** — a screenshot only appears if that feature rendered from the shipped code. **Trademark-safe** by construction: a disclaimer band is composited onto every shot.
 - **Non-goals** — An **MCP server** (dropped by design: agents with a shell get a better contract from `--json` + the skill, without MCP's per-session context cost; nothing here is a fast structured query). Removing the per-repo **scene config** (which screens are *your* money shots is irreducible intent — it lives in your `shotkit.config.js`). A general-purpose video editor (v1 records a clean screencast; editing is Planned). A hosted service (file-touching capture is local by nature).
 - **Redacted** — none. Ships no private data, credentials, or third-party identifiers.
@@ -63,6 +63,26 @@ shotkit ../my-extension --json  # run against another checkout; JSON result on s
 ```
 
 Outputs land in `outDir` (default `store-assets/`): `<scene>.png`, `<promoTile>.png`, `<demo>.webm`, `description.md`.
+
+### Demo → mp4 / trim (SNS)
+
+SNS uploaders (X, etc.) want H.264 mp4, not webm. Add `--mp4` (or configure it) and
+shotkit post-processes the recording — silent H.264, `yuv420p`, `+faststart`:
+
+```js
+demo: {
+  name: 'demo',
+  mp4: true,                                // or { crf: 18 }
+  trim: { start: 2, duration: '00:30' },    // optional; applied to the mp4
+  async run({ page, env }) { /* … */ },
+}
+```
+
+`trim` without `mp4` stream-copy-trims the webm in place. Requires a real
+ffmpeg (`brew install ffmpeg` / `apt-get install -y ffmpeg`; GitHub ubuntu
+runners have one; override with `SHOTKIT_FFMPEG`) — Playwright's bundled
+ffmpeg is vp8-only and can't encode H.264. If mp4/trim is requested and no
+ffmpeg is found, the run fails with the install hint rather than skipping.
 
 ### Agent contract (`--json`)
 
@@ -128,6 +148,7 @@ module.exports = {
 | Claude Code skill ([`skills/capture/`](skills/capture/SKILL.md)) | ✅ now | Claude Code (portable to Codex/Cursor/Gemini via the Agent Skills format) |
 | `AGENTS.md` run-block | ✅ now | every agent that reads AGENTS.md |
 | npm package (`@starter-series/shotkit`) | ✅ now | `npx` zero-install |
+| Demo post-processing (`--mp4`, `trim`) | ✅ now (captions planned) | SNS clips |
 | Capture-in-CI GitHub Action | ✅ now — ships in [`browser-extension-starter`](https://github.com/starter-series/browser-extension-starter)'s `capture.yml` (headless) | zero-local-browser runs + CI smoke test |
 | `starter-series` marketplace entry (`/plugin install shotkit@starter-series`) | ✅ now | discovery |
 | Video editing (`webm→mp4`, trim, captions) | planned | SNS clips |
