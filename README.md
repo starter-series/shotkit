@@ -41,7 +41,7 @@ Zero-install in any repo that has a config:
 npx @starter-series/shotkit
 ```
 
-> shotkit launches the **full Chromium** (`channel: 'chromium'`) — never the default headless-shell, which strips the extension subsystem. **Headless works** (`HEADED=0`; verified on macOS and Linux CI, video included) and is the CI default in the starter's capture workflow; the local default stays headed for easy debugging. If you need headed-under-xvfb in CI, give xvfb a 24-bit screen (`xvfb-run -a --server-args="-screen 0 1920x1080x24"`) — the 8-bit default breaks Chromium's screenshot capture.
+> shotkit launches the **full Chromium** (`channel: 'chromium'`) — never the default headless-shell, which strips the extension subsystem. **Headless works** (`HEADED=0`; verified on macOS and Linux CI, video included) and is the CI default in the starter's capture workflow; the local default stays headed for easy debugging. Headed-under-xvfb proved unreliable on CI runners (the 8-bit default breaks Chromium's screenshot capture, and a 24-bit screen still failed silently) — run headless in CI.
 
 ## Usage
 
@@ -121,7 +121,7 @@ module.exports = {
 | Claude Code skill ([`skills/capture/`](skills/capture/SKILL.md)) | ✅ now | Claude Code (portable to Codex/Cursor/Gemini via the Agent Skills format) |
 | `AGENTS.md` run-block | ✅ now | every agent that reads AGENTS.md |
 | npm package (`@starter-series/shotkit`) | ✅ now | `npx` zero-install |
-| Capture-in-CI GitHub Action | ✅ now — ships in [`browser-extension-starter`](https://github.com/starter-series/browser-extension-starter)'s `capture.yml` (headless default, 24-bit-xvfb fallback) | zero-local-browser runs + CI smoke test |
+| Capture-in-CI GitHub Action | ✅ now — ships in [`browser-extension-starter`](https://github.com/starter-series/browser-extension-starter)'s `capture.yml` (headless) | zero-local-browser runs + CI smoke test |
 | `starter-series` marketplace entry | planned | discovery |
 | Video editing (`webm→mp4`, trim, captions) | planned | SNS clips |
 

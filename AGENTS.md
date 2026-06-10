@@ -49,9 +49,9 @@ test/            → unit tests for the pure/safe modules (no browser)
   strips the extension subsystem; never switch to it. Under the full channel,
   headless **works** (`HEADED=0`; verified 2026-06-10 on macOS + Linux CI,
   recordVideo included); the local default stays headed for debuggability.
-  Headed-under-xvfb needs a 24-bit screen
-  (`xvfb-run -a --server-args="-screen 0 1920x1080x24"` — the 8-bit default
-  breaks `Page.captureScreenshot`).
+  Headed-under-xvfb is unsupported on CI runners (the 8-bit default breaks
+  `Page.captureScreenshot`; a 24-bit screen still failed silently) — run
+  headless in CI.
 - **Caption band stacks UNDER the shot** (scene captured at `height - bandHeight`,
   band appended) so the final image is the exact preset size and no UI is hidden.
 - **`promo.js` innerHTML** is trusted, build-time content only (the repo's own

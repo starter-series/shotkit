@@ -10,8 +10,8 @@
  *     (no service worker, MV3 onInstalled never fires) — the full Chromium
  *     channel is required. Under it, headless ALSO works (HEADED=0; verified
  *     2026-06-10 on macOS + Linux CI, recordVideo included). The local
- *     default stays headed for easy debugging. Headed-under-xvfb needs a
- *     24-bit screen (--server-args="-screen 0 1920x1080x24").
+ *     default stays headed for easy debugging. Headed-under-xvfb proved
+ *     unreliable on CI runners — prefer headless there.
  *
  *   --disable-features=DisableLoadExtensionCommandLineSwitch
  *     Chromium 121+ guards --load-extension behind this flag by default.

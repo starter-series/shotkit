@@ -35,8 +35,7 @@ rendered from the shipped code.
 ## Notes
 
 - Runs the full-Chromium channel; headless works (`HEADED=0 npx …` — verified,
-  video included) and is the right mode for CI. If headed-in-CI is required,
-  use `xvfb-run -a --server-args="-screen 0 1920x1080x24"` (the 8-bit xvfb
-  default breaks Chromium screenshots).
+  video included) and is the mode to use in CI. Headed-under-xvfb is
+  unreliable on CI runners — don't use it.
 - Scenes are the repo's own config — to change *what* is captured, edit
   `shotkit.config.js`, not shotkit.
