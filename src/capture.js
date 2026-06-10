@@ -27,6 +27,7 @@ const { compositeCaption, DEFAULT_BAND_HEIGHT } = require('./caption');
 const { renderPromoTile } = require('./promo');
 const { extractListing, renderDescriptionDoc } = require('./describe');
 const { resolveSize } = require('./presets');
+const { postProcessDemo } = require('./video');
 
 const DEFAULT_VIEWPORT = { width: 1280, height: 800 };
 
@@ -43,6 +44,7 @@ function normalizeSetup(result) {
  * @param {string[]} [opts.scenes]   only capture these names (scenes/promoTiles/demo/"description")
  * @param {boolean} [opts.noVideo]   skip the demo screencast
  * @param {boolean} [opts.noBuild]   skip config.build
+ * @param {boolean} [opts.mp4]       also convert the demo webm to H.264 mp4
  * @param {boolean} [opts.liveGt]    passed to config hooks as flags.liveGt
  * @param {boolean} [opts.freeze]    passed to config hooks as flags.freeze
  * @param {string}  [opts.cwd]       project root for build / outDir / description.from
@@ -176,6 +178,11 @@ async function capture(config, opts = {}) {
       await video.saveAs(out);
       produced.push(out);
       log(`✓ ${config.demo.name}.webm (${viewport.width}×${viewport.height})`);
+      // SNS post-processing: mp4 (H.264) and/or trim — needs a real ffmpeg,
+      // fails loudly if one was requested but none is installed.
+      produced.push(
+        ...postProcessDemo({ webmPath: out, mp4: config.demo.mp4 || opts.mp4, trim: config.demo.trim, log }),
+      );
     }
     await closeContext(demoCtx);
     await setup2.teardown();

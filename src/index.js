@@ -22,6 +22,7 @@ const { compositeCaption, DEFAULT_BAND_HEIGHT } = require('./caption');
 const { renderPromoTile } = require('./promo');
 const { extractListing, renderDescriptionDoc, splitSections } = require('./describe');
 const { PRESETS, resolveSize } = require('./presets');
+const { findFfmpeg, buildFfmpegArgs, postProcessDemo } = require('./video');
 
 module.exports = {
   capture,
@@ -47,4 +48,8 @@ module.exports = {
   // sizes
   PRESETS,
   resolveSize,
+  // demo video post-processing
+  findFfmpeg,
+  buildFfmpegArgs,
+  postProcessDemo,
 };

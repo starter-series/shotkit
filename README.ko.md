@@ -20,7 +20,7 @@
 ## 상태와 범위 (Status & Scope)
 
 - **현재 구현된 것** — Playwright 캡처 **엔진**(빌드 → `--load-extension`으로 *빌드된* 익스텐션 로드 → scene 구동 → 스크린샷 → 캡션/면책 밴드 → HTML 프로모 타일 → 데모 `webm` → `STORE_LISTING.md`에서 문안 추출), **에이전트 계약**을 갖춘 **CLI**(`shotkit` — `--json` 머신 출력, 선택적 `path` 인자, `0/1/2` 종료 코드), 양쪽 용도 **사이즈 프리셋**(CWS `1280×800`/`440×280`, SNS `1200×675`/`1200×630`/`1080×1080`), **path-traversal 안전** 로컬 픽스처 서버, 프로그램 API(`capture()`), **Claude Code skill**([`skills/capture/`](skills/capture/SKILL.md)), 셸을 가진 어떤 코딩 에이전트든 호출법을 읽을 수 있는 **AGENTS.md 실행 블록**, 그리고 **npm 패키지** [`@starter-series/shotkit`](https://www.npmjs.com/package/@starter-series/shotkit). `browser-extension-starter`·`skillBridge`가 소비.
-- **계획된 것** — **동영상 편집**(`webm → mp4`, 트림, 캡션). (capture-in-CI GitHub Action·마켓플레이스 등재는 ✅.)
+- **계획된 것** — 데모 클립 캡션 오버레이. (동영상 mp4 변환·트림은 ✅ — `--mp4` 또는 config의 `demo.mp4`/`demo.trim`; 진짜 ffmpeg 필요(`SHOTKIT_FFMPEG`/PATH, GitHub ubuntu 러너 기본 탑재). Playwright 동봉 ffmpeg는 vp8 전용이라 불가.)
 - **설계 의도** — *엔진 1개, 표면 여러 개 — 단, 도구 성격에 맞는 표면.* shotkit은 무겁고 파일을 산출하는 빌드 도구라 표면이 CLI(+`--json`)·skill·CI입니다 — MCP가 아니라(하지 않기로 한 것 참고). 캡처는 **결정적**(로그인 불필요 픽스처, freeze된 데이터)이고, 실행이 **실제 빌드본 smoke test를 겸함** — 스크린샷이 나온다 = 그 기능이 출하 코드에서 렌더됨. 모든 샷에 면책 밴드를 합성해 **상표 안전**.
 - **하지 않기로 한 것** — **MCP 서버**(의도적으로 폐기: 셸이 있는 에이전트에는 `--json` + skill이 세션당 컨텍스트 비용 없이 더 나은 계약이며, 여기엔 빠른 구조화 질의가 없음). repo별 **scene 설정** 제거(어떤 화면이 *당신의* money shot인지는 환원 불가한 의도 — `shotkit.config.js`에 둠). 범용 동영상 편집기(v1은 깔끔한 녹화만; 편집은 계획). 호스티드 서비스(파일을 만지는 캡처는 본질적으로 로컬).
 - **공개하지 않음** — 없음.
@@ -65,7 +65,7 @@ skill(Agent Skills 표준 — 호환 도구의 skills 디렉터리에 폴더째 
 
 ## 로드맵 — 엔진 1개, 표면 여러 개
 
-CLI `--json`+`path`(✅) · `capture()`(✅) · Claude Code plugin+skill(✅ `/plugin install shotkit@starter-series`) · AGENTS.md 실행 블록(✅) · npm 패키지(✅) · capture-in-CI GitHub Action(✅) · 동영상 편집(계획). MCP stdio 도구는 검토 후 **폐기** — "하지 않기로 한 것" 참고.
+CLI `--json`+`path`(✅) · `capture()`(✅) · Claude Code plugin+skill(✅ `/plugin install shotkit@starter-series`) · AGENTS.md 실행 블록(✅) · npm 패키지(✅) · capture-in-CI GitHub Action(✅) · 데모 mp4/trim(✅, `--mp4`) · 캡션(계획). MCP stdio 도구는 검토 후 **폐기** — "하지 않기로 한 것" 참고.
 
 **일반화 규칙**(시리즈의 다음 기능용): npm 패키지 1개(엔진+얇은 CLI) + `*.config.js` 이음새 1개 + **도구 성격에 맞는 에이전트 표면**(빠른 구조화 도구: `path` 받는 MCP 도구 / 무거운 빌드 도구: `--json` CLI + skill + AGENTS.md 블록) + 마켓플레이스 항목 1개. **엔진은 config 이음새 외엔 프로젝트 특이사항을 읽지 않는다.**
 

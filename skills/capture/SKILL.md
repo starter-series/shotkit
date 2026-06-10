@@ -24,7 +24,9 @@ rendered from the shipped code.
    ```
 
    Useful flags: `--scene <name>` (one scene/promoTile/demo or `description`),
-   `--no-video` (skip the screencast), `--no-build` (reuse an existing build).
+   `--no-video` (skip the screencast), `--mp4` (also emit an H.264 mp4 of the
+   demo — needs ffmpeg on PATH or `SHOTKIT_FFMPEG`), `--no-build` (reuse an
+   existing build).
 3. **Read the result** — stdout is exactly one JSON object:
    `{ "ok": true, "outDir": "...", "produced": ["/abs/path/01-….png", …] }`.
    Progress logs go to stderr in `--json` mode.

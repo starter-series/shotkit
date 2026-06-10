@@ -25,6 +25,8 @@ Options:
   --json            machine-readable mode: stdout gets one JSON object
                     {ok, outDir, produced[]}; progress logs move to stderr
   --no-video        skip the demo screencast
+  --mp4             also convert the demo to H.264 mp4 (needs ffmpeg on PATH
+                    or SHOTKIT_FFMPEG; SNS uploaders want mp4, not webm)
   --no-build        skip the config's build step (use an already-built bundle)
   --live-gt         pass flags.liveGt to config hooks
   --freeze          pass flags.freeze to config hooks
@@ -42,6 +44,7 @@ function parseArgs(argv) {
     freeze: false,
     config: null,
     json: false,
+    mp4: false,
     help: false,
     path: null,
   };
@@ -50,6 +53,7 @@ function parseArgs(argv) {
     if (a === '--scene') opts.scenes.push(...(argv[++i] || '').split(',').filter(Boolean));
     else if (a === '--config') opts.config = argv[++i];
     else if (a === '--json') opts.json = true;
+    else if (a === '--mp4') opts.mp4 = true;
     else if (a === '--no-video') opts.noVideo = true;
     else if (a === '--no-build') opts.noBuild = true;
     else if (a === '--live-gt') opts.liveGt = true;
