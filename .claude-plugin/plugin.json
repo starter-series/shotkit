@@ -1,0 +1,22 @@
+{
+  "name": "shotkit",
+  "version": "1.1.1",
+  "description": "Capture Chrome Web Store + social promo assets (screenshots, promo tiles, demo screencast, listing copy) from a built browser extension — bundles the capture skill that drives the shotkit CLI.",
+  "author": {
+    "name": "heznpc",
+    "url": "https://github.com/heznpc"
+  },
+  "homepage": "https://github.com/starter-series/shotkit",
+  "repository": "https://github.com/starter-series/shotkit",
+  "license": "MIT",
+  "keywords": [
+    "playwright",
+    "screenshots",
+    "chrome-web-store",
+    "store-assets",
+    "promo",
+    "og-image",
+    "browser-extension",
+    "claude-code"
+  ]
+}
