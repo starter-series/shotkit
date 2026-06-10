@@ -6,6 +6,7 @@
 
 Screenshots · promo images · demo screencast · listing copy. One command.
 
+[![npm](https://img.shields.io/npm/v/%40starter-series%2Fshotkit)](https://www.npmjs.com/package/@starter-series/shotkit)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Node ≥ 22](https://img.shields.io/badge/node-%E2%89%A522-brightgreen.svg)](.nvmrc)
 
@@ -21,8 +22,8 @@ Screenshots · promo images · demo screencast · listing copy. One command.
 
 ## Status & Scope
 
-- **Currently implemented** — A Playwright capture **engine** (build → launch the *built* extension via `launchPersistentContext(--load-extension)` → drive scenes → screenshot → caption/disclaimer band → promo tile from HTML → demo `webm` → listing copy from `STORE_LISTING.md`), a **CLI** (`shotkit`) with an **agent contract** (`--json` machine output, optional `path` argument, `0/1/2` exit codes), **size presets** for both audiences (CWS `1280×800`/`440×280`, SNS `1200×675`/`1200×630`/`1080×1080`), a **path-traversal-safe** localhost fixture server, a programmatic API (`capture()`), a **Claude Code skill** ([`skills/capture/`](skills/capture/SKILL.md)), and an **AGENTS.md run-block** so any shell-having coding agent can invoke it. Consumed by `browser-extension-starter` and `skillBridge`.
-- **Planned** — npm publish (until then install via `github:starter-series/shotkit#v1.1.0`); a **capture-in-CI GitHub Action** (run the capture under `xvfb` on the official Playwright image and upload `store-assets/` as an artifact — zero local browser); a listing in the `starter-series` plugin **marketplace**; **video editing** (`webm → mp4`, trim, captions) for SNS.
+- **Currently implemented** — A Playwright capture **engine** (build → launch the *built* extension via `launchPersistentContext(--load-extension)` → drive scenes → screenshot → caption/disclaimer band → promo tile from HTML → demo `webm` → listing copy from `STORE_LISTING.md`), a **CLI** (`shotkit`) with an **agent contract** (`--json` machine output, optional `path` argument, `0/1/2` exit codes), **size presets** for both audiences (CWS `1280×800`/`440×280`, SNS `1200×675`/`1200×630`/`1080×1080`), a **path-traversal-safe** localhost fixture server, a programmatic API (`capture()`), a **Claude Code skill** ([`skills/capture/`](skills/capture/SKILL.md)), an **AGENTS.md run-block** so any shell-having coding agent can invoke it, and the **npm package** [`@starter-series/shotkit`](https://www.npmjs.com/package/@starter-series/shotkit). Consumed by `browser-extension-starter` and `skillBridge`.
+- **Planned** — a **capture-in-CI GitHub Action** (run the capture under `xvfb` on the official Playwright image and upload `store-assets/` as an artifact — zero local browser); a listing in the `starter-series` plugin **marketplace**; **video editing** (`webm → mp4`, trim, captions) for SNS.
 - **Design intent** — *One engine, many surfaces — matched to the tool's nature.* shotkit is a heavy, file-producing build tool, so its surfaces are CLI (+`--json`), skill, and CI — not MCP (see Non-goals). Captures are **deterministic** (login-free fixtures, frozen data) and the run **doubles as a real-bundle smoke test** — a screenshot only appears if that feature rendered from the shipped code. **Trademark-safe** by construction: a disclaimer band is composited onto every shot.
 - **Non-goals** — An **MCP server** (dropped by design: agents with a shell get a better contract from `--json` + the skill, without MCP's per-session context cost; nothing here is a fast structured query). Removing the per-repo **scene config** (which screens are *your* money shots is irreducible intent — it lives in your `shotkit.config.js`). A general-purpose video editor (v1 records a clean screencast; editing is Planned). A hosted service (file-touching capture is local by nature).
 - **Redacted** — none. Ships no private data, credentials, or third-party identifiers.
@@ -34,10 +35,7 @@ npm i -D @starter-series/shotkit
 npx playwright install chromium    # one-time: the browser shotkit drives
 ```
 
-> npm publish is pending — until it lands, install from GitHub:
-> `npm i -D github:starter-series/shotkit#v1.1.0`
-
-Once published, zero-install works in any repo that has a config:
+Zero-install in any repo that has a config:
 
 ```bash
 npx @starter-series/shotkit
@@ -122,7 +120,7 @@ module.exports = {
 | Programmatic `capture()` | ✅ now | embedding |
 | Claude Code skill ([`skills/capture/`](skills/capture/SKILL.md)) | ✅ now | Claude Code (portable to Codex/Cursor/Gemini via the Agent Skills format) |
 | `AGENTS.md` run-block | ✅ now | every agent that reads AGENTS.md |
-| npm publish | planned | `npx` zero-install |
+| npm package (`@starter-series/shotkit`) | ✅ now | `npx` zero-install |
 | Capture-in-CI GitHub Action (xvfb + artifact) | planned | zero-local-browser first run + CI smoke test |
 | `starter-series` marketplace entry | planned | discovery |
 | Video editing (`webm→mp4`, trim, captions) | planned | SNS clips |
