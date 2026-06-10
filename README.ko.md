@@ -20,7 +20,7 @@
 ## 상태와 범위 (Status & Scope)
 
 - **현재 구현된 것** — Playwright 캡처 **엔진**(빌드 → `--load-extension`으로 *빌드된* 익스텐션 로드 → scene 구동 → 스크린샷 → 캡션/면책 밴드 → HTML 프로모 타일 → 데모 `webm` → `STORE_LISTING.md`에서 문안 추출), **에이전트 계약**을 갖춘 **CLI**(`shotkit` — `--json` 머신 출력, 선택적 `path` 인자, `0/1/2` 종료 코드), 양쪽 용도 **사이즈 프리셋**(CWS `1280×800`/`440×280`, SNS `1200×675`/`1200×630`/`1080×1080`), **path-traversal 안전** 로컬 픽스처 서버, 프로그램 API(`capture()`), **Claude Code skill**([`skills/capture/`](skills/capture/SKILL.md)), 셸을 가진 어떤 코딩 에이전트든 호출법을 읽을 수 있는 **AGENTS.md 실행 블록**, 그리고 **npm 패키지** [`@starter-series/shotkit`](https://www.npmjs.com/package/@starter-series/shotkit). `browser-extension-starter`·`skillBridge`가 소비.
-- **계획된 것** — **capture-in-CI GitHub Action**(공식 Playwright 이미지 + `xvfb`로 캡처를 CI에서 돌리고 `store-assets/`를 artifact로 업로드 — 로컬 브라우저 0); `starter-series` 플러그인 **마켓플레이스** 등재; **동영상 편집**(`webm → mp4`, 트림, 캡션).
+- **계획된 것** — `starter-series` 플러그인 **마켓플레이스** 등재; **동영상 편집**(`webm → mp4`, 트림, 캡션). (capture-in-CI GitHub Action은 ✅ — `browser-extension-starter`의 `capture.yml`로 출하, headless 기본.)
 - **설계 의도** — *엔진 1개, 표면 여러 개 — 단, 도구 성격에 맞는 표면.* shotkit은 무겁고 파일을 산출하는 빌드 도구라 표면이 CLI(+`--json`)·skill·CI입니다 — MCP가 아니라(하지 않기로 한 것 참고). 캡처는 **결정적**(로그인 불필요 픽스처, freeze된 데이터)이고, 실행이 **실제 빌드본 smoke test를 겸함** — 스크린샷이 나온다 = 그 기능이 출하 코드에서 렌더됨. 모든 샷에 면책 밴드를 합성해 **상표 안전**.
 - **하지 않기로 한 것** — **MCP 서버**(의도적으로 폐기: 셸이 있는 에이전트에는 `--json` + skill이 세션당 컨텍스트 비용 없이 더 나은 계약이며, 여기엔 빠른 구조화 질의가 없음). repo별 **scene 설정** 제거(어떤 화면이 *당신의* money shot인지는 환원 불가한 의도 — `shotkit.config.js`에 둠). 범용 동영상 편집기(v1은 깔끔한 녹화만; 편집은 계획). 호스티드 서비스(파일을 만지는 캡처는 본질적으로 로컬).
 - **공개하지 않음** — 없음.
@@ -38,7 +38,7 @@ npx playwright install chromium    # 최초 1회: shotkit이 구동할 브라우
 npx @starter-series/shotkit
 ```
 
-> MV3 익스텐션 로드는 **headed** Chromium이 필요합니다 — 로컬 headed, CI는 `xvfb-run`.
+> shotkit은 **풀 Chromium**(`channel: 'chromium'`)을 구동합니다 — 확장 서브시스템이 없는 headless-shell이 아닙니다. **headless 동작 검증 완료**(`HEADED=0`; macOS·Linux CI, 영상 포함)이며 starter capture 워크플로의 기본값입니다. 로컬 기본은 디버깅 편의상 headed. CI에서 headed가 필요하면 xvfb에 24비트 화면을 주십시오(`--server-args="-screen 0 1920x1080x24"` — 8비트 기본값은 스크린샷 캡처가 깨집니다).
 
 ## 사용
 

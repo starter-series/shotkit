@@ -15,8 +15,8 @@ npx @starter-series/shotkit <path> --json   # run against another checkout
 ```
 
 Prereqs: `npx playwright install chromium` (one-time); the config's `build`
-command must succeed. Loading an MV3 extension needs a **headed** Chromium —
-works as-is locally, `xvfb-run` in CI. Exit codes: `0` ok · `1` runtime
+command must succeed. Headless works (`HEADED=0`; verified on macOS + Linux CI,
+video included); the local default is headed. Exit codes: `0` ok · `1` runtime
 failure · `2` usage / no config. In `--json` mode progress logs go to stderr;
 stdout is exactly one JSON object. Useful flags: `--scene <name>`,
 `--no-video`, `--no-build`.
@@ -45,9 +45,13 @@ test/            → unit tests for the pure/safe modules (no browser)
 - **`serve.js` path-safety**: never feed the request URL straight into `path.join`.
   Keep the `path.normalize(...).replace(/^(\.\.(\/|\\|$))+/, '')` sanitizer
   (CodeQL `js/path-injection`). There's a test for it.
-- **Headed Chromium**: MV3 extensions only load headed (`channel:'chromium'`,
-  `headless:false`). Runs headed locally, `xvfb-run` in CI. Don't "optimize" to
-  headless.
+- **Full-Chromium channel**: always `channel:'chromium'` — the headless-shell
+  strips the extension subsystem; never switch to it. Under the full channel,
+  headless **works** (`HEADED=0`; verified 2026-06-10 on macOS + Linux CI,
+  recordVideo included); the local default stays headed for debuggability.
+  Headed-under-xvfb needs a 24-bit screen
+  (`xvfb-run -a --server-args="-screen 0 1920x1080x24"` — the 8-bit default
+  breaks `Page.captureScreenshot`).
 - **Caption band stacks UNDER the shot** (scene captured at `height - bandHeight`,
   band appended) so the final image is the exact preset size and no UI is hidden.
 - **`promo.js` innerHTML** is trusted, build-time content only (the repo's own
