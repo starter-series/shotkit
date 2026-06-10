@@ -5,12 +5,13 @@
  * back the dynamically-assigned extension ID. The launch flags mirror the
  * ones a Playwright extension E2E suite needs — they're not optional:
  *
- *   channel: 'chromium' + headless:false
+ *   channel: 'chromium'
  *     The default headless-shell strips the extension subsystem entirely
- *     (no service worker, MV3 onInstalled never fires). The full Chromium
- *     channel run headed (or under xvfb in CI) is the only reliable way to
- *     load MV3 extensions and have content scripts inject. Set HEADED=0 at
- *     your own risk.
+ *     (no service worker, MV3 onInstalled never fires) — the full Chromium
+ *     channel is required. Under it, headless ALSO works (HEADED=0; verified
+ *     2026-06-10 on macOS + Linux CI, recordVideo included). The local
+ *     default stays headed for easy debugging. Headed-under-xvfb needs a
+ *     24-bit screen (--server-args="-screen 0 1920x1080x24").
  *
  *   --disable-features=DisableLoadExtensionCommandLineSwitch
  *     Chromium 121+ guards --load-extension behind this flag by default.
