@@ -20,6 +20,26 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
   conventions are documented in [`docs/handoff-conventions.md`](docs/handoff-conventions.md).
 - **Integrations module** for wiring captured assets into a consuming project.
 
+### Fixed
+- Handoff caption/beat times are now relative to the delivered (trimmed) clip —
+  `trim.start` is subtracted and captions before the clip start are dropped — so
+  `captions.json`/`storyboard.json` line up with the mp4, not the raw recording.
+- Storyboard fields are coerced to the published schema (object `preset` omitted,
+  bare-number `thumbnail` → `{ at }`, non-object `trim` → `null`), so a loosely-typed
+  demo config no longer emits a schema-invalid storyboard.
+- A scene-filtered or `--no-video` run now MERGES into the existing handoff
+  contract instead of overwriting a prior full run's storyboard/captions/manifest.
+- Post-processed mp4/thumbnail assets no longer record the source-viewport size
+  when `crop` changes the output dimensions (size is omitted rather than wrong).
+- A thumbnail seek past the end of a trimmed clip no longer records a phantom
+  asset — the file's existence is verified before it is recorded.
+- One demo failing (e.g. mp4 requested with no ffmpeg) no longer aborts the
+  remaining demos, the handoff pack, or temp-dir cleanup.
+- Storyboard lint no longer throws on a malformed `trim.duration`/caption time;
+  it surfaces as a lint warning, as documented.
+- Added an ajv (draft 2020-12) schema-validation test that checks emitted
+  storyboard/captions/manifest documents against `schemas/`.
+
 ### Notes
 - The demo post-processing pipeline (`webm → H.264 mp4` with `+faststart`,
   frame-accurate trim) shipped in 1.2.0 and remains available; it requires an

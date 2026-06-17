@@ -102,7 +102,14 @@ function formatStoryboardLint(item) {
 function analyzeDemoStoryboard(demoConfig, { viewport, mp4Requested } = {}) {
   if (demoConfig.storyboardLint === false) return [];
   const warnings = [];
-  const captions = Array.isArray(demoConfig.captions) ? normalizeDemoCaptions(demoConfig.captions) : [];
+  // Lint must never throw — a malformed caption time should surface AS a lint
+  // warning, not crash the whole capture run (this runs before any try/catch).
+  let captions = [];
+  try {
+    captions = Array.isArray(demoConfig.captions) ? normalizeDemoCaptions(demoConfig.captions) : [];
+  } catch (e) {
+    warnings.push(storyboardWarning('invalid-captions', e.message, 'fix the caption time/text so the storyboard can be linted'));
+  }
   if (!captions.length) {
     warnings.push(storyboardWarning(
       'no-captions',
@@ -169,8 +176,13 @@ function analyzeDemoStoryboard(demoConfig, { viewport, mp4Requested } = {}) {
   }
 
   if (demoConfig.trim && demoConfig.trim.duration != null) {
-    const durationMs = parseTimeToMs(demoConfig.trim.duration, 'trim.duration');
-    if (durationMs < 20000) {
+    let durationMs = null;
+    try {
+      durationMs = parseTimeToMs(demoConfig.trim.duration, 'trim.duration');
+    } catch (e) {
+      warnings.push(storyboardWarning('invalid-duration', e.message, 'use a number of seconds or an "mm:ss" string'));
+    }
+    if (durationMs != null && durationMs < 20000) {
       warnings.push(storyboardWarning(
         'short-duration',
         'trim.duration is under 20s',
@@ -178,7 +190,7 @@ function analyzeDemoStoryboard(demoConfig, { viewport, mp4Requested } = {}) {
         { durationMs },
       ));
     }
-    if (durationMs > 40000) {
+    if (durationMs != null && durationMs > 40000) {
       warnings.push(storyboardWarning(
         'long-duration',
         'trim.duration is over 40s',

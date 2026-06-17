@@ -153,8 +153,15 @@ function postProcessDemo({ webmPath, mp4, trim, crop, zoom, thumbnail, log, env 
     execFileSync(bin, buildThumbnailArgs({ input: finalVideoPath, output: thumbPath, at }), {
       stdio: ['ignore', 'ignore', 'inherit'],
     });
-    produced.push(thumbPath);
-    log(`✓ ${path.basename(thumbPath)} (thumbnail @ ${at}s)`);
+    // ffmpeg exits 0 even when `at` seeks past the end of a (trimmed) clip,
+    // writing no file. Only record the thumbnail when it was actually produced,
+    // so the manifest never references a phantom asset.
+    if (fs.existsSync(thumbPath)) {
+      produced.push(thumbPath);
+      log(`✓ ${path.basename(thumbPath)} (thumbnail @ ${at}s)`);
+    } else {
+      log(`⚠️  thumbnail @ ${at}s not written (seek past end of clip?) — skipped`);
+    }
   }
   return produced;
 }

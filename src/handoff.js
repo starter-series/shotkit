@@ -8,7 +8,7 @@
 
 const fs = require('fs');
 const path = require('path');
-const { normalizeDemoCaptions } = require('./demo');
+const { normalizeDemoCaptions, parseTimeToMs } = require('./demo');
 const { buildHandoffRecommendations } = require('./integrations');
 
 const HANDOFF_VERSION = 1;
@@ -80,41 +80,72 @@ function demoNextTool(demoConfig) {
   return 'manual-editor';
 }
 
+// The delivered mp4/webm has trim.start cut off its head, so caption/beat times
+// in the handoff contract must be relative to the DELIVERABLE, not the raw
+// recording. Returns 0 unless trim is an object with a parseable start.
+function trimStartMs(demoConfig) {
+  const trim = demoConfig.trim;
+  if (!trim || typeof trim !== 'object' || trim.start == null) return 0;
+  try {
+    return parseTimeToMs(trim.start, 'trim.start');
+  } catch (_e) {
+    return 0;
+  }
+}
+
+// Shift caption times by the trimmed-off prefix and drop captions that fall
+// before the clip starts (they are not in the deliverable). Output conforms to
+// the beat/caption schema: at >= 0 (number), atMs >= 0 (integer).
+function deliverableBeats(captions, startMs) {
+  return captions
+    .map((caption) => ({ atMs: caption.atMs - startMs, text: caption.text }))
+    .filter((beat) => beat.atMs >= 0)
+    .map((beat) => ({ at: beat.atMs / 1000, atMs: beat.atMs, text: beat.text }));
+}
+
+// Coerce loosely-typed demo config into the storyboard schema's shape: preset
+// must be a string (object presets are omitted), trim object|null, thumbnail
+// object|boolean|null (a bare number becomes { at }).
+function storyboardPreset(preset) {
+  return typeof preset === 'string' ? preset : undefined;
+}
+function storyboardTrim(trim) {
+  return trim && typeof trim === 'object' ? trim : null;
+}
+function storyboardThumbnail(thumbnail) {
+  if (typeof thumbnail === 'number') return { at: thumbnail };
+  return thumbnail || null;
+}
+
 function demoStoryboard(demoConfig, viewport) {
   const captions = normalizeDemoCaptions(demoConfig.captions || []);
+  const startMs = trimStartMs(demoConfig);
   return {
     name: demoConfig.name,
     audience: demoAudience(demoConfig),
-    preset: demoConfig.preset,
+    preset: storyboardPreset(demoConfig.preset),
     viewport,
     recommendedNextTool: demoNextTool(demoConfig),
-    trim: demoConfig.trim || null,
+    trim: storyboardTrim(demoConfig.trim),
     framing: {
       crop: demoConfig.crop || null,
       zoom: demoConfig.zoom || null,
     },
-    thumbnail: demoConfig.thumbnail || null,
+    thumbnail: storyboardThumbnail(demoConfig.thumbnail),
     recommendedStory: {
       durationSeconds: { min: 20, max: 40 },
       shape: ['result-first', 'action', 'proof', 'safety-restore'],
     },
-    beats: captions.map((caption) => ({
-      at: caption.atMs / 1000,
-      atMs: caption.atMs,
-      text: caption.text,
-    })),
+    beats: deliverableBeats(captions, startMs),
     guidance: demoConfig.guidance || null,
   };
 }
 
 function demoCaptions(demoConfig) {
+  const startMs = trimStartMs(demoConfig);
   return {
     name: demoConfig.name,
-    captions: normalizeDemoCaptions(demoConfig.captions || []).map((caption) => ({
-      at: caption.atMs / 1000,
-      atMs: caption.atMs,
-      text: caption.text,
-    })),
+    captions: deliverableBeats(normalizeDemoCaptions(demoConfig.captions || []), startMs),
   };
 }
 
@@ -183,7 +214,24 @@ function writeJson(filePath, data) {
   fs.writeFileSync(filePath, `${JSON.stringify(data, null, 2)}\n`);
 }
 
-function writeHandoffDocs({ cwd, outDir, config, assets, demoConfigs, demoViewports, demoWarnings, flags }) {
+function readJsonIfExists(filePath) {
+  try {
+    return fs.existsSync(filePath) ? JSON.parse(fs.readFileSync(filePath, 'utf8')) : null;
+  } catch (_e) {
+    return null;
+  }
+}
+
+// Union by key, with the current run's entries winning — preserves prior
+// entries this run did not touch, so a partial re-run does not clobber them.
+function mergeByKey(prev, next, keyOf) {
+  if (!Array.isArray(prev) || !prev.length) return next;
+  const nextKeys = new Set(next.map(keyOf));
+  const kept = prev.filter((item) => item && !nextKeys.has(keyOf(item)));
+  return [...kept, ...next];
+}
+
+function writeHandoffDocs({ cwd, outDir, config, assets, demoConfigs, demoViewports, demoWarnings, flags, partial = false }) {
   const storyboardPath = path.join(outDir, 'storyboard.json');
   const captionsPath = path.join(outDir, 'captions.json');
   const manifestPath = path.join(outDir, 'shotkit-manifest.json');
@@ -214,6 +262,24 @@ function writeHandoffDocs({ cwd, outDir, config, assets, demoConfigs, demoViewpo
     demoWarnings,
     flags,
   });
+  // A partial run (scene filter or --no-video) only re-captures a subset, so
+  // merge into the existing contract instead of overwriting a prior full run's
+  // storyboard/captions/manifest with just this run's subset.
+  if (partial) {
+    const prevStoryboard = readJsonIfExists(storyboardPath);
+    const prevCaptions = readJsonIfExists(captionsPath);
+    const prevManifest = readJsonIfExists(manifestPath);
+    if (prevStoryboard) {
+      docs.storyboard.demos = mergeByKey(prevStoryboard.demos, docs.storyboard.demos, (d) => d.name);
+      docs.storyboard.storyboardLint = mergeByKey(prevStoryboard.storyboardLint, docs.storyboard.storyboardLint, (l) => l.name);
+    }
+    if (prevCaptions) {
+      docs.captions.demos = mergeByKey(prevCaptions.demos, docs.captions.demos, (d) => d.name);
+    }
+    if (prevManifest) {
+      docs.manifest.assets = mergeByKey(prevManifest.assets, docs.manifest.assets, (a) => a.id);
+    }
+  }
   writeJson(storyboardPath, docs.storyboard);
   writeJson(captionsPath, docs.captions);
   writeJson(manifestPath, docs.manifest);

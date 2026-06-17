@@ -281,12 +281,17 @@ async function capture(config, opts = {}) {
             name: path.basename(extraPath, path.extname(extraPath)),
             type: format === '.png' ? 'image' : 'video',
             role: format === '.png' ? 'thumbnail' : 'sns-demo-mp4',
-            width: viewport.width,
-            height: viewport.height,
+            // No width/height: crop/zoom change the output dimensions from the
+            // source viewport and we don't re-measure, so recording the viewport
+            // size here would be wrong. The manifest schema makes them optional.
             source: { kind: 'demo', name: demoConfig.name },
           }));
         }
       }
+    } catch (err) {
+      // One demo failing (e.g. mp4 requested but no ffmpeg) must not abort the
+      // remaining demos, the handoff pack, or temp-dir cleanup below.
+      log(`❌ demo "${demoConfig.name}" failed: ${err.message} — continuing with the remaining demos`);
     } finally {
       if (!page.isClosed()) await page.close().catch(() => {});
       await closeContext(demoCtx);
@@ -306,6 +311,9 @@ async function capture(config, opts = {}) {
       demoViewports,
       demoWarnings,
       flags: passFlags,
+      // Scene-filtered or --no-video runs only re-capture a subset; merge into
+      // the existing handoff contract rather than clobbering a prior full run.
+      partial: only.size > 0 || !!opts.noVideo,
     });
     produced.push(...handoffPaths);
     for (const out of handoffPaths) {
