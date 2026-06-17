@@ -50,6 +50,9 @@ function findFfmpeg(env = process.env) {
  * @param {boolean} [o.copy=false]  stream-copy (no re-encode) — for webm-only trims
  */
 function buildFfmpegArgs({ input, output, trim, crf = 23, crop, zoom, copy = false }) {
+  if (!copy && (!Number.isFinite(Number(crf)) || Number(crf) < 0 || Number(crf) > 63)) {
+    throw new Error('shotkit: demo.mp4.crf must be a number between 0 and 63');
+  }
   const args = ['-hide_banner', '-loglevel', 'error', '-y'];
   // -ss before -i = fast keyframe seek; with re-encode it is frame-accurate.
   if (trim && trim.start != null) args.push('-ss', String(trim.start));
@@ -79,11 +82,19 @@ function buildVideoFilter({ crop, zoom } = {}) {
     for (const key of ['x', 'y', 'width', 'height']) {
       if (!Number.isFinite(crop[key])) throw new Error(`shotkit: demo.crop.${key} must be a finite number`);
     }
+    if (crop.width <= 0 || crop.height <= 0) {
+      throw new Error('shotkit: demo.crop.width and demo.crop.height must be greater than 0');
+    }
     filters.push(`crop=${crop.width}:${crop.height}:${crop.x}:${crop.y}`);
   }
   if (zoom) {
     const scale = typeof zoom === 'number' ? zoom : zoom.scale;
     if (!Number.isFinite(scale) || scale <= 1) throw new Error('shotkit: demo.zoom scale must be > 1');
+    for (const key of ['x', 'y']) {
+      if (typeof zoom === 'object' && typeof zoom[key] === 'number' && !Number.isFinite(zoom[key])) {
+        throw new Error(`shotkit: demo.zoom.${key} must be a finite number`);
+      }
+    }
     const x = typeof zoom === 'object' && zoom.x != null ? zoom.x : `(iw-iw/${scale})/2`;
     const y = typeof zoom === 'object' && zoom.y != null ? zoom.y : `(ih-ih/${scale})/2`;
     filters.push(`crop=iw/${scale}:ih/${scale}:${x}:${y}`);

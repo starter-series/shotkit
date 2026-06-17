@@ -37,6 +37,14 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
   remaining demos, the handoff pack, or temp-dir cleanup.
 - Storyboard lint no longer throws on a malformed `trim.duration`/caption time;
   it surfaces as a lint warning, as documented.
+- ffmpeg arg/filter validation: a zero/negative `crop` dimension, a non-finite
+  `mp4.crf`, or a NaN `zoom` offset now fail with a clear shotkit error instead
+  of an opaque ffmpeg parse failure.
+- `demo.captions` must be an array — validated at config-normalize time (fail
+  fast) rather than late, mid-capture.
+- Handoff readiness no longer claims `high` confidence for a recommendation with
+  no captured clip, and the source `.webm` is surfaced to video editors even
+  when no mp4 was produced.
 - Added an ajv (draft 2020-12) schema-validation test that checks emitted
   storyboard/captions/manifest documents against `schemas/`.
 

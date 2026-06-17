@@ -79,6 +79,9 @@ function normalizeDemoConfigs(config = {}) {
     }
     if (!demo.name) throw new Error(`shotkit: demo entry ${index} needs a name`);
     if (typeof demo.run !== 'function') throw new Error(`shotkit: demo "${demo.name}" needs run({ page, demo })`);
+    if (demo.captions != null && !Array.isArray(demo.captions)) {
+      throw new Error(`shotkit: demo "${demo.name}".captions must be an array`);
+    }
     if (seen.has(demo.name)) throw new Error(`shotkit: duplicate demo name "${demo.name}"`);
     seen.add(demo.name);
     return demo;

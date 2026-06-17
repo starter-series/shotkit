@@ -22,7 +22,7 @@ const DEFAULT_TARGETS = Object.freeze([
     label: 'Screen Studio',
     kind: 'desktop-editor',
     requiredRoles: ['sns-demo-mp4'],
-    optionalRoles: ['captions-contract', 'thumbnail', 'storyboard-contract'],
+    optionalRoles: ['source-demo-webm', 'captions-contract', 'thumbnail', 'storyboard-contract'],
     reason: 'polish the captured product proof with cursor smoothing, callouts, pacing, and final crop',
     nextStep: 'Import the MP4, preserve caption timing, then export the final social clip.',
   },
@@ -31,7 +31,7 @@ const DEFAULT_TARGETS = Object.freeze([
     label: 'Canva',
     kind: 'design-editor',
     requiredRoles: ['sns-demo-mp4', 'thumbnail'],
-    optionalRoles: ['captions-contract', 'store-listing-copy', 'promo-tile'],
+    optionalRoles: ['source-demo-webm', 'captions-contract', 'store-listing-copy', 'promo-tile'],
     reason: 'turn the MP4 and poster frame into lightweight social layouts or launch posts',
     nextStep: 'Use the thumbnail as the cover and the MP4 as the main media; keep captions short for mobile preview.',
   },
@@ -49,7 +49,7 @@ const DEFAULT_TARGETS = Object.freeze([
     label: 'Remotion',
     kind: 'code-video',
     requiredRoles: ['sns-demo-mp4', 'captions-contract', 'storyboard-contract'],
-    optionalRoles: ['thumbnail'],
+    optionalRoles: ['source-demo-webm', 'thumbnail'],
     reason: 'render a repeatable template-based video while keeping the captured extension proof as the source layer',
     nextStep: 'Feed the MP4, captions, and storyboard into a project-owned Remotion template.',
   },
@@ -114,7 +114,11 @@ function readinessFor(target, byRole) {
   if (target.extraInputs && target.extraInputs.length) {
     return { readiness: 'needs-input', confidence: 'medium', missingRoles: [] };
   }
-  return { readiness: 'ready', confidence: 'high', missingRoles: [] };
+  // shotkit's value is the captured clip; a "ready" recommendation with no demo
+  // media at all (a scenes-only or --no-video run, where storyboard-only targets
+  // still satisfy their required roles) is real but lower-confidence.
+  const hasClip = byRole.has('sns-demo-mp4') || byRole.has('source-demo-webm');
+  return { readiness: 'ready', confidence: hasClip ? 'high' : 'medium', missingRoles: [] };
 }
 
 function buildHandoffRecommendations({ assets = [], config = {} } = {}) {
