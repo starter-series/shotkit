@@ -5,6 +5,7 @@ describe('presets', () => {
     expect(resolveSize('cws-screenshot')).toEqual({ width: 1280, height: 800 });
     expect(resolveSize('cws-promo-small')).toEqual({ width: 440, height: 280 });
     expect(resolveSize('sns-twitter')).toEqual({ width: 1200, height: 675 });
+    expect(resolveSize('sns-video')).toEqual({ width: 1280, height: 720 });
     expect(resolveSize('sns-og')).toEqual({ width: 1200, height: 630 });
   });
 
@@ -24,6 +25,7 @@ describe('presets', () => {
   test('PRESETS is frozen and covers both audiences', () => {
     expect(Object.isFrozen(PRESETS)).toBe(true);
     expect(PRESETS).toHaveProperty('cws-screenshot');
+    expect(PRESETS).toHaveProperty('sns-video', { width: 1280, height: 720 });
     expect(PRESETS).toHaveProperty('sns-square', { width: 1080, height: 1080 });
   });
 });

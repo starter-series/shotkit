@@ -21,6 +21,10 @@ module.exports = [
     languageOptions: { globals: { ...globals.jest } },
   },
   {
+    files: ['scripts/**/*.mjs'],
+    languageOptions: { sourceType: 'module' },
+  },
+  {
     ignores: ['node_modules/', 'coverage/'],
   },
 ];

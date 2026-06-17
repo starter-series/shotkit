@@ -20,7 +20,7 @@ Arguments:
 
 Options:
   --config <path>   config file (default: shotkit.config.js | store.config.js)
-  --scene <name>    only capture this scene/promoTile/demo, or "description";
+  --scene <name>    only capture this scene/promoTile/demo/demos entry, or "description";
                     repeatable, or comma-separated. When given, nothing else runs.
   --json            machine-readable mode: stdout gets one JSON object
                     {ok, outDir, produced[]}; progress logs move to stderr
@@ -31,6 +31,9 @@ Options:
   --live-gt         pass flags.liveGt to config hooks
   --freeze          pass flags.freeze to config hooks
   -h, --help        show this help
+
+Handoff: successful runs also write storyboard.json, captions.json, and
+shotkit-manifest.json unless the config sets handoff:false.
 
 Exit codes: 0 ok · 1 runtime failure · 2 usage / no config found
 `;

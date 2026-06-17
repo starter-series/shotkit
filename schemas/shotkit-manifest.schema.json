@@ -1,0 +1,155 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:starter-series:shotkit:schema:shotkit-manifest:v1",
+  "title": "shotkit handoff manifest",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "$schema",
+    "kind",
+    "version",
+    "generatedAt",
+    "tool",
+    "project",
+    "outDir",
+    "flags",
+    "positioning",
+    "handoff",
+    "assets"
+  ],
+  "properties": {
+    "$schema": { "const": "urn:starter-series:shotkit:schema:shotkit-manifest:v1" },
+    "kind": { "const": "shotkit.manifest" },
+    "version": { "const": 1 },
+    "generatedAt": { "type": "string", "format": "date-time" },
+    "tool": { "const": "@starter-series/shotkit" },
+    "project": { "$ref": "#/$defs/project" },
+    "outDir": { "type": "string" },
+    "flags": { "type": "object", "additionalProperties": true },
+    "positioning": { "const": "capture-and-handoff-kit" },
+    "handoff": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["contractVersion", "schemas", "storyboards", "captions", "recommendedFlow", "adapterHints"],
+      "properties": {
+        "contractVersion": { "const": 1 },
+        "schemas": {
+          "type": "object",
+          "required": ["manifest", "storyboard", "captions"],
+          "properties": {
+            "manifest": { "type": "string" },
+            "storyboard": { "type": "string" },
+            "captions": { "type": "string" }
+          }
+        },
+        "storyboards": { "const": "storyboard.json" },
+        "captions": { "const": "captions.json" },
+        "recommendedFlow": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "adapterHints": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/adapterHint" }
+        }
+      }
+    },
+    "assets": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/asset" }
+    },
+    "config": { "type": "object", "additionalProperties": true }
+  },
+  "$defs": {
+    "project": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "name": { "type": "string" },
+        "version": { "type": "string" },
+        "private": { "type": "boolean" }
+      }
+    },
+    "asset": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["id", "name", "type", "role", "format", "path", "outPath", "source"],
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "type": { "enum": ["image", "video", "json", "text"] },
+        "role": { "type": "string" },
+        "format": { "type": "string" },
+        "path": { "type": "string" },
+        "outPath": { "type": "string" },
+        "width": { "type": "integer", "minimum": 1 },
+        "height": { "type": "integer", "minimum": 1 },
+        "source": {
+          "type": "object",
+          "additionalProperties": true,
+          "required": ["kind"],
+          "properties": {
+            "kind": { "type": "string" },
+            "name": { "type": "string" }
+          }
+        }
+      }
+    },
+    "adapterHint": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "id",
+        "label",
+        "kind",
+        "readiness",
+        "confidence",
+        "reason",
+        "nextStep",
+        "useAssets",
+        "missingRoles",
+        "missingInputs"
+      ],
+      "properties": {
+        "id": { "type": "string" },
+        "label": { "type": "string" },
+        "kind": { "type": "string" },
+        "readiness": { "enum": ["ready", "needs-input", "needs-assets"] },
+        "confidence": { "enum": ["high", "medium", "low"] },
+        "reason": { "type": "string" },
+        "nextStep": { "type": "string" },
+        "connector": {
+          "type": "object",
+          "additionalProperties": true,
+          "properties": {
+            "type": { "type": "string" },
+            "name": { "type": "string" }
+          }
+        },
+        "useAssets": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": true,
+            "required": ["id", "role", "path"],
+            "properties": {
+              "id": { "type": "string" },
+              "role": { "type": "string" },
+              "path": { "type": "string" },
+              "type": { "type": "string" },
+              "format": { "type": "string" }
+            }
+          }
+        },
+        "missingRoles": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "missingInputs": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    }
+  }
+}
