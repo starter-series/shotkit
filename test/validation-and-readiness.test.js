@@ -7,7 +7,7 @@
  */
 
 const { buildVideoFilter, buildFfmpegArgs } = require('../src/video');
-const { normalizeDemoConfigs } = require('../src/demo');
+const { normalizeDemoConfigs, lintDemoStoryboard } = require('../src/demo');
 const { buildHandoffRecommendations } = require('../src/integrations');
 const { assetRecord } = require('../src/handoff');
 
@@ -33,6 +33,20 @@ describe('demo config fails fast', () => {
   it('rejects a non-array captions value at normalize time', () => {
     expect(() => normalizeDemoConfigs({ demo: { name: 'd', run: () => {}, captions: { at: 1, text: 'x' } } }))
       .toThrow(/captions must be an array/);
+  });
+});
+
+describe('storyboard lint mp4 warning reflects the demo config', () => {
+  const captions = [{ at: 1, text: 'before' }, { at: 4, text: 'restore original' }];
+
+  it('no spurious missing-mp4 when demo.mp4 is set (public caller passes no mp4Requested)', () => {
+    const lines = lintDemoStoryboard({ name: 'd', mp4: { crf: 18 }, trim: { duration: 25 }, captions });
+    expect(lines.some((l) => /mp4/i.test(l))).toBe(false);
+  });
+
+  it('still warns when neither the config nor a flag requests mp4', () => {
+    const lines = lintDemoStoryboard({ name: 'd', trim: { duration: 25 }, captions });
+    expect(lines.some((l) => /mp4/i.test(l))).toBe(true);
   });
 });
 

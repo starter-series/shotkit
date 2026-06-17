@@ -155,7 +155,11 @@ function analyzeDemoStoryboard(demoConfig, { viewport, mp4Requested } = {}) {
     ));
   }
 
-  if (!mp4Requested) {
+  // Honor an explicit mp4Requested (only the caller knows about the CLI --mp4
+  // flag) but also infer it from the demo config, so public callers like
+  // lintDemoStoryboard() don't emit a spurious warning when demo.mp4 is set.
+  const wantsMp4 = mp4Requested || !!(demoConfig.mp4 || demoConfig.crop || demoConfig.zoom);
+  if (!wantsMp4) {
     warnings.push(storyboardWarning(
       'missing-mp4',
       'X/SNS demo clips should emit mp4',
@@ -511,9 +515,13 @@ function createDemoController({ page, captions = [], captionOptions = {} }) {
     caption: (text, options = {}) => render(text, options),
 
     async step(text, action, options = {}) {
-      await render(text, options.captionOptions || {});
+      // Caption display options may be passed explicitly (captionOptions) or flat
+      // (e.g. step(text, fn, { position }) by analogy with caption()); honor both
+      // so they are not silently dropped. holdMs is the only step-control key.
+      const { holdMs, captionOptions, ...displayOptions } = options;
+      await render(text, { ...displayOptions, ...(captionOptions || {}) });
       const result = typeof action === 'function' ? await action() : undefined;
-      const hold = normalizeDelayMs(options.holdMs == null ? DEFAULT_STEP_HOLD_MS : options.holdMs, 'step holdMs');
+      const hold = normalizeDelayMs(holdMs == null ? DEFAULT_STEP_HOLD_MS : holdMs, 'step holdMs');
       if (hold > 0) await page.waitForTimeout(hold);
       return result;
     },

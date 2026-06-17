@@ -6,6 +6,16 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+### Fixed
+- `step(text, fn, options)` now honors flat caption display options (e.g.
+  `{ position }`, by analogy with `caption()`) instead of silently dropping
+  anything outside `options.captionOptions`.
+- `lintDemoStoryboard()` no longer emits a spurious "missing mp4" warning when
+  the demo config sets `mp4`/`crop`/`zoom` — the public caller need not pass
+  `mp4Requested`.
+- A thumbnail-only demo (no mp4/crop/zoom/trim) no longer re-muxes and
+  overwrites the source `.webm`; the thumbnail is taken from the original clip.
+
 ## [1.3.0] - 2026-06-18
 
 ### Added
