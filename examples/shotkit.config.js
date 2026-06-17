@@ -61,4 +61,54 @@ module.exports = {
       replacements: { NAME: 'My Extension', TAGLINE: 'Does one useful thing well.' },
     },
   ],
+
+  demos: [
+    {
+      name: 'demo-feature',
+      preset: 'sns-video',
+      mp4: { crf: 18 },
+      trim: { start: 0, duration: '00:35' },
+      thumbnail: { at: 1.2 },
+      zoom: { scale: 1.04 },
+      captions: [
+        { at: 0.5, text: 'Open the course page' },
+        { at: 4.0, text: 'Turn the extension on' },
+        { at: 11.0, text: 'The page changes in place' },
+        { at: 20.0, text: 'Restore the original anytime' },
+      ],
+      async run({ page, extensionId, baseUrl, demo }) {
+        await demo.step('Open the page', async () => {
+          await page.goto(`${baseUrl}/demo.html`, { waitUntil: 'networkidle' });
+        });
+        await demo.step('Open the toolbar popup', async () => {
+          await page.goto(`chrome-extension://${extensionId}/src/popup/popup.html`, { waitUntil: 'load' });
+          await page.waitForSelector('#status');
+        });
+        await demo.click('.slider', { moveMs: 420, holdMs: 900 });
+        await demo.caption('Restore the original anytime');
+        await demo.click('.slider', { moveMs: 420, holdMs: 900 });
+        await demo.wait(600);
+      },
+    },
+    {
+      name: 'demo-restore',
+      preset: 'sns-video',
+      mp4: { crf: 18 },
+      trim: { start: 0, duration: '00:24' },
+      thumbnail: { at: 1.0 },
+      captions: [
+        { at: 0.5, text: 'Restore the original anytime' },
+        { at: 5.0, text: 'Keep a safety path visible' },
+      ],
+      async run({ page, extensionId, baseUrl, demo }) {
+        await page.goto(`${baseUrl}/demo.html`, { waitUntil: 'networkidle' });
+        await demo.step('Open the toolbar popup', async () => {
+          await page.goto(`chrome-extension://${extensionId}/src/popup/popup.html`, { waitUntil: 'load' });
+          await page.waitForSelector('#status');
+        });
+        await demo.click('.slider', { moveMs: 420, holdMs: 900 });
+        await demo.click('.slider', { moveMs: 420, holdMs: 900 });
+      },
+    },
+  ],
 };

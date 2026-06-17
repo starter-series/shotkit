@@ -1,0 +1,96 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:starter-series:shotkit:schema:storyboard:v1",
+  "title": "shotkit storyboard handoff",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "$schema",
+    "kind",
+    "version",
+    "generatedAt",
+    "project",
+    "purpose",
+    "demos",
+    "storyboardLint"
+  ],
+  "properties": {
+    "$schema": { "const": "urn:starter-series:shotkit:schema:storyboard:v1" },
+    "kind": { "const": "shotkit.storyboard" },
+    "version": { "const": 1 },
+    "generatedAt": { "type": "string", "format": "date-time" },
+    "project": { "type": "object", "additionalProperties": true },
+    "purpose": { "const": "browser-extension-demo-starter-pack" },
+    "demos": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/demo" }
+    },
+    "storyboardLint": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/lintSummary" }
+    }
+  },
+  "$defs": {
+    "demo": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["name", "audience", "viewport", "recommendedNextTool", "beats"],
+      "properties": {
+        "name": { "type": "string" },
+        "audience": { "type": "string" },
+        "preset": { "type": "string" },
+        "viewport": { "$ref": "#/$defs/viewport" },
+        "recommendedNextTool": { "type": "string" },
+        "trim": { "type": ["object", "null"], "additionalProperties": true },
+        "framing": { "type": "object", "additionalProperties": true },
+        "thumbnail": { "type": ["object", "boolean", "null"], "additionalProperties": true },
+        "recommendedStory": { "type": "object", "additionalProperties": true },
+        "beats": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/beat" }
+        },
+        "guidance": { "type": ["string", "null"] }
+      }
+    },
+    "viewport": {
+      "type": "object",
+      "required": ["width", "height"],
+      "properties": {
+        "width": { "type": "integer", "minimum": 1 },
+        "height": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "beat": {
+      "type": "object",
+      "required": ["at", "atMs", "text"],
+      "properties": {
+        "at": { "type": "number", "minimum": 0 },
+        "atMs": { "type": "integer", "minimum": 0 },
+        "text": { "type": "string" }
+      }
+    },
+    "lintSummary": {
+      "type": "object",
+      "required": ["name", "ok", "warnings"],
+      "properties": {
+        "name": { "type": "string" },
+        "ok": { "type": "boolean" },
+        "warnings": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/lintWarning" }
+        }
+      }
+    },
+    "lintWarning": {
+      "type": "object",
+      "required": ["code", "severity", "message", "fix"],
+      "properties": {
+        "code": { "type": "string" },
+        "severity": { "enum": ["warning"] },
+        "message": { "type": "string" },
+        "fix": { "type": "string" },
+        "details": { "type": "object", "additionalProperties": true }
+      }
+    }
+  }
+}

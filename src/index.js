@@ -2,9 +2,9 @@
  * shotkit — public API.
  *
  * shotkit drives a BUILT browser extension (or any HTML) with Playwright and
- * captures store/social assets: screenshots, promo images, and a demo
- * screencast. One engine, used via the CLI (`shotkit`), programmatically
- * (`capture()`), or (planned) an MCP server.
+ * captures store/social assets: screenshots, promo images, and captioned demo
+ * screencasts. One engine, used via the CLI (`shotkit`), programmatically
+ * (`capture()`), or through agent-readable docs/skills.
  *
  * Config authors typically use `capture` indirectly (via the CLI) and import
  * the helpers below inside their `shotkit.config.js` to set up scenes:
@@ -22,7 +22,35 @@ const { compositeCaption, DEFAULT_BAND_HEIGHT } = require('./caption');
 const { renderPromoTile } = require('./promo');
 const { extractListing, renderDescriptionDoc, splitSections } = require('./describe');
 const { PRESETS, resolveSize } = require('./presets');
-const { findFfmpeg, buildFfmpegArgs, postProcessDemo } = require('./video');
+const { findFfmpeg, buildFfmpegArgs, buildThumbnailArgs, buildVideoFilter, postProcessDemo } = require('./video');
+const { DEFAULT_TARGETS, buildHandoffRecommendations } = require('./integrations');
+const {
+  HANDOFF_KINDS,
+  HANDOFF_SCHEMA_IDS,
+  HANDOFF_VERSION,
+  assetRecord,
+  buildHandoffDocs,
+  demoStoryboard,
+  writeHandoffDocs,
+} = require('./handoff');
+const {
+  analyzeDemoStoryboard,
+  createDemoController,
+  demoCaptionInitScript,
+  ensureDemoCaptionOverlay,
+  formatStoryboardLint,
+  hideDemoCaption,
+  hideDemoPointer,
+  installDemoCaptionOverlay,
+  lintDemoStoryboard,
+  moveDemoPointer,
+  normalizeDelayMs,
+  normalizeDemoConfigs,
+  normalizeDemoCaptions,
+  parseTimeToMs,
+  pulseDemoPointer,
+  setDemoCaption,
+} = require('./demo');
 
 module.exports = {
   capture,
@@ -51,5 +79,35 @@ module.exports = {
   // demo video post-processing
   findFfmpeg,
   buildFfmpegArgs,
+  buildThumbnailArgs,
+  buildVideoFilter,
   postProcessDemo,
+  // downstream handoff recommendations
+  DEFAULT_TARGETS,
+  buildHandoffRecommendations,
+  // demo story rendering
+  analyzeDemoStoryboard,
+  createDemoController,
+  demoCaptionInitScript,
+  ensureDemoCaptionOverlay,
+  formatStoryboardLint,
+  hideDemoCaption,
+  hideDemoPointer,
+  installDemoCaptionOverlay,
+  lintDemoStoryboard,
+  moveDemoPointer,
+  normalizeDelayMs,
+  normalizeDemoConfigs,
+  normalizeDemoCaptions,
+  parseTimeToMs,
+  pulseDemoPointer,
+  setDemoCaption,
+  // handoff contract
+  HANDOFF_KINDS,
+  HANDOFF_SCHEMA_IDS,
+  HANDOFF_VERSION,
+  assetRecord,
+  buildHandoffDocs,
+  demoStoryboard,
+  writeHandoffDocs,
 };

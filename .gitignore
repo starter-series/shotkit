@@ -4,3 +4,4 @@ coverage/
 *.log
 # local smoke output
 examples/**/out/
+research-runs/

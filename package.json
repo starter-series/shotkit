@@ -1,10 +1,11 @@
 {
   "name": "@starter-series/shotkit",
-  "version": "1.2.0",
-  "description": "Capture Chrome Web Store + social promo assets (screenshots, promo images, demo video) from a built browser extension with Playwright.",
+  "version": "1.3.0",
+  "description": "Capture Chrome Web Store assets and SNS demo handoff packs from a built browser extension with Playwright.",
   "main": "src/index.js",
   "exports": {
-    ".": "./src/index.js"
+    ".": "./src/index.js",
+    "./schemas/*": "./schemas/*"
   },
   "bin": {
     "shotkit": "bin/shotkit.js"
@@ -12,10 +13,13 @@
   "files": [
     "src",
     "bin",
-    "skills"
+    "skills/capture",
+    "docs/handoff-conventions.md",
+    "schemas"
   ],
   "scripts": {
-    "lint": "eslint src/ bin/ test/",
+    "lint": "eslint src/ bin/ scripts/ test/",
+    "research": "node scripts/research-to-product-fit.mjs",
     "test": "jest --verbose --coverage",
     "install:browser": "playwright install chromium"
   },
@@ -30,7 +34,10 @@
     "browser-extension",
     "promo",
     "og-image",
-    "store-assets"
+    "store-assets",
+    "demo-video",
+    "storyboard",
+    "handoff"
   ],
   "author": "heznpc",
   "license": "MIT",
@@ -53,7 +60,10 @@
       "src/extension.js",
       "src/serve.js",
       "src/cli.js",
-      "src/video.js"
+      "src/video.js",
+      "src/demo.js",
+      "src/handoff.js",
+      "src/integrations.js"
     ],
     "coverageReporters": [
       "text",
