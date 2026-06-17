@@ -147,7 +147,7 @@ function postProcessDemo({ webmPath, mp4, trim, crop, zoom, thumbnail, log, env 
     if (crop) notes.push('cropped');
     if (zoom) notes.push('zoomed');
     log(`✓ ${path.basename(mp4Path)} (${notes.join(', ')})`);
-  } else {
+  } else if (trim) {
     // Trim-only: stream-copy to a sibling temp file, then swap in place.
     const tmp = `${webmPath}.trim.webm`;
     execFileSync(bin, buildFfmpegArgs({ input: webmPath, output: tmp, trim, copy: true }), {
@@ -156,6 +156,8 @@ function postProcessDemo({ webmPath, mp4, trim, crop, zoom, thumbnail, log, env 
     fs.renameSync(tmp, webmPath);
     log(`✓ ${path.basename(webmPath)} trimmed in place`);
   }
+  // else: thumbnail-only (no mp4/crop/zoom/trim) — nothing to re-encode; the
+  // thumbnail below is taken from the original webm without rewriting it.
   if (thumbnail) {
     const at = typeof thumbnail === 'object' && thumbnail.at != null ? thumbnail.at : 1;
     const thumbPath = typeof thumbnail === 'object' && thumbnail.name
