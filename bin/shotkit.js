@@ -26,6 +26,12 @@ async function main() {
     process.stdout.write(USAGE);
     return;
   }
+  if (opts.errors.length) {
+    const msg = opts.errors.join('; ');
+    if (opts.json) process.stderr.write(JSON.stringify({ ok: false, error: msg, code: 2 }) + '\n');
+    else console.error(`[shotkit] ${msg}\n\n${USAGE}`);
+    process.exit(2);
+  }
   const cwd = path.resolve(process.cwd(), opts.path || '.');
   const configPath = resolveConfigPath(opts.config, cwd);
   if (!configPath || !fs.existsSync(configPath)) {
