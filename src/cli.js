@@ -54,22 +54,24 @@ function parseArgs(argv) {
   };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
-    if (a === '--scene') {
-      const value = argv[++i];
+    if (a === '--scene' || a.startsWith('--scene=')) {
+      const inline = a.startsWith('--scene=');
+      const value = inline ? a.slice('--scene='.length) : argv[++i];
       if (!value || value.startsWith('-')) {
         opts.errors.push('--scene requires a scene name');
-        if (value && value.startsWith('-')) i--;
+        if (!inline && value && value.startsWith('-')) i--;
       } else {
         const scenes = value.split(',').filter(Boolean);
         if (scenes.length) opts.scenes.push(...scenes);
         else opts.errors.push('--scene requires a scene name');
       }
     }
-    else if (a === '--config') {
-      const value = argv[++i];
+    else if (a === '--config' || a.startsWith('--config=')) {
+      const inline = a.startsWith('--config=');
+      const value = inline ? a.slice('--config='.length) : argv[++i];
       if (!value || value.startsWith('-')) {
         opts.errors.push('--config requires a config path');
-        if (value && value.startsWith('-')) i--;
+        if (!inline && value && value.startsWith('-')) i--;
       } else {
         opts.config = value;
       }
