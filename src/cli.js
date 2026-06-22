@@ -41,6 +41,7 @@ Exit codes: 0 ok · 1 runtime failure · 2 usage / no config found
 function parseArgs(argv) {
   const opts = {
     scenes: [],
+    errors: [],
     noVideo: false,
     noBuild: false,
     liveGt: false,
@@ -53,8 +54,26 @@ function parseArgs(argv) {
   };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
-    if (a === '--scene') opts.scenes.push(...(argv[++i] || '').split(',').filter(Boolean));
-    else if (a === '--config') opts.config = argv[++i];
+    if (a === '--scene') {
+      const value = argv[++i];
+      if (!value || value.startsWith('-')) {
+        opts.errors.push('--scene requires a scene name');
+        if (value && value.startsWith('-')) i--;
+      } else {
+        const scenes = value.split(',').filter(Boolean);
+        if (scenes.length) opts.scenes.push(...scenes);
+        else opts.errors.push('--scene requires a scene name');
+      }
+    }
+    else if (a === '--config') {
+      const value = argv[++i];
+      if (!value || value.startsWith('-')) {
+        opts.errors.push('--config requires a config path');
+        if (value && value.startsWith('-')) i--;
+      } else {
+        opts.config = value;
+      }
+    }
     else if (a === '--json') opts.json = true;
     else if (a === '--mp4') opts.mp4 = true;
     else if (a === '--no-video') opts.noVideo = true;
@@ -63,6 +82,8 @@ function parseArgs(argv) {
     else if (a === '--freeze') opts.freeze = true;
     else if (a === '-h' || a === '--help') opts.help = true;
     else if (!a.startsWith('-') && opts.path === null) opts.path = a;
+    else if (!a.startsWith('-')) opts.errors.push(`unexpected positional argument: ${a}`);
+    else opts.errors.push(`unknown option: ${a}`);
   }
   return opts;
 }
