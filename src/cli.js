@@ -20,7 +20,8 @@ Arguments:
 
 Options:
   --config <path>   config file (default: shotkit.config.js | store.config.js)
-  --scene <name>    only capture this scene/promoTile/demo/demos entry, or "description";
+  --scene <name>    only capture this scene/promoTile/demo/demos entry,
+                    "description", or "privacy";
                     repeatable, or comma-separated. When given, nothing else runs.
   --json            machine-readable mode: stdout gets one JSON object
                     {ok, outDir, produced[]}; progress logs move to stderr

@@ -44,7 +44,7 @@ shotkit-ready TODOs.
   It includes a fallback helper so the current `1.1.1` package can still run
   the demo while newer demo-story fields remain inert until shotkit is upgraded.
 - `browser-extension-starter/.github/workflows/capture.yml`: CI runs
-  `HEADED=0 npx shotkit --json`, emits `shotkit-result.json`, and uploads png,
+  `HEADED=0 npx @starter-series/shotkit --json`, emits `shotkit-result.json`, and uploads png,
   webm, mp4, `description.md`, `storyboard.json`, `captions.json`, and
   `shotkit-manifest.json` artifacts when present.
 - `skillBridge/package.json`: `capture:store` runs `shotkit`; store release

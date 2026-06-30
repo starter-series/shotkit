@@ -22,7 +22,7 @@ Screenshots · promo images · demo clips · storyboard · handoff manifest. One
 
 ## Status & Scope
 
-- **Currently implemented** — A Playwright capture **engine** (build → launch the *built* extension via `launchPersistentContext(--load-extension)` → drive scenes → screenshot → caption/disclaimer band → promo tile from HTML → demo `webm` with DOM caption overlays → listing copy from `STORE_LISTING.md` → `storyboard.json` / `captions.json` / `shotkit-manifest.json` handoff pack), a **CLI** (`shotkit`) with an **agent contract** (`--json` machine output, optional `path` argument, `0/1/2` exit codes), **size presets** for both audiences (CWS `1280×800`/`440×280`, SNS `1200×675`/`1280×720`/`1200×630`/`1080×1080`), a **path-traversal-safe** localhost fixture server, a programmatic API (`capture()`), a **Claude Code plugin + skill** ([`skills/capture/`](skills/capture/SKILL.md); `/plugin install shotkit@starter-series`), an **AGENTS.md run-block** so any shell-having coding agent can invoke it, the **npm package** [`@starter-series/shotkit`](https://www.npmjs.com/package/@starter-series/shotkit), and **demo post-processing** for SNS (`webm → H.264 mp4` with `+faststart`, frame-accurate **trim**, static crop/zoom framing, thumbnails — needs an ffmpeg on PATH or `SHOTKIT_FFMPEG`; GitHub ubuntu runners ship one). Consumed by `browser-extension-starter` and `skillBridge`.
+- **Currently implemented** — A Playwright capture **engine** (build → launch the *built* extension via `launchPersistentContext(--load-extension)` → drive scenes → screenshot → caption/disclaimer band → promo tile from HTML → demo `webm` with DOM caption overlays → listing copy from `STORE_LISTING.md` or `product.manifest.json` → optional `privacy-disclosure.md` worksheet → `storyboard.json` / `captions.json` / `shotkit-manifest.json` handoff pack), a **CLI** (`shotkit`) with an **agent contract** (`--json` machine output, optional `path` argument, `0/1/2` exit codes), **size presets** for both audiences (CWS `1280×800`/`440×280`, SNS `1200×675`/`1280×720`/`1200×630`/`1080×1080`), a **path-traversal-safe** localhost fixture server, a programmatic API (`capture()`), a **Claude Code plugin + skill** ([`skills/capture/`](skills/capture/SKILL.md); `/plugin install shotkit@starter-series`), an **AGENTS.md run-block** so any shell-having coding agent can invoke it, the **npm package** [`@starter-series/shotkit`](https://www.npmjs.com/package/@starter-series/shotkit), and **demo post-processing** for SNS (`webm → H.264 mp4` with `+faststart`, frame-accurate **trim**, static crop/zoom framing, thumbnails — needs an ffmpeg on PATH or `SHOTKIT_FFMPEG`; GitHub ubuntu runners ship one). Consumed by `browser-extension-starter` and `skillBridge`.
 - **Story renderer** — Demo configs can use one `demo` or several `demos: []` entries, timed `captions`, pointer-highlighted clicks, paced cursor movement, static zoom/crop framing, thumbnail frames, storyboard lint, and a small `demo` helper (`caption`, `step`, `wait`, `click`) so an agent can turn a feature checklist into 20-40 second before → action → result stories without pulling in a general video editor.
 - **Design intent** — *One engine, many surfaces — matched to the tool's nature.* shotkit is a heavy, file-producing build tool, so its surfaces are CLI (+`--json`), skill, and CI — not MCP (see Non-goals). Captures are **deterministic** (login-free fixtures, frozen data) and the run **doubles as a real-bundle smoke test** — a screenshot only appears if that feature rendered from the shipped code. **Trademark-safe** by construction: a disclaimer band is composited onto every shot.
 - **Non-goals** — An **MCP server** inside shotkit (dropped by design: agents with a shell get a better contract from `--json` + the skill). Removing the per-repo **scene config** (which screens are *your* money shots is irreducible intent — it lives in your `shotkit.config.js`). A general-purpose video editor or hosted demo platform. shotkit creates source evidence and a handoff pack; Screen Studio, Canva, Supademo, or future MCP connectors can do polish later.
@@ -56,13 +56,13 @@ Add a `shotkit.config.js` (the per-repo capture contract), then:
 
 ```bash
 shotkit                         # produce everything into outDir
-shotkit --scene 01-feature      # just one scene/promoTile/demo/demos entry, or "description"
+shotkit --scene 01-feature      # just one scene/promoTile/demo/demos entry, "description", or "privacy"
 shotkit --no-video              # skip the screencast (faster/CI)
 shotkit --no-build              # use an already-built bundle
 shotkit ../my-extension --json  # run against another checkout; JSON result on stdout
 ```
 
-Outputs land in `outDir` (default `store-assets/`): `<scene>.png`, `<promoTile>.png`, `<demo>.webm`, optional `<demo>.mp4`, optional `<demo>-thumbnail.png`, `description.md`, and, by default, `storyboard.json`, `captions.json`, and `shotkit-manifest.json` (`handoff: false` disables the handoff files).
+Outputs land in `outDir` (default `store-assets/`): `<scene>.png`, `<promoTile>.png`, `<demo>.webm`, optional `<demo>.mp4`, optional `<demo>-thumbnail.png`, `description.md`, optional `privacy-disclosure.md`, and, by default, `storyboard.json`, `captions.json`, and `shotkit-manifest.json` (`handoff: false` disables the handoff files).
 
 ### Handoff Pack
 
@@ -251,6 +251,7 @@ module.exports = {
   outDir: 'store-assets',
   disclaimer: 'Unofficial · not affiliated with …', // composited onto every shot (optional)
   description: { from: 'store-assets/STORE_LISTING.md' }, // → description.md (optional)
+  // Or: { from: 'product.manifest.json', channel: 'chromeWebStore' }
 
   async setup({ context, extensionId, flags }) {  // e.g. start a fixture server / stubs
     return { env: { baseUrl }, teardown: async () => {} };
@@ -284,12 +285,67 @@ module.exports = {
 - Demo captions are overlays inside the recorded page, not screenshot bands; they are meant for story clips, not CWS screenshots.
 - Demo names must be unique across `demo` and `demos` because they become output filenames.
 
+### Product manifest listing/privacy
+
+Use `STORE_LISTING.md` when you want human-edited copy only. Use
+`product.manifest.json` when listing copy, permission disclosures, and future
+launch tooling should share one source of truth:
+
+```js
+module.exports = {
+  description: { from: 'product.manifest.json', channel: 'chromeWebStore' },
+};
+```
+
+Minimal manifest:
+
+```json
+{
+  "product": {
+    "name": "SkillBridge",
+    "summary": "Translate selected text safely.",
+    "description": "A browser extension for protected-term translation.",
+    "category": "Productivity"
+  },
+  "stores": {
+    "chromeWebStore": {
+      "title": "SkillBridge Translator",
+      "whatsNew": "- Rebuilt launch disclosures"
+    }
+  },
+  "privacy": {
+    "dataCollection": "No sale of personal data.",
+    "dataUse": "Selected text is sent only when the user requests translation.",
+    "permissions": [
+      {
+        "name": "storage",
+        "purpose": "Save local preferences",
+        "disclosure": "Stores settings on this device."
+      }
+    ],
+    "dataFlows": [
+      {
+        "data": "Selected text",
+        "source": "Active page",
+        "destination": "Translation API",
+        "purpose": "Return translated text",
+        "retention": "Not retained by the extension"
+      }
+    ]
+  }
+}
+```
+
+`privacy-disclosure.md` is a review worksheet for store disclosure and README
+permission tables. It is intentionally not a privacy policy generator.
+
 ## Public API
 
 `require('@starter-series/shotkit')` →
 `capture(config, opts)` · `serveDirectory` · `stageExtension` · `patchManifestForLocalhost` ·
 `launchWithExtension` · `closeContext` · `compositeCaption` · `renderPromoTile` ·
-`extractListing` · `renderDescriptionDoc` · `PRESETS` · `resolveSize` ·
+`extractListing` · `extractProductManifest` · `renderDescriptionDoc` ·
+`renderPrivacyDisclosureDoc` · `PRESETS` · `resolveSize` ·
 `createDemoController` · `normalizeDemoConfigs` · `analyzeDemoStoryboard` ·
 `lintDemoStoryboard` · `installDemoCaptionOverlay` · `setDemoCaption` ·
 `buildVideoFilter` · `buildThumbnailArgs` · `HANDOFF_VERSION` ·

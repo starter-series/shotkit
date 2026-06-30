@@ -1,7 +1,13 @@
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const { splitSections, extractListing, renderDescriptionDoc } = require('../src/describe');
+const {
+  splitSections,
+  extractListing,
+  extractProductManifest,
+  renderDescriptionDoc,
+  renderPrivacyDisclosureDoc,
+} = require('../src/describe');
 
 const MD = `# Listing
 
@@ -25,6 +31,12 @@ Productivity
 function tmpMd(content) {
   const p = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'sk-md-')), 'LISTING.md');
   fs.writeFileSync(p, content);
+  return p;
+}
+
+function tmpJson(value) {
+  const p = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'sk-json-')), 'product.manifest.json');
+  fs.writeFileSync(p, JSON.stringify(value, null, 2));
   return p;
 }
 
@@ -63,5 +75,72 @@ describe('describe', () => {
     expect(doc).toContain('## Title');
     expect(doc).toContain('My Ext — short pitch');
     expect(doc).toContain('Productivity');
+  });
+
+  test('extractProductManifest maps listing and privacy disclosure fields', () => {
+    const product = extractProductManifest(tmpJson({
+      product: {
+        name: 'SkillBridge',
+        summary: 'Translate selected text safely.',
+        description: 'A browser extension for protected-term translation.',
+      },
+      stores: {
+        chromeWebStore: {
+          title: 'SkillBridge Translator',
+          category: 'Productivity',
+          whatsNew: '- Rebuilt privacy disclosures',
+        },
+      },
+      privacy: {
+        dataCollection: 'No sale of personal data.',
+        dataUse: 'Selected text is sent only when the user requests translation.',
+        permissions: [
+          {
+            name: 'storage',
+            purpose: 'Save local preferences',
+            disclosure: 'Stores settings on this device.',
+          },
+        ],
+        hostPermissions: [
+          {
+            host: 'https://translation.example/*',
+            purpose: 'Send translation requests',
+            disclosure: 'Only selected text is sent after user action.',
+            optional: true,
+          },
+        ],
+        dataFlows: [
+          {
+            data: 'Selected text',
+            source: 'Active page',
+            destination: 'Translation API',
+            purpose: 'Return translated text',
+            retention: 'Not retained by the extension',
+          },
+        ],
+        notes: ['Review this worksheet before store submission.'],
+      },
+    }));
+    expect(product.listing.title).toBe('SkillBridge Translator');
+    expect(product.listing.summary).toBe('Translate selected text safely.');
+    expect(product.listing.description).toContain('protected-term');
+    expect(product.listing.category).toBe('Productivity');
+    expect(product.privacy.permissions.map((p) => p.name)).toEqual(['storage', 'https://translation.example/*']);
+    expect(product.privacy.dataFlows[0].purpose).toBe('Return translated text');
+    expect(product.privacy.warnings).toEqual([]);
+  });
+
+  test('renderPrivacyDisclosureDoc is a worksheet, not legal policy text', () => {
+    const { privacy } = extractProductManifest(tmpJson({
+      privacy: {
+        permissions: [{ name: 'tabs', purpose: 'Detect current tab', disclosure: 'Used to capture the active page.' }],
+        dataFlows: [{ data: 'URL', destination: 'Local log', purpose: 'Debug capture fixtures' }],
+      },
+    }));
+    const doc = renderPrivacyDisclosureDoc(privacy);
+    expect(doc).toContain('# Privacy disclosure worksheet');
+    expect(doc).toContain('not a');
+    expect(doc).toContain('| tabs | Detect current tab | Used to capture the active page. | no |');
+    expect(doc).toContain('| URL | (unspecified) | Local log | Debug capture fixtures | (unspecified) |');
   });
 });

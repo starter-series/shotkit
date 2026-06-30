@@ -1,6 +1,6 @@
 ---
 name: capture
-description: Capture Chrome Web Store + social promo assets (screenshots, promo tiles, demo screencast, listing copy) from a built browser extension using shotkit. Use when asked to generate store screenshots, CWS assets, promo/OG images, or a demo video for a repo that has a shotkit.config.js (or store.config.js).
+description: Capture Chrome Web Store + social promo assets (screenshots, promo tiles, demo screencast, listing copy, privacy disclosure worksheet) from a built browser extension using shotkit. Use when asked to generate store screenshots, CWS assets, promo/OG images, listing/privacy handoff, or a demo video for a repo that has a shotkit.config.js (or store.config.js).
 allowed-tools: Bash(npx @starter-series/shotkit*), Bash(npm run capture:store*), Bash(npx playwright install chromium), Read
 ---
 
@@ -24,7 +24,8 @@ rendered from the shipped code. By default, it also writes a handoff pack:
    npx @starter-series/shotkit <path> --json   # against another checkout
    ```
 
-   Useful flags: `--scene <name>` (one scene/promoTile/demo/demos entry or `description`),
+   Useful flags: `--scene <name>` (one scene/promoTile/demo/demos entry,
+   `description`, or `privacy`),
    `--no-video` (skip the screencast), `--mp4` (also emit an H.264 mp4 of the
    demo — needs ffmpeg on PATH or `SHOTKIT_FFMPEG`), `--no-build` (reuse an
    existing build).
@@ -45,6 +46,9 @@ rendered from the shipped code. By default, it also writes a handoff pack:
   unreliable on CI runners — don't use it.
 - Scenes are the repo's own config — to change *what* is captured, edit
   `shotkit.config.js`, not shotkit.
+- `description.from` may point to `STORE_LISTING.md` for copy only or to
+  `product.manifest.json` for shared listing + privacy disclosure inputs.
+  `privacy-disclosure.md` is a worksheet for store review, not legal policy text.
 - CWS assets and SNS demo clips have different jobs. For X/SNS clips, prefer
   `demo.preset: 'sns-video'` (`1280×720`), `demo.mp4: { crf: 18 }`, 20-40
   seconds, short captions, first-result-within-3-seconds, and a
