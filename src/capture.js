@@ -9,7 +9,8 @@
  *   - <demo>.webm      a captionable demo screencast (unless opts.noVideo)
  *   - <demo>.mp4       optional H.264 version for SNS
  *   - storyboard.json / captions.json / shotkit-manifest.json
- *   - description.md   listing copy extracted from STORE_LISTING.md
+ *   - description.md   listing copy extracted from STORE_LISTING.md or product.manifest.json
+ *   - privacy-disclosure.md worksheet extracted from product.manifest.json
  *
  * Because it runs the project's real `build` first and loads the BUILT bundle,
  * a clean run doubles as a real-bundle smoke test: a screenshot only appears if
@@ -27,7 +28,13 @@ const { execSync } = require('child_process');
 const { launchWithExtension, closeContext } = require('./launch');
 const { compositeCaption, DEFAULT_BAND_HEIGHT } = require('./caption');
 const { renderPromoTile } = require('./promo');
-const { extractListing, renderDescriptionDoc } = require('./describe');
+const {
+  extractListing,
+  extractProductManifest,
+  hasJsonExtension,
+  renderDescriptionDoc,
+  renderPrivacyDisclosureDoc,
+} = require('./describe');
 const { resolveSize } = require('./presets');
 const { postProcessDemo } = require('./video');
 const { analyzeDemoStoryboard, createDemoController, installDemoCaptionOverlay, normalizeDemoConfigs } = require('./demo');
@@ -45,13 +52,13 @@ function normalizeSetup(result) {
 /**
  * @param {object} config  the project's shotkit config object (scenes, etc.)
  * @param {object} [opts]
- * @param {string[]} [opts.scenes]   only capture these names (scenes/promoTiles/demo/demos/"description")
+ * @param {string[]} [opts.scenes]   only capture these names (scenes/promoTiles/demo/demos/"description"/"privacy")
  * @param {boolean} [opts.noVideo]   skip the demo screencast
  * @param {boolean} [opts.noBuild]   skip config.build
  * @param {boolean} [opts.mp4]       also convert the demo webm to H.264 mp4
  * @param {boolean} [opts.liveGt]    passed to config hooks as flags.liveGt
  * @param {boolean} [opts.freeze]    passed to config hooks as flags.freeze
- * @param {string}  [opts.cwd]       project root for build / outDir / description.from
+ * @param {string}  [opts.cwd]       project root for build / outDir / listing sources
  * @param {(msg:string)=>void} [opts.log]
  * @returns {Promise<{produced: string[], outDir: string}>}
  */
@@ -153,22 +160,59 @@ async function capture(config, opts = {}) {
       log(`✓ ${tile.name}.png (${width}×${height})`);
     }
 
-    if (config.description && config.description.from && wants('description')) {
-      const listing = extractListing(path.resolve(cwd, config.description.from));
-      const out = path.join(outDir, 'description.md');
-      fs.writeFileSync(out, renderDescriptionDoc(listing));
-      produced.push(out);
-      assets.push(assetRecord({
-        cwd,
-        outDir,
-        filePath: out,
-        name: 'description',
-        type: 'text',
-        role: 'store-listing-copy',
-        source: { kind: 'description' },
-      }));
-      if (listing.warnings.length) log(`⚠️  ${listing.warnings.join('; ')}`);
-      log('✓ description.md');
+    if (config.description && config.description.from) {
+      const sourcePath = path.resolve(cwd, config.description.from);
+      if (hasJsonExtension(sourcePath)) {
+        const product = extractProductManifest(sourcePath, { channel: config.description.channel });
+        if (wants('description')) {
+          const out = path.join(outDir, 'description.md');
+          fs.writeFileSync(out, renderDescriptionDoc(product.listing));
+          produced.push(out);
+          assets.push(assetRecord({
+            cwd,
+            outDir,
+            filePath: out,
+            name: 'description',
+            type: 'text',
+            role: 'store-listing-copy',
+            source: { kind: 'productManifest', path: config.description.from },
+          }));
+          if (product.listing.warnings.length) log(`⚠️  ${product.listing.warnings.join('; ')}`);
+          log('✓ description.md');
+        }
+        if (wants('privacy')) {
+          const out = path.join(outDir, 'privacy-disclosure.md');
+          fs.writeFileSync(out, renderPrivacyDisclosureDoc(product.privacy));
+          produced.push(out);
+          assets.push(assetRecord({
+            cwd,
+            outDir,
+            filePath: out,
+            name: 'privacy',
+            type: 'text',
+            role: 'privacy-disclosure',
+            source: { kind: 'productManifest', path: config.description.from },
+          }));
+          if (product.privacy.warnings.length) log(`⚠️  ${product.privacy.warnings.join('; ')}`);
+          log('✓ privacy-disclosure.md');
+        }
+      } else if (wants('description')) {
+        const listing = extractListing(sourcePath);
+        const out = path.join(outDir, 'description.md');
+        fs.writeFileSync(out, renderDescriptionDoc(listing));
+        produced.push(out);
+        assets.push(assetRecord({
+          cwd,
+          outDir,
+          filePath: out,
+          name: 'description',
+          type: 'text',
+          role: 'store-listing-copy',
+          source: { kind: 'description' },
+        }));
+        if (listing.warnings.length) log(`⚠️  ${listing.warnings.join('; ')}`);
+        log('✓ description.md');
+      }
     }
   } finally {
     // Close the context (drops the browser's sockets) BEFORE the fixture server:

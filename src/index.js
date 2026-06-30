@@ -20,7 +20,15 @@ const { serveDirectory, FIXTURE_CSP } = require('./serve');
 const { stageExtension, patchManifestForLocalhost, LOCALHOST_MATCHES } = require('./extension');
 const { compositeCaption, DEFAULT_BAND_HEIGHT } = require('./caption');
 const { renderPromoTile } = require('./promo');
-const { extractListing, renderDescriptionDoc, splitSections } = require('./describe');
+const {
+  extractListing,
+  extractPrivacyDisclosure,
+  extractProductListing,
+  extractProductManifest,
+  renderDescriptionDoc,
+  renderPrivacyDisclosureDoc,
+  splitSections,
+} = require('./describe');
 const { PRESETS, resolveSize } = require('./presets');
 const { findFfmpeg, buildFfmpegArgs, buildThumbnailArgs, buildVideoFilter, postProcessDemo } = require('./video');
 const { DEFAULT_TARGETS, buildHandoffRecommendations } = require('./integrations');
@@ -71,7 +79,11 @@ module.exports = {
   renderPromoTile,
   // listing copy
   extractListing,
+  extractPrivacyDisclosure,
+  extractProductListing,
+  extractProductManifest,
   renderDescriptionDoc,
+  renderPrivacyDisclosureDoc,
   splitSections,
   // sizes
   PRESETS,
