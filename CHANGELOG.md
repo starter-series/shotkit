@@ -1,10 +1,15 @@
 # Changelog
 
-All notable changes to `@starter-series/shotkit` are documented here.
+All notable changes to `shotkit` are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+
+### Changed
+- Package identity is now the unscoped npm product noun `shotkit`.
+- The handoff manifest `tool` field now emits `shotkit`, matching the package
+  and CLI identity.
 
 ### Fixed
 - `step(text, fn, options)` now honors flat caption display options (e.g.

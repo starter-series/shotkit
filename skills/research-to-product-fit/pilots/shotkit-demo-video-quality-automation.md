@@ -14,7 +14,7 @@ shotkit-ready TODOs.
 
 ## Local Evidence Checked
 
-- `shotkit/package.json`: package `@starter-series/shotkit` is at `1.3.0`;
+- `shotkit/package.json`: package `shotkit` is at `1.3.0`;
   scripts are `lint`, `research`, `test`, and `install:browser`; npm package
   includes `src`, `bin`, `skills/capture`, `docs/handoff-conventions.md`, and
   `schemas`, with `./schemas/*` exported. The research-to-product-fit harness,
@@ -37,16 +37,18 @@ shotkit-ready TODOs.
 
 ## Consumer Evidence Checked
 
-- `browser-extension-starter/package.json`: `capture:store` runs `shotkit`, and
-  the dependency is `@starter-series/shotkit` `^1.1.1`.
+- `browser-extension-starter/package.json`: the local consumer target was
+  checked in the starter-series workspace. It should consume the unscoped
+  `shotkit` package after the package-name migration lands.
 - `browser-extension-starter/shotkit.config.js`: uses scenes, promo tile, demo
   captions, `mp4: { crf: 18 }`, and `trim: { start: 0, duration: '00:14' }`.
   It includes a fallback helper so the current `1.1.1` package can still run
   the demo while newer demo-story fields remain inert until shotkit is upgraded.
-- `browser-extension-starter/.github/workflows/capture.yml`: CI runs
-  `HEADED=0 npx @starter-series/shotkit --json`, emits `shotkit-result.json`, and uploads png,
-  webm, mp4, `description.md`, `storyboard.json`, `captions.json`, and
-  `shotkit-manifest.json` artifacts when present.
+- `browser-extension-starter/.github/workflows/capture.yml`: the capture CI path
+  should run the unscoped `shotkit` CLI after the package-name migration lands,
+  emit `shotkit-result.json`, and upload png, webm, mp4, `description.md`,
+  `storyboard.json`, `captions.json`, and `shotkit-manifest.json` artifacts
+  when present.
 - `skillBridge/package.json`: `capture:store` runs `shotkit`; store release
   checklist says screenshots should be regenerated with one command.
 - `skillBridge/store-assets/RELEASE_CHECKLIST.md`: requires five 1280x800

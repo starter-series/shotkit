@@ -184,7 +184,7 @@ function buildHandoffDocs({ cwd, outDir, config, assets, demoConfigs, demoViewpo
     kind: HANDOFF_KINDS.manifest,
     version: HANDOFF_VERSION,
     generatedAt,
-    tool: '@starter-series/shotkit',
+    tool: 'shotkit',
     project,
     outDir: rel(cwd, outDir),
     flags,

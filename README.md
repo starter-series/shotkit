@@ -6,7 +6,6 @@
 
 Screenshots · promo images · demo clips · storyboard · handoff manifest. One command.
 
-[![npm](https://img.shields.io/npm/v/%40starter-series%2Fshotkit)](https://www.npmjs.com/package/@starter-series/shotkit)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Node ≥ 22](https://img.shields.io/badge/node-%E2%89%A522-brightgreen.svg)](.nvmrc)
 
@@ -16,13 +15,13 @@ Screenshots · promo images · demo clips · storyboard · handoff manifest. One
 
 ---
 
-> **Part of [Starter Series](https://github.com/starter-series)** — reusable tooling, not just clone-templates. `shotkit` is the first capability extracted into an installable package so any repo (and any agent) can use it without copy-paste.
+> **Part of [Starter Series](https://github.com/starter-series)** — reusable tooling, not just clone-templates. `shotkit` is the unscoped package identity for this capture engine; public npm install is a release gate, not assumed by the repo README.
 
 ---
 
 ## Status & Scope
 
-- **Currently implemented** — A Playwright capture **engine** (build → launch the *built* extension via `launchPersistentContext(--load-extension)` → drive scenes → screenshot → caption/disclaimer band → promo tile from HTML → demo `webm` with DOM caption overlays → listing copy from `STORE_LISTING.md` or `product.manifest.json` → optional `privacy-disclosure.md` worksheet → `storyboard.json` / `captions.json` / `shotkit-manifest.json` handoff pack), a **CLI** (`shotkit`) with an **agent contract** (`--json` machine output, optional `path` argument, `0/1/2` exit codes), **size presets** for both audiences (CWS `1280×800`/`440×280`, SNS `1200×675`/`1280×720`/`1200×630`/`1080×1080`), a **path-traversal-safe** localhost fixture server, a programmatic API (`capture()`), a **Claude Code plugin + skill** ([`skills/capture/`](skills/capture/SKILL.md); `/plugin install shotkit@starter-series`), an **AGENTS.md run-block** so any shell-having coding agent can invoke it, the **npm package** [`@starter-series/shotkit`](https://www.npmjs.com/package/@starter-series/shotkit), and **demo post-processing** for SNS (`webm → H.264 mp4` with `+faststart`, frame-accurate **trim**, static crop/zoom framing, thumbnails — needs an ffmpeg on PATH or `SHOTKIT_FFMPEG`; GitHub ubuntu runners ship one). Consumed by `browser-extension-starter` and `skillBridge`.
+- **Currently implemented** — A Playwright capture **engine** (build → launch the *built* extension via `launchPersistentContext(--load-extension)` → drive scenes → screenshot → caption/disclaimer band → promo tile from HTML → demo `webm` with DOM caption overlays → listing copy from `STORE_LISTING.md` or `product.manifest.json` → optional `privacy-disclosure.md` worksheet → `storyboard.json` / `captions.json` / `shotkit-manifest.json` handoff pack), a **CLI** (`shotkit`) with an **agent contract** (`--json` machine output, optional `path` argument, `0/1/2` exit codes), **size presets** for both audiences (CWS `1280×800`/`440×280`, SNS `1200×675`/`1280×720`/`1200×630`/`1080×1080`), a **path-traversal-safe** localhost fixture server, a programmatic API (`capture()`), a **Claude Code plugin + skill** ([`skills/capture/`](skills/capture/SKILL.md); `/plugin install shotkit@starter-series`), an **AGENTS.md run-block** so any shell-having coding agent can invoke it, and **demo post-processing** for SNS (`webm → H.264 mp4` with `+faststart`, frame-accurate **trim**, static crop/zoom framing, thumbnails — needs an ffmpeg on PATH or `SHOTKIT_FFMPEG`; GitHub ubuntu runners ship one).
 - **Story renderer** — Demo configs can use one `demo` or several `demos: []` entries, timed `captions`, pointer-highlighted clicks, paced cursor movement, static zoom/crop framing, thumbnail frames, storyboard lint, and a small `demo` helper (`caption`, `step`, `wait`, `click`) so an agent can turn a feature checklist into 20-40 second before → action → result stories without pulling in a general video editor.
 - **Design intent** — *One engine, many surfaces — matched to the tool's nature.* shotkit is a heavy, file-producing build tool, so its surfaces are CLI (+`--json`), skill, and CI — not MCP (see Non-goals). Captures are **deterministic** (login-free fixtures, frozen data) and the run **doubles as a real-bundle smoke test** — a screenshot only appears if that feature rendered from the shipped code. **Trademark-safe** by construction: a disclaimer band is composited onto every shot.
 - **Non-goals** — An **MCP server** inside shotkit (dropped by design: agents with a shell get a better contract from `--json` + the skill). Removing the per-repo **scene config** (which screens are *your* money shots is irreducible intent — it lives in your `shotkit.config.js`). A general-purpose video editor or hosted demo platform. shotkit creates source evidence and a handoff pack; Screen Studio, Canva, Supademo, or future MCP connectors can do polish later.
@@ -30,9 +29,20 @@ Screenshots · promo images · demo clips · storyboard · handoff manifest. One
 
 ## Install
 
+After the unscoped npm package is published:
+
 ```bash
-npm i -D @starter-series/shotkit
+npm i -D shotkit
 npx playwright install chromium    # one-time: the browser shotkit drives
+```
+
+Before npm publication, run from this repository:
+
+```bash
+npm ci
+npm run lint
+npm test
+node bin/shotkit.js --help
 ```
 
 Or as a **Claude Code plugin** (bundles the capture skill):
@@ -42,10 +52,10 @@ Or as a **Claude Code plugin** (bundles the capture skill):
 /plugin install shotkit@starter-series
 ```
 
-Zero-install in any repo that has a config:
+Zero-install after npm publication in any repo that has a config:
 
 ```bash
-npx @starter-series/shotkit
+npx shotkit
 ```
 
 > shotkit launches the **full Chromium** (`channel: 'chromium'`) — never the default headless-shell, which strips the extension subsystem. **Headless works** (`HEADED=0`; verified on macOS and Linux CI, video included) and is the CI default in the starter's capture workflow; the local default stays headed for easy debugging. Headed-under-xvfb proved unreliable on CI runners (the 8-bit default breaks Chromium's screenshot capture, and a 24-bit screen still failed silently) — run headless in CI.
@@ -243,7 +253,7 @@ copy the folder into any compatible tool's skills directory).
 ## Config contract (`shotkit.config.js`)
 
 ```js
-const { serveDirectory, stageExtension, patchManifestForLocalhost } = require('@starter-series/shotkit');
+const { serveDirectory, stageExtension, patchManifestForLocalhost } = require('shotkit');
 
 module.exports = {
   build: 'npm run build',                 // run first → real-bundle smoke test (optional)
@@ -341,7 +351,7 @@ permission tables. It is intentionally not a privacy policy generator.
 
 ## Public API
 
-`require('@starter-series/shotkit')` →
+`require('shotkit')` →
 `capture(config, opts)` · `serveDirectory` · `stageExtension` · `patchManifestForLocalhost` ·
 `launchWithExtension` · `closeContext` · `compositeCaption` · `renderPromoTile` ·
 `extractListing` · `extractProductManifest` · `renderDescriptionDoc` ·
@@ -355,11 +365,11 @@ permission tables. It is intentionally not a privacy policy generator.
 
 | Surface | Status | For |
 |---|---|---|
-| CLI (`shotkit`, `npx`) with `--json` + `path` | ✅ now | humans / CI / **shell-having agents** |
+| CLI (`shotkit`) with `--json` + `path` | ✅ now from source; `npx` after npm publication | humans / CI / **shell-having agents** |
 | Programmatic `capture()` | ✅ now | embedding |
 | Claude Code skill ([`skills/capture/`](skills/capture/SKILL.md)) | ✅ now | Claude Code (portable to Codex/Cursor/Gemini via the Agent Skills format) |
 | `AGENTS.md` run-block | ✅ now | every agent that reads AGENTS.md |
-| npm package (`@starter-series/shotkit`) | ✅ now | `npx` zero-install |
+| npm package (`shotkit`) | release target | `npx` zero-install after publish |
 | Demo story rendering (`demo`, `demos[]`, captions, click highlight, pacing, crop/zoom, thumbnails, storyboard lint, `--mp4`, `trim`) | ✅ now | SNS clips |
 | Capture-in-CI GitHub Action | ✅ now — ships in [`browser-extension-starter`](https://github.com/starter-series/browser-extension-starter)'s `capture.yml` (headless) | zero-local-browser runs + CI smoke test |
 | `starter-series` marketplace entry (`/plugin install shotkit@starter-series`) | ✅ now | discovery |
