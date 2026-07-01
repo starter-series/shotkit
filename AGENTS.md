@@ -10,11 +10,14 @@ To capture store/social assets from a repo that has a `shotkit.config.js`
 (or legacy `store.config.js`):
 
 ```bash
-npx @starter-series/shotkit --json          # all assets; stdout = {ok, outDir, produced[]}
-npx @starter-series/shotkit <path> --json   # run against another checkout
+node bin/shotkit.js --json          # from this source repo
+node bin/shotkit.js <path> --json   # run against another checkout
 ```
 
-Prereqs: `npx playwright install chromium` (one-time); the config's `build`
+After npm publication, installed projects can use `shotkit --json` or
+`npm run capture:store -- --json` when the project defines that wrapper.
+
+Prereqs: `npm exec -- playwright install chromium` (one-time); the config's `build`
 command must succeed. Headless works (`HEADED=0`; verified on macOS + Linux CI,
 video included); the local default is headed. Exit codes: `0` ok · `1` runtime
 failure · `2` usage / no config. In `--json` mode progress logs go to stderr;

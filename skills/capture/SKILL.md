@@ -1,7 +1,7 @@
 ---
 name: capture
 description: Capture Chrome Web Store + social promo assets (screenshots, promo tiles, demo screencast, listing copy, privacy disclosure worksheet) from a built browser extension using shotkit. Use when asked to generate store screenshots, CWS assets, promo/OG images, listing/privacy handoff, or a demo video for a repo that has a shotkit.config.js (or store.config.js).
-allowed-tools: Bash(npx @starter-series/shotkit*), Bash(npm run capture:store*), Bash(npx playwright install chromium), Read
+allowed-tools: Bash(shotkit*), Bash(node bin/shotkit.js*), Bash(npm run capture:store*), Bash(npm exec -- playwright install chromium), Read
 ---
 
 # Capture store/social assets with shotkit
@@ -15,14 +15,18 @@ rendered from the shipped code. By default, it also writes a handoff pack:
 ## Steps
 
 1. **Preconditions** — the repo has a `shotkit.config.js` (or legacy
-   `store.config.js`); Chromium is installed (`npx playwright install chromium`,
+   `store.config.js`); Chromium is installed (`npm exec -- playwright install chromium`,
    one-time); the config's `build` command succeeds.
 2. **Run** (from the repo, or pass its path):
 
    ```bash
-   npx @starter-series/shotkit --json
-   npx @starter-series/shotkit <path> --json   # against another checkout
+   shotkit --json
+   shotkit <path> --json   # against another checkout
    ```
+
+   Before npm publication, run the source checkout with
+   `node bin/shotkit.js --json`, or use a project wrapper such as
+   `npm run capture:store -- --json`.
 
    Useful flags: `--scene <name>` (one scene/promoTile/demo/demos entry,
    `description`, or `privacy`),
@@ -41,7 +45,7 @@ rendered from the shipped code. By default, it also writes a handoff pack:
 
 ## Notes
 
-- Runs the full-Chromium channel; headless works (`HEADED=0 npx …` — verified,
+- Runs the full-Chromium channel; headless works (`HEADED=0 shotkit …` — verified,
   video included) and is the mode to use in CI. Headed-under-xvfb is
   unreliable on CI runners — don't use it.
 - Scenes are the repo's own config — to change *what* is captured, edit

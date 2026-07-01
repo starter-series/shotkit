@@ -10,6 +10,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const Ajv = require('ajv/dist/2020');
+const addFormats = require('ajv-formats');
 const { buildHandoffDocs, assetRecord } = require('../src/handoff');
 
 function loadSchema(name) {
@@ -67,6 +68,7 @@ function buildSampleDocs() {
 
 describe('handoff docs conform to the published JSON schemas', () => {
   const ajv = new Ajv({ strict: false, allErrors: true });
+  addFormats(ajv);
   const docs = buildSampleDocs();
 
   const cases = [

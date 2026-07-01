@@ -22,7 +22,7 @@
     "kind": { "const": "shotkit.manifest" },
     "version": { "const": 1 },
     "generatedAt": { "type": "string", "format": "date-time" },
-    "tool": { "const": "@starter-series/shotkit" },
+    "tool": { "const": "shotkit" },
     "project": { "$ref": "#/$defs/project" },
     "outDir": { "type": "string" },
     "flags": { "type": "object", "additionalProperties": true },

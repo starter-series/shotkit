@@ -7,7 +7,7 @@
  */
 
 const path = require('path');
-const { stageExtension, patchManifestForLocalhost, serveDirectory } = require('@starter-series/shotkit');
+const { stageExtension, patchManifestForLocalhost, serveDirectory } = require('shotkit');
 
 const FIXTURES = path.join(__dirname, 'fixtures');
 

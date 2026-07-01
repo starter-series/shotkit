@@ -131,4 +131,4 @@ The handoff contract is versioned independently from the npm package:
 
 Downstream tools should ignore unknown fields and key off `kind`, `version`, and
 `assets[].role`. For validation, load the schema files from the installed
-`@starter-series/shotkit` package rather than fetching the URN.
+`shotkit` package rather than fetching the URN.

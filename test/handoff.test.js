@@ -98,7 +98,7 @@ describe('handoff contract', () => {
       $schema: HANDOFF_SCHEMA_IDS.manifest,
       kind: HANDOFF_KINDS.manifest,
       version: HANDOFF_VERSION,
-      tool: '@starter-series/shotkit',
+      tool: 'shotkit',
       project: { name: 'demo-ext', version: '1.0.0', private: true },
       handoff: {
         contractVersion: HANDOFF_VERSION,
