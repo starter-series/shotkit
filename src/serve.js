@@ -48,25 +48,50 @@ function serveDirectory(dir, opts = {}) {
   const root = path.resolve(dir);
   return new Promise((resolve) => {
     const server = http.createServer((req, res) => {
-      const urlPath = decodeURIComponent((req.url || '/').split('?')[0]);
-      // Path-traversal sanitizer (CodeQL js/path-injection): normalize, then
-      // strip any leading `../` segments so the join can't escape `root`.
-      const rel = path.normalize(urlPath === '/' ? '/index.html' : urlPath).replace(/^(\.\.(\/|\\|$))+/, '');
-      let filePath = path.join(root, rel);
-      if (!fs.existsSync(filePath) || fs.statSync(filePath).isDirectory()) {
-        filePath = opts.fallback ? path.join(root, opts.fallback) : null;
-      }
-      if (!filePath || !fs.existsSync(filePath)) {
-        res.writeHead(404, { 'Content-Type': 'text/plain' });
-        res.end('Not found');
+      // A synchronous throw inside this handler would become an uncaughtException
+      // that kills the whole capture process, so guard the entire body. Malformed
+      // percent-encoding (decodeURIComponent), a TOCTOU race between existsSync and
+      // read, or a permission/EACCES error must all yield an HTTP status, not a crash.
+      let urlPath;
+      try {
+        urlPath = decodeURIComponent((req.url || '/').split('?')[0]);
+      } catch {
+        res.writeHead(400, { 'Content-Type': 'text/plain' });
+        res.end('Bad request');
         return;
       }
-      const ext = path.extname(filePath).toLowerCase();
-      res.writeHead(200, {
-        'Content-Type': CONTENT_TYPES[ext] || 'application/octet-stream',
-        'Content-Security-Policy': FIXTURE_CSP,
-      });
-      res.end(fs.readFileSync(filePath));
+      try {
+        // Path-traversal sanitizer (CodeQL js/path-injection): normalize, then
+        // strip any leading `../` segments so the join can't escape `root`.
+        const rel = path.normalize(urlPath === '/' ? '/index.html' : urlPath).replace(/^(\.\.(\/|\\|$))+/, '');
+        let filePath = path.join(root, rel);
+        if (!fs.existsSync(filePath) || fs.statSync(filePath).isDirectory()) {
+          filePath = opts.fallback ? path.join(root, opts.fallback) : null;
+        }
+        if (!filePath || !fs.existsSync(filePath)) {
+          res.writeHead(404, { 'Content-Type': 'text/plain' });
+          res.end('Not found');
+          return;
+        }
+        const ext = path.extname(filePath).toLowerCase();
+        res.writeHead(200, {
+          'Content-Type': CONTENT_TYPES[ext] || 'application/octet-stream',
+          'Content-Security-Policy': FIXTURE_CSP,
+        });
+        res.end(fs.readFileSync(filePath));
+      } catch (err) {
+        // readFileSync can throw after writeHead(200) already flushed headers, so
+        // only write a new status when none has been sent — otherwise abort the socket.
+        if (!res.headersSent) {
+          res.writeHead(err && err.code === 'ENOENT' ? 404 : 500, { 'Content-Type': 'text/plain' });
+          res.end('Server error');
+        } else {
+          res.destroy();
+        }
+      }
+    });
+    server.on('clientError', (err, socket) => {
+      if (socket.writable) socket.end('HTTP/1.1 400 Bad Request\r\n\r\n');
     });
     server.listen(0, '127.0.0.1', () => {
       const { port } = server.address();
