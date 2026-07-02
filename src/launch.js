@@ -59,9 +59,21 @@ async function launchWithExtension({ extensionDir, viewport, recordVideoDir, rec
   const context = await chromium.launchPersistentContext(userDataDir, launchOpts);
 
   // Wait for the service worker so we can read the extension ID off its URL.
-  let [sw] = context.serviceWorkers();
-  if (!sw) sw = await context.waitForEvent('serviceworker', { timeout: 15_000 });
-  const extensionId = sw.url().split('/')[2];
+  // A content-script-only extension (no MV3 worker) or a slow worker makes this
+  // reject — clean up the open context and temp profile before rethrowing so a
+  // failed launch never leaks a live Chromium process or a temp dir.
+  let extensionId;
+  try {
+    let [sw] = context.serviceWorkers();
+    if (!sw) sw = await context.waitForEvent('serviceworker', { timeout: 15_000 });
+    extensionId = sw.url().split('/')[2];
+  } catch (err) {
+    await context.close().catch(() => {});
+    if (userDataDir && fs.existsSync(userDataDir)) {
+      fs.rmSync(userDataDir, { recursive: true, force: true });
+    }
+    throw err;
+  }
 
   return { context, extensionId, userDataDir };
 }

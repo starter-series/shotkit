@@ -20,6 +20,37 @@ const INSTALL_HINT =
   '`apt-get install -y ffmpeg`; GitHub ubuntu runners already have it) or set ' +
   "SHOTKIT_FFMPEG to a binary. Playwright's bundled ffmpeg cannot encode H.264.";
 
+// Bound each ffmpeg invocation so a wedged encoder (bad input, odd codec path,
+// a binary that hangs on stdin) can't block the whole capture run forever.
+// Override for legitimately long encodes via SHOTKIT_FFMPEG_TIMEOUT_MS.
+function ffmpegTimeoutMs(env = process.env) {
+  const raw = Number(env.SHOTKIT_FFMPEG_TIMEOUT_MS);
+  return Number.isFinite(raw) && raw > 0 ? raw : 120_000;
+}
+
+/**
+ * Run ffmpeg with a bounded timeout, turning a timeout into a clear error
+ * (execFileSync otherwise throws a raw ETIMEDOUT/signal error on `.killed`).
+ */
+function runFfmpeg(bin, args, timeoutMs) {
+  try {
+    execFileSync(bin, args, {
+      stdio: ['ignore', 'ignore', 'inherit'],
+      timeout: timeoutMs,
+      killSignal: 'SIGKILL',
+    });
+  } catch (err) {
+    if (err && (err.killed || err.code === 'ETIMEDOUT')) {
+      throw new Error(
+        `shotkit: ffmpeg timed out after ${Math.round(timeoutMs / 1000)}s — the encoder may be ` +
+          'wedged. Raise SHOTKIT_FFMPEG_TIMEOUT_MS for legitimately long encodes.',
+        { cause: err },
+      );
+    }
+    throw err;
+  }
+}
+
 /**
  * Locate a usable ffmpeg. Returns the binary path/name, or null.
  * @param {NodeJS.ProcessEnv} [env]
@@ -28,7 +59,14 @@ function findFfmpeg(env = process.env) {
   for (const bin of [env.SHOTKIT_FFMPEG, 'ffmpeg']) {
     if (!bin) continue;
     try {
-      const r = spawnSync(bin, ['-version'], { stdio: ['ignore', 'pipe', 'ignore'], encoding: 'utf8', env });
+      // `-version` returns near-instantly; a small timeout guards against a
+      // resolved binary that wedges (e.g. hangs waiting on stdin).
+      const r = spawnSync(bin, ['-version'], {
+        stdio: ['ignore', 'pipe', 'ignore'],
+        encoding: 'utf8',
+        env,
+        timeout: 10_000,
+      });
       if (r.status === 0 && /ffmpeg version/i.test(r.stdout || '')) return bin;
     } catch (_e) {
       /* try the next candidate */
@@ -132,14 +170,13 @@ function postProcessDemo({ webmPath, mp4, trim, crop, zoom, thumbnail, log, env 
   const bin = findFfmpeg(env);
   if (!bin) throw new Error(`demo mp4/trim/crop/zoom/thumbnail requested but ${INSTALL_HINT}`);
 
+  const timeoutMs = ffmpegTimeoutMs(env);
   const produced = [];
   let finalVideoPath = webmPath;
   if (mp4 || crop || zoom) {
     const crf = typeof mp4 === 'object' && mp4.crf != null ? mp4.crf : undefined;
     const mp4Path = webmPath.replace(/\.webm$/, '.mp4');
-    execFileSync(bin, buildFfmpegArgs({ input: webmPath, output: mp4Path, trim, crf, crop, zoom }), {
-      stdio: ['ignore', 'ignore', 'inherit'],
-    });
+    runFfmpeg(bin, buildFfmpegArgs({ input: webmPath, output: mp4Path, trim, crf, crop, zoom }), timeoutMs);
     produced.push(mp4Path);
     finalVideoPath = mp4Path;
     const notes = ['H.264'];
@@ -150,9 +187,7 @@ function postProcessDemo({ webmPath, mp4, trim, crop, zoom, thumbnail, log, env 
   } else if (trim) {
     // Trim-only: stream-copy to a sibling temp file, then swap in place.
     const tmp = `${webmPath}.trim.webm`;
-    execFileSync(bin, buildFfmpegArgs({ input: webmPath, output: tmp, trim, copy: true }), {
-      stdio: ['ignore', 'ignore', 'inherit'],
-    });
+    runFfmpeg(bin, buildFfmpegArgs({ input: webmPath, output: tmp, trim, copy: true }), timeoutMs);
     fs.renameSync(tmp, webmPath);
     log(`✓ ${path.basename(webmPath)} trimmed in place`);
   }
@@ -163,9 +198,7 @@ function postProcessDemo({ webmPath, mp4, trim, crop, zoom, thumbnail, log, env 
     const thumbPath = typeof thumbnail === 'object' && thumbnail.name
       ? path.join(path.dirname(webmPath), thumbnail.name)
       : webmPath.replace(/\.webm$/, '-thumbnail.png');
-    execFileSync(bin, buildThumbnailArgs({ input: finalVideoPath, output: thumbPath, at }), {
-      stdio: ['ignore', 'ignore', 'inherit'],
-    });
+    runFfmpeg(bin, buildThumbnailArgs({ input: finalVideoPath, output: thumbPath, at }), timeoutMs);
     // ffmpeg exits 0 even when `at` seeks past the end of a (trimmed) clip,
     // writing no file. Only record the thumbnail when it was actually produced,
     // so the manifest never references a phantom asset.
