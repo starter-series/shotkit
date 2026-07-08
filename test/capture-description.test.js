@@ -75,3 +75,21 @@ test('capture writes listing and privacy worksheet from product manifest', async
   expect(manifest.assets.some((asset) => asset.role === 'store-listing-copy')).toBe(true);
   expect(manifest.assets.some((asset) => asset.role === 'privacy-disclosure')).toBe(true);
 });
+
+test('capture does not delete caller-owned extension directories', async () => {
+  const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'shotkit-capture-owned-extension-'));
+  const extensionDir = fs.mkdtempSync(path.join(os.tmpdir(), 'shotkit-extension-'));
+
+  await capture({
+    outDir: 'store-assets',
+    handoff: false,
+    prepareExtension: async () => extensionDir,
+  }, {
+    cwd,
+    noBuild: true,
+    noVideo: true,
+    log: () => {},
+  });
+
+  expect(fs.existsSync(extensionDir)).toBe(true);
+});

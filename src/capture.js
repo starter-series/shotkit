@@ -49,6 +49,27 @@ function normalizeSetup(result) {
   return { env: result.env || result, teardown: async () => {} };
 }
 
+function isManagedTempDir(dir, prefix) {
+  const resolved = path.resolve(dir);
+  return path.dirname(resolved) === path.resolve(os.tmpdir()) && path.basename(resolved).startsWith(prefix);
+}
+
+function normalizePreparedExtension(result) {
+  if (typeof result === 'string') {
+    return {
+      dir: result,
+      cleanup: isManagedTempDir(result, 'store-ext-') ? () => fs.rmSync(result, { recursive: true, force: true }) : null,
+    };
+  }
+  if (result && typeof result.dir === 'string') {
+    return {
+      dir: result.dir,
+      cleanup: typeof result.cleanup === 'function' ? result.cleanup : null,
+    };
+  }
+  throw new Error('prepareExtension() must return an extension directory string or { dir, cleanup }');
+}
+
 /**
  * @param {object} config  the project's shotkit config object (scenes, etc.)
  * @param {object} [opts]
@@ -80,6 +101,16 @@ async function capture(config, opts = {}) {
   const demoViewports = {};
   const demoWarnings = {};
   const tempDirs = [];
+  let fatalDemoError = null;
+  let cleaned = false;
+  let extensionCleanup = null;
+
+  const cleanupTempResources = async () => {
+    if (cleaned) return;
+    cleaned = true;
+    for (const d of tempDirs) fs.rmSync(d, { recursive: true, force: true });
+    if (extensionCleanup) await extensionCleanup();
+  };
 
   // 1. Build — the smoke test starts here. `config.build` is a repo-committed
   // command string (same trust boundary as a package.json script), run through
@@ -92,8 +123,9 @@ async function capture(config, opts = {}) {
   }
 
   // 2. Prepare the unpacked extension dir to load.
-  const extensionDir = await config.prepareExtension(passFlags);
-  tempDirs.push(extensionDir);
+  const preparedExtension = normalizePreparedExtension(await config.prepareExtension(passFlags));
+  const extensionDir = preparedExtension.dir;
+  extensionCleanup = preparedExtension.cleanup;
 
   // 3. Screenshots + promo + description run in a no-video context.
   const ctx = await launchWithExtension({ extensionDir, viewport: defaultViewport });
@@ -306,15 +338,23 @@ async function capture(config, opts = {}) {
         log(`✓ ${demoConfig.name}.webm (${viewport.width}×${viewport.height})`);
         // SNS post-processing: mp4 (H.264) and/or trim — needs a real ffmpeg,
         // fails loudly if one was requested but none is installed.
-        const extra = postProcessDemo({
-          webmPath: out,
-          mp4: demoConfig.mp4 || opts.mp4,
-          trim: demoConfig.trim,
-          crop: demoConfig.crop,
-          zoom: demoConfig.zoom,
-          thumbnail: demoConfig.thumbnail,
-          log,
-        });
+        let extra;
+        try {
+          extra = postProcessDemo({
+            webmPath: out,
+            mp4: demoConfig.mp4 || opts.mp4,
+            trim: demoConfig.trim,
+            crop: demoConfig.crop,
+            zoom: demoConfig.zoom,
+            thumbnail: demoConfig.thumbnail,
+            log,
+          });
+        } catch (err) {
+          const msg = err && err.message ? err.message : String(err);
+          fatalDemoError = new Error(`demo "${demoConfig.name}" post-processing failed: ${msg}`, { cause: err });
+          log(`❌ ${fatalDemoError.message}`);
+          break;
+        }
         produced.push(...extra);
         for (const extraPath of extra) {
           const format = path.extname(extraPath).toLowerCase();
@@ -333,14 +373,21 @@ async function capture(config, opts = {}) {
         }
       }
     } catch (err) {
-      // One demo failing (e.g. mp4 requested but no ffmpeg) must not abort the
-      // remaining demos, the handoff pack, or temp-dir cleanup below.
+      // One demo run/recording failure must not abort the remaining demos, the
+      // handoff pack, or temp-dir cleanup below. Requested post-processing
+      // failures are treated as fatal above because they mean an expected
+      // deliverable is missing.
       log(`❌ demo "${demoConfig.name}" failed: ${err.message} — continuing with the remaining demos`);
     } finally {
       if (!page.isClosed()) await page.close().catch(() => {});
       await closeContext(demoCtx);
       await setup2.teardown();
     }
+  }
+
+  if (fatalDemoError) {
+    await cleanupTempResources();
+    throw fatalDemoError;
   }
 
   // 5. Handoff contract — metadata for external editors, MCP adapters, and
@@ -375,7 +422,7 @@ async function capture(config, opts = {}) {
   }
 
   // 6. Cleanup temp dirs.
-  for (const d of tempDirs) fs.rmSync(d, { recursive: true, force: true });
+  await cleanupTempResources();
 
   log(`done — ${produced.length} asset(s) in ${path.relative(cwd, outDir) || '.'}/`);
   return { produced, outDir };
