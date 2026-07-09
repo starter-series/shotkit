@@ -244,8 +244,9 @@ logs move to stderr):
 { "ok": true, "outDir": "/abs/store-assets", "produced": ["/abs/store-assets/01-popup.png"] }
 ```
 
-Exit codes: `0` ok · `1` runtime failure (stderr carries `{"ok":false,"error":…}`) ·
-`2` usage / no config found. Drop-in agent wiring: the run-block in
+Exit codes: `0` ok · `1` runtime failure · `2` usage / no config found. Failure
+payloads also use the single stdout JSON object (`{"ok":false,"error":…}`).
+Drop-in agent wiring: the run-block in
 [`AGENTS.md`](AGENTS.md) (read by Claude Code, Codex, Cursor, Gemini CLI, …) and
 the [`skills/capture/`](skills/capture/SKILL.md) skill (Agent Skills format —
 copy the folder into any compatible tool's skills directory).

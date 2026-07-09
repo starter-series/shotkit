@@ -54,12 +54,12 @@ describe('capture lifecycle cleanup', () => {
     expect(cleanup).toHaveBeenCalledTimes(1);
   });
 
-  test('closes the demo context and prepared extension when demo setup throws', async () => {
+  test('closes the demo context and prepared extension then fails when demo setup throws', async () => {
     const cleanup = jest.fn();
     const cwd = tempCwd();
     const logs = [];
 
-    const result = await capture({
+    await expect(capture({
       handoff: false,
       prepareExtension: async () => preparedExtension(cleanup),
       setup: async () => {
@@ -71,12 +71,77 @@ describe('capture lifecycle cleanup', () => {
       scenes: ['demo'],
       noBuild: true,
       log: (msg) => logs.push(msg),
-    });
+    })).rejects.toThrow(/demo capture failed for: demo/);
 
-    expect(result.produced).toEqual([]);
     expect(launchWithExtension).toHaveBeenCalledTimes(1);
     expect(closeContext).toHaveBeenCalledTimes(1);
     expect(cleanup).toHaveBeenCalledTimes(1);
     expect(logs.join('\n')).toContain('demo "demo" failed: demo setup failed');
+  });
+
+  test('fails when a requested demo does not produce a video recording', async () => {
+    const cleanup = jest.fn();
+    const cwd = tempCwd();
+    const logs = [];
+    let closed = false;
+    const page = {
+      setViewportSize: jest.fn(async () => {}),
+      on: jest.fn(),
+      off: jest.fn(),
+      video: jest.fn(() => null),
+      close: jest.fn(async () => { closed = true; }),
+      isClosed: jest.fn(() => closed),
+    };
+    launchWithExtension.mockResolvedValueOnce({
+      extensionId: 'test-extension',
+      context: {
+        addInitScript: jest.fn(async () => {}),
+        newPage: jest.fn(async () => page),
+      },
+    });
+
+    await expect(capture({
+      handoff: false,
+      prepareExtension: async () => preparedExtension(cleanup),
+      demos: [{ name: 'demo', run: async () => {} }],
+    }, {
+      cwd,
+      scenes: ['demo'],
+      noBuild: true,
+      log: (msg) => logs.push(msg),
+    })).rejects.toThrow(/demo capture failed for: demo/);
+
+    expect(page.video).toHaveBeenCalledTimes(1);
+    expect(page.close).toHaveBeenCalledTimes(1);
+    expect(closeContext).toHaveBeenCalledTimes(1);
+    expect(cleanup).toHaveBeenCalledTimes(1);
+    expect(logs.join('\n')).toContain('demo "demo" failed: demo "demo" did not produce a video recording');
+    expect(fs.existsSync(path.join(cwd, 'store-assets', 'demo.webm'))).toBe(false);
+  });
+
+  test('rejects unknown scene names before launching Chromium or preparing an extension', async () => {
+    const cleanup = jest.fn();
+    const prepareExtension = jest.fn(async () => preparedExtension(cleanup));
+    const cwd = tempCwd();
+
+    await expect(capture({
+      handoff: false,
+      prepareExtension,
+      scenes: [{ name: 'known-scene', run: async () => {} }],
+      demos: [{ name: 'known-demo', run: async () => {} }],
+    }, {
+      cwd,
+      scenes: ['missing-scene'],
+      noBuild: true,
+      log: () => {},
+    })).rejects.toMatchObject({
+      message: 'unknown scene: missing-scene. Known: known-scene, known-demo',
+      exitCode: 2,
+    });
+
+    expect(prepareExtension).not.toHaveBeenCalled();
+    expect(launchWithExtension).not.toHaveBeenCalled();
+    expect(cleanup).not.toHaveBeenCalled();
+    expect(fs.existsSync(path.join(cwd, 'store-assets'))).toBe(false);
   });
 });

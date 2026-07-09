@@ -75,17 +75,35 @@ function wantsAny(only, names) {
   return names.some((name) => only.has(name));
 }
 
-function staticOutputNames(config, cwd) {
-  const names = [
+function visualOutputNames(config) {
+  return [
     ...(config.scenes || []).map((scene) => scene.name),
     ...(config.promoTiles || []).map((tile) => tile.name),
-  ];
+  ].filter(Boolean);
+}
+
+function textOutputNames(config, cwd) {
+  const names = [];
   if (config.description && config.description.from) {
     const sourcePath = path.resolve(cwd, config.description.from);
     names.push('description');
     if (hasJsonExtension(sourcePath)) names.push('privacy');
   }
   return names.filter(Boolean);
+}
+
+function outputNames(config, cwd, demoConfigs) {
+  return [
+    ...visualOutputNames(config),
+    ...textOutputNames(config, cwd),
+    ...demoConfigs.map((demo) => demo.name),
+  ];
+}
+
+function usageError(message) {
+  const err = new Error(message);
+  err.exitCode = 2;
+  return err;
 }
 
 /**
@@ -109,7 +127,6 @@ async function capture(config, opts = {}) {
   const passFlags = { liveGt: !!opts.liveGt, freeze: !!opts.freeze };
 
   const outDir = path.resolve(cwd, config.outDir || 'store-assets');
-  fs.mkdirSync(outDir, { recursive: true });
   const defaultViewport = resolveSize(config.viewport, DEFAULT_VIEWPORT);
   const bandHeight = config.bandHeight || DEFAULT_BAND_HEIGHT;
   const produced = [];
@@ -118,17 +135,41 @@ async function capture(config, opts = {}) {
   const capturedDemoConfigs = [];
   const demoViewports = {};
   const demoWarnings = {};
-  const shouldRunStaticPass = wantsAny(only, staticOutputNames(config, cwd));
+  const shouldRunVisualPass = wantsAny(only, visualOutputNames(config));
+  const shouldRunTextPass = wantsAny(only, textOutputNames(config, cwd));
+  const selectedDemoConfigs = demoConfigs.filter((demoConfig) => !opts.noVideo && wants(demoConfig.name));
+  const needsBrowser = shouldRunVisualPass || selectedDemoConfigs.length > 0;
+  if (only.size > 0) {
+    const knownNames = new Set(outputNames(config, cwd, demoConfigs));
+    const unknownNames = [...only].filter((name) => !knownNames.has(name));
+    if (unknownNames.length) {
+      throw usageError(`unknown scene: ${unknownNames.join(', ')}. Known: ${[...knownNames].join(', ') || '(none)'}`);
+    }
+  }
+  fs.mkdirSync(outDir, { recursive: true });
   const tempDirs = [];
   let fatalDemoError = null;
+  const demoErrors = [];
   let cleaned = false;
   let extensionCleanup = null;
 
   const cleanupTempResources = async () => {
     if (cleaned) return;
     cleaned = true;
-    for (const d of tempDirs) fs.rmSync(d, { recursive: true, force: true });
-    if (extensionCleanup) await extensionCleanup();
+    for (const d of tempDirs) {
+      try {
+        fs.rmSync(d, { recursive: true, force: true });
+      } catch (err) {
+        log(`⚠️  cleanup failed for ${d}: ${err.message}`);
+      }
+    }
+    if (extensionCleanup) {
+      try {
+        await extensionCleanup();
+      } catch (err) {
+        log(`⚠️  extension cleanup failed: ${err.message}`);
+      }
+    }
   };
 
   const registerAsset = (filePath, meta, message) => {
@@ -145,20 +186,74 @@ async function capture(config, opts = {}) {
     // 1. Build — the smoke test starts here. `config.build` is a repo-committed
     // command string (same trust boundary as a package.json script), run through
     // a shell so projects can write `npm run build:bundle`; never user input.
-    if (config.build && !opts.noBuild) {
+    if (config.build && !opts.noBuild && needsBrowser) {
       log(`build: ${config.build}`);
       // In --json mode stdout must stay a single JSON object, so route the build
       // command's stdout to our stderr (fd 2) instead of inheriting it.
       execSync(config.build, { stdio: opts.json ? ['ignore', 2, 2] : 'inherit', cwd });
     }
 
-    // 2. Prepare the unpacked extension dir to load.
-    const preparedExtension = normalizePreparedExtension(await config.prepareExtension(passFlags));
-    const extensionDir = preparedExtension.dir;
-    extensionCleanup = preparedExtension.cleanup;
+    if (shouldRunTextPass && config.description && config.description.from) {
+      const sourcePath = path.resolve(cwd, config.description.from);
+      if (hasJsonExtension(sourcePath)) {
+        const product = extractProductManifest(sourcePath, { channel: config.description.channel });
+        if (wants('description')) {
+          writeAsset(
+            path.join(outDir, 'description.md'),
+            renderDescriptionDoc(product.listing),
+            {
+              name: 'description',
+              type: 'text',
+              role: 'store-listing-copy',
+              source: { kind: 'productManifest', path: config.description.from },
+            },
+            '✓ description.md',
+          );
+          if (product.listing.warnings.length) log(`⚠️  ${product.listing.warnings.join('; ')}`);
+        }
+        if (wants('privacy')) {
+          writeAsset(
+            path.join(outDir, 'privacy-disclosure.md'),
+            renderPrivacyDisclosureDoc(product.privacy),
+            {
+              name: 'privacy',
+              type: 'text',
+              role: 'privacy-disclosure',
+              source: { kind: 'productManifest', path: config.description.from },
+            },
+            '✓ privacy-disclosure.md',
+          );
+          if (product.privacy.warnings.length) log(`⚠️  ${product.privacy.warnings.join('; ')}`);
+        }
+      } else if (wants('description')) {
+        const listing = extractListing(sourcePath);
+        writeAsset(
+          path.join(outDir, 'description.md'),
+          renderDescriptionDoc(listing),
+          {
+            name: 'description',
+            type: 'text',
+            role: 'store-listing-copy',
+            source: { kind: 'description' },
+          },
+          '✓ description.md',
+        );
+        if (listing.warnings.length) log(`⚠️  ${listing.warnings.join('; ')}`);
+      }
+    }
 
-    // 3. Screenshots + promo + description run in a no-video context.
-    if (shouldRunStaticPass) {
+    // 2. Prepare the unpacked extension dir to load only when a browser capture
+    // is required. Text-only description/privacy runs should not depend on
+    // Chromium, build artifacts, or extension manifests.
+    let extensionDir = null;
+    if (needsBrowser) {
+      const preparedExtension = normalizePreparedExtension(await config.prepareExtension(passFlags));
+      extensionDir = preparedExtension.dir;
+      extensionCleanup = preparedExtension.cleanup;
+    }
+
+    // 3. Screenshots + promo run in a no-video context.
+    if (shouldRunVisualPass) {
       const ctx = await launchWithExtension({ extensionDir, viewport: defaultViewport });
       let setup = normalizeSetup(null);
       try {
@@ -220,54 +315,6 @@ async function capture(config, opts = {}) {
           );
         }
 
-        if (config.description && config.description.from) {
-          const sourcePath = path.resolve(cwd, config.description.from);
-          if (hasJsonExtension(sourcePath)) {
-            const product = extractProductManifest(sourcePath, { channel: config.description.channel });
-            if (wants('description')) {
-              writeAsset(
-                path.join(outDir, 'description.md'),
-                renderDescriptionDoc(product.listing),
-                {
-                  name: 'description',
-                  type: 'text',
-                  role: 'store-listing-copy',
-                  source: { kind: 'productManifest', path: config.description.from },
-                },
-                '✓ description.md',
-              );
-              if (product.listing.warnings.length) log(`⚠️  ${product.listing.warnings.join('; ')}`);
-            }
-            if (wants('privacy')) {
-              writeAsset(
-                path.join(outDir, 'privacy-disclosure.md'),
-                renderPrivacyDisclosureDoc(product.privacy),
-                {
-                  name: 'privacy',
-                  type: 'text',
-                  role: 'privacy-disclosure',
-                  source: { kind: 'productManifest', path: config.description.from },
-                },
-                '✓ privacy-disclosure.md',
-              );
-              if (product.privacy.warnings.length) log(`⚠️  ${product.privacy.warnings.join('; ')}`);
-            }
-          } else if (wants('description')) {
-            const listing = extractListing(sourcePath);
-            writeAsset(
-              path.join(outDir, 'description.md'),
-              renderDescriptionDoc(listing),
-              {
-                name: 'description',
-                type: 'text',
-                role: 'store-listing-copy',
-                source: { kind: 'description' },
-              },
-              '✓ description.md',
-            );
-            if (listing.warnings.length) log(`⚠️  ${listing.warnings.join('; ')}`);
-          }
-        }
       } finally {
         // Close the context (drops the browser's sockets) BEFORE the fixture server:
         // server.close() waits for open connections to drain, and a still-open page
@@ -282,10 +329,8 @@ async function capture(config, opts = {}) {
 
     // 4. Demo screencasts — separate context per demo so only that walkthrough
     // records video and each clip can choose its own viewport/captions/trim.
-    for (const demoConfig of demoConfigs) {
-      if (opts.noVideo || !wants(demoConfig.name)) continue;
+    for (const demoConfig of selectedDemoConfigs) {
       const viewport = resolveSize(demoConfig.preset || demoConfig.viewport, defaultViewport);
-      capturedDemoConfigs.push(demoConfig);
       demoViewports[demoConfig.name] = viewport;
       const warnings = analyzeDemoStoryboard(demoConfig, {
         viewport,
@@ -348,54 +393,54 @@ async function capture(config, opts = {}) {
         // deadlock). See the screenshots finally above.
         const video = page.video();
         await page.close();
-        if (video) {
-          const out = path.join(outDir, `${demoConfig.name}.webm`);
-          await video.saveAs(out);
-          registerAsset(out, {
-            name: demoConfig.name,
-            type: 'video',
-            role: 'source-demo-webm',
-            width: viewport.width,
-            height: viewport.height,
+        if (!video) throw new Error(`demo "${demoConfig.name}" did not produce a video recording`);
+        const out = path.join(outDir, `${demoConfig.name}.webm`);
+        await video.saveAs(out);
+        capturedDemoConfigs.push(demoConfig);
+        registerAsset(out, {
+          name: demoConfig.name,
+          type: 'video',
+          role: 'source-demo-webm',
+          width: viewport.width,
+          height: viewport.height,
+          source: { kind: 'demo', name: demoConfig.name },
+        }, `✓ ${demoConfig.name}.webm (${viewport.width}×${viewport.height})`);
+        // SNS post-processing: mp4 (H.264) and/or trim — needs a real ffmpeg,
+        // fails loudly if one was requested but none is installed.
+        let extra;
+        try {
+          extra = postProcessDemo({
+            webmPath: out,
+            mp4: demoConfig.mp4 || opts.mp4,
+            trim: demoConfig.trim,
+            crop: demoConfig.crop,
+            zoom: demoConfig.zoom,
+            thumbnail: demoConfig.thumbnail,
+            log,
+          });
+        } catch (err) {
+          const msg = err && err.message ? err.message : String(err);
+          fatalDemoError = new Error(`demo "${demoConfig.name}" post-processing failed: ${msg}`, { cause: err });
+          log(`❌ ${fatalDemoError.message}`);
+          break;
+        }
+        for (const extraPath of extra) {
+          const format = path.extname(extraPath).toLowerCase();
+          registerAsset(extraPath, {
+            name: path.basename(extraPath, path.extname(extraPath)),
+            type: format === '.png' ? 'image' : 'video',
+            role: format === '.png' ? 'thumbnail' : 'sns-demo-mp4',
+            // No width/height: crop/zoom change the output dimensions from the
+            // source viewport and we don't re-measure, so recording the viewport
+            // size here would be wrong. The manifest schema makes them optional.
             source: { kind: 'demo', name: demoConfig.name },
-          }, `✓ ${demoConfig.name}.webm (${viewport.width}×${viewport.height})`);
-          // SNS post-processing: mp4 (H.264) and/or trim — needs a real ffmpeg,
-          // fails loudly if one was requested but none is installed.
-          let extra;
-          try {
-            extra = postProcessDemo({
-              webmPath: out,
-              mp4: demoConfig.mp4 || opts.mp4,
-              trim: demoConfig.trim,
-              crop: demoConfig.crop,
-              zoom: demoConfig.zoom,
-              thumbnail: demoConfig.thumbnail,
-              log,
-            });
-          } catch (err) {
-            const msg = err && err.message ? err.message : String(err);
-            fatalDemoError = new Error(`demo "${demoConfig.name}" post-processing failed: ${msg}`, { cause: err });
-            log(`❌ ${fatalDemoError.message}`);
-            break;
-          }
-          for (const extraPath of extra) {
-            const format = path.extname(extraPath).toLowerCase();
-            registerAsset(extraPath, {
-              name: path.basename(extraPath, path.extname(extraPath)),
-              type: format === '.png' ? 'image' : 'video',
-              role: format === '.png' ? 'thumbnail' : 'sns-demo-mp4',
-              // No width/height: crop/zoom change the output dimensions from the
-              // source viewport and we don't re-measure, so recording the viewport
-              // size here would be wrong. The manifest schema makes them optional.
-              source: { kind: 'demo', name: demoConfig.name },
-            });
-          }
+          });
         }
       } catch (err) {
         // One demo run/recording failure must not abort the remaining demos, the
-        // handoff pack, or temp-dir cleanup below. Requested post-processing
-        // failures are treated as fatal above because they mean an expected
-        // deliverable is missing.
+        // later teardown, but it must still make the run fail. A requested demo
+        // clip missing from produced[] is a false-positive success signal.
+        demoErrors.push({ name: demoConfig.name, error: err });
         log(`❌ demo "${demoConfig.name}" failed: ${err.message} — continuing with the remaining demos`);
       } finally {
         if (page && !page.isClosed()) await page.close().catch(() => {});
@@ -408,6 +453,10 @@ async function capture(config, opts = {}) {
     }
 
     if (fatalDemoError) throw fatalDemoError;
+    if (demoErrors.length) {
+      const names = demoErrors.map((item) => item.name).join(', ');
+      throw new Error(`demo capture failed for: ${names}`, { cause: demoErrors[0].error });
+    }
 
     // 5. Handoff contract — metadata for external editors, MCP adapters, and
     // agents. This is the starter-pack layer, not a competing editor surface.

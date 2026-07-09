@@ -39,9 +39,11 @@ rendered from the shipped code. By default, it also writes a handoff pack:
    For follow-up editing, read `shotkit-manifest.json` first; it lists the
    mp4/webm, thumbnail, captions, storyboard, schema ids, recommended handoff
    flow, and `handoff.adapterHints[]` for likely next tools/connectors.
-4. **On failure** — exit code `2` = no config found, `1` = runtime failure;
-   stderr carries `{ "ok": false, "error": … }`. Common causes: build failure,
-   Chromium not installed, a scene's wait timing out (feature didn't render).
+4. **On failure** — exit code `2` = usage/no config found, `1` = runtime
+   failure; stdout still carries the single JSON payload
+   `{ "ok": false, "error": … }`. Common causes: build failure, Chromium not
+   installed, an unknown `--scene`, or a scene's wait timing out (feature didn't
+   render).
 
 ## Notes
 

@@ -10,7 +10,12 @@ jest.mock('../src/launch', () => ({
   closeContext: jest.fn(async () => {}),
 }));
 
+const { launchWithExtension } = require('../src/launch');
 const { capture } = require('../src/capture');
+
+afterEach(() => {
+  jest.clearAllMocks();
+});
 
 function writeProductManifest(cwd) {
   fs.writeFileSync(path.join(cwd, 'product.manifest.json'), JSON.stringify({
@@ -48,13 +53,13 @@ function writeProductManifest(cwd) {
 
 test('capture writes listing and privacy worksheet from product manifest', async () => {
   const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'shotkit-capture-product-'));
-  const extensionDir = fs.mkdtempSync(path.join(os.tmpdir(), 'shotkit-extension-'));
+  const prepareExtension = jest.fn(async () => fs.mkdtempSync(path.join(os.tmpdir(), 'shotkit-extension-')));
   writeProductManifest(cwd);
 
   const result = await capture({
     outDir: 'store-assets',
     description: { from: 'product.manifest.json', channel: 'chromeWebStore' },
-    prepareExtension: async () => extensionDir,
+    prepareExtension,
   }, {
     cwd,
     noBuild: true,
@@ -74,6 +79,37 @@ test('capture writes listing and privacy worksheet from product manifest', async
   const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
   expect(manifest.assets.some((asset) => asset.role === 'store-listing-copy')).toBe(true);
   expect(manifest.assets.some((asset) => asset.role === 'privacy-disclosure')).toBe(true);
+  expect(prepareExtension).not.toHaveBeenCalled();
+  expect(launchWithExtension).not.toHaveBeenCalled();
+});
+
+test('description-only scene does not run build, prepareExtension, or Chromium', async () => {
+  const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'shotkit-capture-description-only-'));
+  const prepareExtension = jest.fn(() => {
+    throw new Error('prepareExtension should not run');
+  });
+  writeProductManifest(cwd);
+
+  const result = await capture({
+    build: `${process.execPath} -e "process.exit(7)"`,
+    outDir: 'store-assets',
+    description: { from: 'product.manifest.json', channel: 'chromeWebStore' },
+    prepareExtension,
+  }, {
+    cwd,
+    scenes: ['description'],
+    noVideo: true,
+    log: () => {},
+  });
+
+  expect(result.produced.map((filePath) => path.basename(filePath))).toEqual([
+    'description.md',
+    'storyboard.json',
+    'captions.json',
+    'shotkit-manifest.json',
+  ]);
+  expect(prepareExtension).not.toHaveBeenCalled();
+  expect(launchWithExtension).not.toHaveBeenCalled();
 });
 
 test('capture does not delete caller-owned extension directories', async () => {

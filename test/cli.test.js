@@ -90,6 +90,28 @@ describe('shotkit CLI usage errors', () => {
     });
     expect(res.stderr).toBe('');
   });
+
+  test('--json unknown scenes fail with usage code 2 before capture work', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sk-cli-scene-'));
+    fs.writeFileSync(path.join(dir, 'shotkit.config.js'), `
+module.exports = {
+  prepareExtension() { throw new Error('prepareExtension should not run'); },
+  scenes: [{ name: 'known-scene', run: async () => {} }],
+};
+`);
+
+    const res = spawnSync(process.execPath, [BIN, dir, '--scene', 'missing-scene', '--json', '--no-build', '--no-video'], {
+      encoding: 'utf8',
+    });
+
+    expect(res.status).toBe(2);
+    expect(JSON.parse(res.stdout)).toEqual({
+      ok: false,
+      error: 'unknown scene: missing-scene. Known: known-scene',
+      code: 2,
+    });
+    expect(res.stderr).toBe('');
+  });
 });
 
 describe('resolveConfigPath', () => {

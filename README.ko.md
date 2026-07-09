@@ -201,8 +201,8 @@ result → safety/restore, 짧은 캡션, 느린 cursor/click/typing, X용 mp4�
 
 `shotkit [path] --json`은 stdout에 **정확히 하나의 JSON 객체**를 출력합니다
 (진행 로그는 stderr로 이동): `{ "ok": true, "outDir": …, "produced": [절대경로…] }`.
-종료 코드: `0` 정상 · `1` 런타임 실패(stderr에 `{"ok":false,"error":…}`) ·
-`2` 사용법 오류/설정 없음. 에이전트 연결은 [`AGENTS.md`](AGENTS.md) 실행 블록
+종료 코드: `0` 정상 · `1` 런타임 실패 · `2` 사용법 오류/설정 없음입니다.
+실패 payload도 stdout의 단일 JSON 객체(`{"ok":false,"error":…}`)를 사용합니다. 에이전트 연결은 [`AGENTS.md`](AGENTS.md) 실행 블록
 (Claude Code·Codex·Cursor·Gemini CLI 등이 읽음)과 [`skills/capture/`](skills/capture/SKILL.md)
 skill(Agent Skills 표준 — 호환 도구의 skills 디렉터리에 폴더째 복사)을 참고하십시오.
 

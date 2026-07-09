@@ -48,12 +48,14 @@ async function runCli(argv, io = {}, deps = {}) {
     return 0;
   } catch (err) {
     const msg = err && err.message ? err.message : String(err);
+    const code = Number.isInteger(err && err.exitCode) ? err.exitCode : 1;
     if (opts.json) {
-      writeJson(stdout, errorPayload(msg, 1));
+      writeJson(stdout, errorPayload(msg, code));
     } else {
-      stderr.write(`[shotkit] FAILED: ${err && err.stack ? err.stack : err}\n`);
+      const detail = code === 2 ? msg : (err && err.stack ? err.stack : err);
+      stderr.write(`[shotkit] ${code === 2 ? msg : `FAILED: ${detail}`}\n`);
     }
-    return 1;
+    return code;
   }
 }
 

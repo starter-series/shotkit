@@ -21,7 +21,7 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 - A thumbnail-only demo (no mp4/crop/zoom/trim) no longer re-muxes and
   overwrites the source `.webm`; the thumbnail is taken from the original clip.
 
-## [1.3.0] - 2026-06-18
+## 1.3.0 - 2026-06-18 (source-staged)
 
 ### Added
 - **Demo story renderer** — demo configs accept a single `demo` or several
@@ -64,6 +64,8 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
   storyboard/captions/manifest documents against `schemas/`.
 
 ### Notes
+- Source files are versioned at `1.3.0`, but no `v1.3.0` GitHub release tag or
+  public npm publication is assumed until the release step is cut.
 - The demo post-processing pipeline (`webm → H.264 mp4` with `+faststart`,
   frame-accurate trim) shipped in 1.2.0 and remains available; it requires an
   `ffmpeg` on `PATH` or `SHOTKIT_FFMPEG`.
@@ -72,5 +74,4 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
   The repo-local research harness (`scripts/`, `skills/research-to-product-fit/`,
   generated `research-runs/`) is not published.
 
-[Unreleased]: https://github.com/starter-series/shotkit/compare/v1.3.0...HEAD
-[1.3.0]: https://github.com/starter-series/shotkit/releases/tag/v1.3.0
+[Unreleased]: https://github.com/starter-series/shotkit/compare/v1.2.0...HEAD
