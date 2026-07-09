@@ -1,0 +1,70 @@
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
+const { runCli } = require('../src/cli-runner');
+
+function streamBuffer() {
+  let value = '';
+  return {
+    stream: { write: (chunk) => { value += chunk; } },
+    read: () => value,
+  };
+}
+
+function tmpProject() {
+  const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'sk-cli-runner-'));
+  const configPath = path.join(cwd, 'shotkit.config.js');
+  fs.writeFileSync(configPath, 'module.exports = {};');
+  return { cwd, configPath };
+}
+
+describe('runCli', () => {
+  test('json success writes exactly one parseable stdout object and routes progress to stderr', async () => {
+    const { cwd, configPath } = tmpProject();
+    const stdout = streamBuffer();
+    const stderr = streamBuffer();
+    const capture = jest.fn(async (_config, opts) => {
+      opts.log('capturing');
+      return { outDir: path.join(cwd, 'store-assets'), produced: [path.join(cwd, 'store-assets', 'a.png')] };
+    });
+
+    const code = await runCli(['--json'], {
+      stdout: stdout.stream,
+      stderr: stderr.stream,
+      processCwd: () => cwd,
+    }, {
+      capture,
+      loadConfig: jest.fn(() => ({ loadedFrom: configPath })),
+    });
+
+    expect(code).toBe(0);
+    expect(JSON.parse(stdout.read())).toEqual({
+      ok: true,
+      outDir: path.join(cwd, 'store-assets'),
+      produced: [path.join(cwd, 'store-assets', 'a.png')],
+    });
+    expect(stderr.read()).toContain('[shotkit] capturing');
+    expect(capture).toHaveBeenCalledWith(expect.objectContaining({ loadedFrom: configPath }), expect.objectContaining({ cwd, json: true }));
+  });
+
+  test('json runtime failures write the error payload to stdout', async () => {
+    const { cwd } = tmpProject();
+    const stdout = streamBuffer();
+    const stderr = streamBuffer();
+
+    const code = await runCli(['--json'], {
+      stdout: stdout.stream,
+      stderr: stderr.stream,
+      processCwd: () => cwd,
+    }, {
+      capture: jest.fn(async () => {
+        throw new Error('boom');
+      }),
+      loadConfig: jest.fn(() => ({})),
+    });
+
+    expect(code).toBe(1);
+    expect(JSON.parse(stdout.read())).toEqual({ ok: false, error: 'boom', code: 1 });
+    expect(stderr.read()).toBe('');
+  });
+});

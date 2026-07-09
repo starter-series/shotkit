@@ -1,7 +1,14 @@
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const { findFfmpeg, buildFfmpegArgs, buildThumbnailArgs, buildVideoFilter, INSTALL_HINT } = require('../src/video');
+const {
+  findFfmpeg,
+  buildFfmpegArgs,
+  buildThumbnailArgs,
+  buildVideoFilter,
+  postProcessDemo,
+  INSTALL_HINT,
+} = require('../src/video');
 
 describe('buildFfmpegArgs', () => {
   test('mp4 conversion defaults: libx264, yuv420p, faststart, silent, even-dims', () => {
@@ -79,5 +86,34 @@ describe('findFfmpeg', () => {
 
   test('install hint names the env override', () => {
     expect(INSTALL_HINT).toMatch(/SHOTKIT_FFMPEG/);
+  });
+});
+
+describe('postProcessDemo cleanup', () => {
+  test('removes temp mp4 output when ffmpeg fails mid-encode', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sk-postprocess-'));
+    const fake = path.join(dir, 'fake-ffmpeg');
+    const webmPath = path.join(dir, 'demo.webm');
+    fs.writeFileSync(webmPath, 'webm');
+    fs.writeFileSync(fake, `#!/usr/bin/env node
+const fs = require('fs');
+if (process.argv.includes('-version')) {
+  console.log('ffmpeg version fake');
+  process.exit(0);
+}
+fs.writeFileSync(process.argv[process.argv.length - 1], 'partial');
+process.exit(1);
+`);
+    fs.chmodSync(fake, 0o755);
+
+    expect(() => postProcessDemo({
+      webmPath,
+      mp4: true,
+      log: () => {},
+      env: { SHOTKIT_FFMPEG: fake, PATH: '' },
+    })).toThrow();
+
+    expect(fs.existsSync(path.join(dir, 'demo.mp4'))).toBe(false);
+    expect(fs.readdirSync(dir).filter((name) => name.includes('.tmp-'))).toEqual([]);
   });
 });

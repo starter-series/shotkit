@@ -148,6 +148,17 @@ function buildThumbnailArgs({ input, output, at = 1 }) {
   return ['-hide_banner', '-loglevel', 'error', '-y', '-ss', String(at), '-i', input, '-frames:v', '1', output];
 }
 
+function replaceFile(tmpPath, finalPath) {
+  fs.rmSync(finalPath, { force: true });
+  fs.renameSync(tmpPath, finalPath);
+}
+
+function tempSibling(filePath) {
+  const ext = path.extname(filePath);
+  const base = filePath.slice(0, -ext.length);
+  return `${base}.tmp-${process.pid}-${Date.now()}${ext}`;
+}
+
 /**
  * Post-process a recorded demo webm per config:
  *   - mp4 requested → write `<name>.mp4` next to the webm (trim applied there)
@@ -176,7 +187,14 @@ function postProcessDemo({ webmPath, mp4, trim, crop, zoom, thumbnail, log, env 
   if (mp4 || crop || zoom) {
     const crf = typeof mp4 === 'object' && mp4.crf != null ? mp4.crf : undefined;
     const mp4Path = webmPath.replace(/\.webm$/, '.mp4');
-    runFfmpeg(bin, buildFfmpegArgs({ input: webmPath, output: mp4Path, trim, crf, crop, zoom }), timeoutMs);
+    const tmpMp4Path = tempSibling(mp4Path);
+    try {
+      runFfmpeg(bin, buildFfmpegArgs({ input: webmPath, output: tmpMp4Path, trim, crf, crop, zoom }), timeoutMs);
+      replaceFile(tmpMp4Path, mp4Path);
+    } catch (err) {
+      fs.rmSync(tmpMp4Path, { force: true });
+      throw err;
+    }
     produced.push(mp4Path);
     finalVideoPath = mp4Path;
     const notes = ['H.264'];
@@ -186,9 +204,14 @@ function postProcessDemo({ webmPath, mp4, trim, crop, zoom, thumbnail, log, env 
     log(`✓ ${path.basename(mp4Path)} (${notes.join(', ')})`);
   } else if (trim) {
     // Trim-only: stream-copy to a sibling temp file, then swap in place.
-    const tmp = `${webmPath}.trim.webm`;
-    runFfmpeg(bin, buildFfmpegArgs({ input: webmPath, output: tmp, trim, copy: true }), timeoutMs);
-    fs.renameSync(tmp, webmPath);
+    const tmp = tempSibling(webmPath);
+    try {
+      runFfmpeg(bin, buildFfmpegArgs({ input: webmPath, output: tmp, trim, copy: true }), timeoutMs);
+      replaceFile(tmp, webmPath);
+    } catch (err) {
+      fs.rmSync(tmp, { force: true });
+      throw err;
+    }
     log(`✓ ${path.basename(webmPath)} trimmed in place`);
   }
   // else: thumbnail-only (no mp4/crop/zoom/trim) — nothing to re-encode; the
@@ -198,7 +221,14 @@ function postProcessDemo({ webmPath, mp4, trim, crop, zoom, thumbnail, log, env 
     const thumbPath = typeof thumbnail === 'object' && thumbnail.name
       ? path.join(path.dirname(webmPath), thumbnail.name)
       : webmPath.replace(/\.webm$/, '-thumbnail.png');
-    runFfmpeg(bin, buildThumbnailArgs({ input: finalVideoPath, output: thumbPath, at }), timeoutMs);
+    const tmpThumbPath = tempSibling(thumbPath);
+    try {
+      runFfmpeg(bin, buildThumbnailArgs({ input: finalVideoPath, output: tmpThumbPath, at }), timeoutMs);
+      if (fs.existsSync(tmpThumbPath)) replaceFile(tmpThumbPath, thumbPath);
+    } catch (err) {
+      fs.rmSync(tmpThumbPath, { force: true });
+      throw err;
+    }
     // ffmpeg exits 0 even when `at` seeks past the end of a (trimmed) clip,
     // writing no file. Only record the thumbnail when it was actually produced,
     // so the manifest never references a phantom asset.

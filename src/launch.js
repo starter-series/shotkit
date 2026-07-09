@@ -56,7 +56,15 @@ async function launchWithExtension({ extensionDir, viewport, recordVideoDir, rec
     launchOpts.recordVideo = { dir: recordVideoDir, size: recordVideoSize || launchOpts.viewport };
   }
 
-  const context = await chromium.launchPersistentContext(userDataDir, launchOpts);
+  let context;
+  try {
+    context = await chromium.launchPersistentContext(userDataDir, launchOpts);
+  } catch (err) {
+    if (userDataDir && fs.existsSync(userDataDir)) {
+      fs.rmSync(userDataDir, { recursive: true, force: true });
+    }
+    throw err;
+  }
 
   // Wait for the service worker so we can read the extension ID off its URL.
   // A content-script-only extension (no MV3 worker) or a slow worker makes this

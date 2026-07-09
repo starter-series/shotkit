@@ -79,16 +79,16 @@ describe('shotkit CLI usage errors', () => {
     expect(res.stderr).toContain('Usage: shotkit');
   });
 
-  test('--json usage errors keep stdout empty and write JSON to stderr', () => {
+  test('--json usage errors write one JSON object to stdout', () => {
     const res = run(['--config', '--json']);
 
     expect(res.status).toBe(2);
-    expect(res.stdout).toBe('');
-    expect(JSON.parse(res.stderr)).toEqual({
+    expect(JSON.parse(res.stdout)).toEqual({
       ok: false,
       error: '--config requires a config path',
       code: 2,
     });
+    expect(res.stderr).toBe('');
   });
 });
 

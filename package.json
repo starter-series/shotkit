@@ -63,8 +63,12 @@
       "src/extension.js",
       "src/serve.js",
       "src/cli.js",
+      "src/cli-runner.js",
+      "src/index.js",
       "src/video.js",
       "src/demo.js",
+      "src/demo-time.js",
+      "src/demo-storyboard.js",
       "src/handoff.js",
       "src/integrations.js"
     ],

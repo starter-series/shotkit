@@ -20,6 +20,8 @@ const requiredFiles = [
   "skills/capture/SKILL.md",
   "docs/handoff-conventions.md",
   "schemas/shotkit-manifest.schema.json",
+  "schemas/storyboard.schema.json",
+  "schemas/captions.schema.json",
 ];
 
 for (const relpath of requiredFiles) {

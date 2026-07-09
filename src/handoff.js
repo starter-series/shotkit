@@ -8,7 +8,7 @@
 
 const fs = require('fs');
 const path = require('path');
-const { normalizeDemoCaptions, parseTimeToMs } = require('./demo');
+const { normalizeDemoCaptions, parseTimeToMs } = require('./demo-time');
 const { buildHandoffRecommendations } = require('./integrations');
 
 const HANDOFF_VERSION = 1;
