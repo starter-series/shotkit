@@ -1,10 +1,10 @@
 # shotkit Handoff Conventions
 
-shotkit is the agent-ready launch asset capture and handoff layer for browser
-extensions. It should not try to become Screen Studio, Canva, Supademo, or a
-hosted demo editor. Instead, it turns the shipped product into repeatable source
-evidence and a self-contained contract that agents, tools, or MCP adapters can
-consume.
+shotkit is the autonomous launch asset pipeline for browser extensions. It
+turns a reusable product story into channel variants, validates the final files,
+and gives agents machine-readable fixes until the requested targets are
+publish-ready. The handoff pack is an internal machine boundary, not a request
+for a user to inspect JSON or edit media.
 
 ## Files
 
@@ -25,9 +25,8 @@ own copies; resolve `handoff.schemaFiles` relative to the directory containing
 requirement. shotkit validates the finalized three-document pack with these
 same schemas before publishing the manifest.
 
-The CLI's `ok:true` only means the requested stages completed and files were
-written. It does not certify visual approval, store-policy compliance, channel
-completeness, legal compliance, or connector availability.
+The CLI's `ok:true` means the requested stages completed. Its separate `status`
+is `publish-ready`, `needs-fix`, `blocked`, or `not-requested`.
 
 ## Manifest Roles
 
@@ -61,22 +60,46 @@ asset's `runId` matches it and its state is `produced`. A scene-filtered or
 digest changed becomes `modified`, is excluded from adapter readiness, and must
 be recaptured.
 
-`handoff.review.status` is `ready` when the captured storyboard has no warnings,
-`needs-review` when lint found improvements, and `incomplete` when a selected
-demo was skipped or retained evidence changed. This is a quality-review signal,
-not launch certification. `handoff.summary` reports asset, demo, and ready-
-adapter counts.
+`handoff.review` remains an additive v1 compatibility summary. Autonomous
+callers use `handoff.automation` instead; `needs-fix` never means "ask the user
+to review." `handoff.summary` reports asset, demo, adapter, and publish-ready
+target counts.
+
+## Autonomous Publishing
+
+One demo story can declare `targets: ['cws-youtube', 'x', 'youtube-shorts']`.
+Each expanded target records its profile in `storyboard.json` and receives
+mechanical defaults for viewport, H.264/yuv420p, duration cap, caption position,
+and thumbnail.
+
+`handoff.automation.targets[]` validates:
+
+- final MP4 presence and unchanged integrity;
+- ffprobe codec, pixel format, actual dimensions, and actual duration;
+- poster-frame presence and nonblank PNG pixel statistics;
+- storyboard lint being enabled for every publish target;
+- structured storyboard warnings, including early result and restore beats;
+- configured targets that were skipped or produced no output.
+
+Failures become `automation.actions[]` with `owner:"agent"`, an explicit `fix`,
+and a target/scene rerun instruction. Agents increment `--attempt`, apply every
+fix, and rerun `automation.retryScenes[]`. The default maximum is three. Only
+the exhausted `blocked` state sets `userActionRequired:true`.
+
+`publish-ready` means these automated checks passed. External publication has
+not happened yet; `targets[].upload` identifies the connector and notes that an
+authorized external write is required.
 
 Adapter `readiness` is tool-specific. `ready` means the required, unmodified
 asset roles and storyboard content are present for that recommendation; it does
 not mean the connector is installed or the assets were visually approved.
 
-## Tool Handoff
+## Manual Fallback
 
-`shotkit-manifest.json.handoff.adapterHints[]` is the recommendation layer. It
-lets an agent see likely next tools without the user researching the ecosystem.
-Hints are advisory; shotkit does not call external services, hold credentials,
-or install MCP servers.
+Target workflows omit `adapterHints[]` by default. They are available for
+legacy targetless captures or when `automation.manualFallback:true` is
+explicitly configured. Hints are advisory; shotkit does not hold credentials or
+install MCP servers.
 
 Each hint includes:
 
@@ -90,17 +113,16 @@ Each hint includes:
 - `missingRoles` / `missingInputs` — what to capture or provide next.
 - `nextStep` — the agent-facing action.
 
-Recommended downstream flow:
+Autonomous flow:
 
-1. Read the CLI result's `manifest` path and, when needed, validate it with
-   `handoff.schemaFiles.manifest`.
-2. Select the MP4 asset for upload/editing; keep the WEBM as source evidence.
-3. Read `storyboard.json` for the beat list and lint warnings.
-4. Read `captions.json` for subtitle/caption timing.
-5. Import the MP4, thumbnail, and captions into the downstream tool.
-6. Keep repo fixtures and `shotkit.config.js` as the repeatable source of truth.
+1. Read the CLI `status` and manifest path.
+2. On `needs-fix`, execute every agent-owned action and rerun only the listed
+   scenes with the next `--attempt`.
+3. On `publish-ready`, use each target's deliverable and upload connector.
+4. On `blocked`, report the exhausted blocker and attempted fixes.
+5. Keep repo fixtures and the story/action script as the repeatable source.
 
-Tool-specific notes:
+Fallback tool notes:
 
 - Figma MCP: use the `figma-mcp` hint when the manifest has a thumbnail and
   storyboard. It is good for cover frames, social layout, and design-system

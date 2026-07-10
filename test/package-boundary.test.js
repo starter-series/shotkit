@@ -28,6 +28,7 @@ describe('npm package boundary', () => {
 
   test('locks the public root API names', () => {
     expect(Object.keys(publicApi).sort()).toEqual([
+      'CHANNEL_PROFILES',
       'DEFAULT_BAND_HEIGHT',
       'DEFAULT_TARGETS',
       'DEFAULT_VIEWPORT',
@@ -42,6 +43,7 @@ describe('npm package boundary', () => {
       'buildFfmpegArgs',
       'buildHandoffDocs',
       'buildHandoffRecommendations',
+      'buildPublishPlan',
       'buildThumbnailArgs',
       'buildVideoFilter',
       'capture',
@@ -73,6 +75,7 @@ describe('npm package boundary', () => {
       'renderDescriptionDoc',
       'renderPrivacyDisclosureDoc',
       'renderPromoTile',
+      'resolveChannelProfile',
       'resolveSize',
       'serveDirectory',
       'setDemoCaption',

@@ -3,6 +3,7 @@ const os = require('os');
 const path = require('path');
 const {
   findFfmpeg,
+  parseProbeOutput,
   buildFfmpegArgs,
   buildThumbnailArgs,
   buildVideoFilter,
@@ -52,6 +53,26 @@ describe('buildFfmpegArgs', () => {
     expect(args).toContain('-c');
     expect(args).not.toContain('libx264');
     expect(args).not.toContain('-movflags');
+  });
+});
+
+describe('ffprobe metadata', () => {
+  test('normalizes final codec, dimensions, pixel format, and duration', () => {
+    expect(parseProbeOutput(JSON.stringify({
+      streams: [{ codec_name: 'h264', pix_fmt: 'yuv420p', width: 1280, height: 720 }],
+      format: { duration: '29.970000' },
+    }))).toEqual({
+      ok: true,
+      codec: 'h264',
+      pixelFormat: 'yuv420p',
+      width: 1280,
+      height: 720,
+      durationSeconds: 29.97,
+    });
+  });
+
+  test('rejects probe output without a video stream', () => {
+    expect(() => parseProbeOutput('{"streams":[],"format":{}}')).toThrow(/no video stream/);
   });
 });
 

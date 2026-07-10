@@ -1,7 +1,7 @@
 # shotkit
 
-An agent-ready launch asset capture and handoff pipeline for browser extensions.
-Playwright drives the shipped product; the `shotkit` CLI, programmatic
+An autonomous publish-ready launch asset pipeline for browser extensions.
+Playwright drives the shipped product; channel profiles, automated QA, the `shotkit` CLI, programmatic
 `capture()`, and `skills/capture/` Claude Code skill expose the same engine.
 Vanilla JS, CommonJS, no build step.
 
@@ -23,7 +23,9 @@ command must succeed. Headless works (`HEADED=0`; verified on macOS + Linux CI,
 video included); the local default is headed. Exit codes: `0` ok · `1` runtime
 failure · `2` usage / no config. In `--json` mode progress logs go to stderr;
 stdout is exactly one JSON object. Useful flags: `--scene <name>`,
-`--mp4`, `--no-video`, `--no-build`.
+`--target <id>`, `--attempt <n>`, `--mp4`, `--no-video`, `--no-build`.
+Success JSON carries `status`: `publish-ready`, `needs-fix`, `blocked`, or
+`not-requested`. Agents own `needs-fix` actions and retry without user review.
 Every run also writes `storyboard.json`, `captions.json`, and
 `shotkit-manifest.json` unless `handoff:false` is set in config.
 
@@ -37,11 +39,15 @@ src/
   serve.js       → serveDirectory (path-traversal-safe localhost fixture server)
   caption.js     → compositeCaption (disclaimer/caption band, stacked UNDER the shot)
   demo.js        → demo story helpers (DOM caption overlay + demo.caption/step/wait/click)
+  channels.js    → autonomous CWS/YouTube, X, and Shorts target profiles
   promo.js       → renderPromoTile (HTML template → image)
   describe.js    → extractListing / renderDescriptionDoc (STORE_LISTING.md → copy)
   presets.js     → PRESETS / resolveSize (CWS + SNS sizes)
   video.js       → demo post-processing: mp4/trim/crop/zoom/thumbnail (real ffmpeg required)
   handoff.js     → storyboard/captions/shotkit-manifest JSON contract
+  handoff-files.js / handoff-validator.js → integrity, atomic IO, runtime schemas
+  image-qa.js    → nonblank thumbnail pixel checks
+  publish.js     → publish-ready/needs-fix/blocked target plan
   schemas/       → JSON schemas for the v1 handoff contract
   cli.js         → CLI arg parsing + config resolution (unit-tested)
   index.js       → public API (the contract — don't break exports)
@@ -68,14 +74,13 @@ test/            → unit tests for the pure/safe modules (no browser)
   disclaimer badge stays top-left. Keep this lightweight: one `demo` or several
   `demos[]` entries, timed captions, `demo.caption/step/wait/click`, static
   `zoom`/`crop`, `thumbnail`, and storyboard lint — not a timeline editor.
-- **Handoff JSON is the product boundary**: shotkit creates source evidence and
-  metadata; external editors or MCP adapters do polish. Read
-  `shotkit-manifest.json` first, then use `assets[].role` and the packaged
-  `schemas/` files instead of filename guessing.
-- **Adapter hints are product guidance**: `handoff.adapterHints[]` should tell
-  agents which MCP/editor/video tool to try next and whether it is ready,
-  missing assets, or missing non-shotkit inputs. Do not call those tools from
-  shotkit itself.
+- **Handoff JSON is the machine boundary**: target workflows use
+  `handoff.automation` to fix and retry until `publish-ready`; users do not read
+  manifests or review media. Use `assets[].role` and bundled schemas instead of
+  filename guessing.
+- **Exception-only automation**: every `needs-fix` action is owned by the agent.
+  Escalate only after `automation.maxAttempts` yields `blocked`. Manual editor
+  hints are disabled unless `automation.manualFallback:true` is explicit.
 - **Storyboard lint is structured for agents**: runtime logs are human strings,
   but `storyboard.json` carries `code`, `severity`, `message`, and `fix` so the
   next config edit can be mechanical.
@@ -120,8 +125,11 @@ Use `demos: []` for multiple campaign cuts such as `demo-translate`,
 `demo-restore`, or `demo-popup`; `--scene <name>` reruns just one clip.
 Use `demo.click(selectorOrLocator, { moveMs, beforeMs, holdMs })` for visible cursor
 pacing. Prefer `thumbnail: { at: 1.2 }`; use `zoom: { scale: 1.04 }` or a
-small `crop` only when the key UI is too small. Storyboard lint warns; set
-`storyboardLint:false` only for intentionally short smoke clips.
-Read `shotkit-manifest.json` before handing assets to Screen Studio, Canva,
-Supademo, or a connector. Use `handoff.adapterHints[]` to choose the next tool
-instead of making the user research the ecosystem first.
+small `crop` only when the key UI is too small. Storyboard lint must stay on
+for channel targets; `storyboardLint:false` is only for legacy, non-publishing
+smoke clips and must produce `needs-fix` for a target.
+Prefer one story with `targets:['cws-youtube','x','youtube-shorts']`; shotkit
+replays the action script with target-specific framing. Read
+`handoff.automation`, apply agent-owned fixes, and rerun only
+`automation.retryScenes[]`. Do not propose iMovie, manual recapture, or media
+review unless the user explicitly requests fallback editing.

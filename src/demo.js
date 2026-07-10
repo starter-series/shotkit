@@ -13,6 +13,7 @@ const DEFAULT_STEP_HOLD_MS = 800;
 
 const { normalizeDelayMs, normalizeDemoCaptions, parseTimeToMs } = require('./demo-time');
 const { analyzeDemoStoryboard, formatStoryboardLint, lintDemoStoryboard } = require('./demo-storyboard');
+const { expandDemoTargets } = require('./channels');
 
 function normalizeDemoConfigs(config = {}) {
   const demos = [];
@@ -22,8 +23,7 @@ function normalizeDemoConfigs(config = {}) {
     demos.push(...config.demos);
   }
 
-  const seen = new Set();
-  return demos.map((demo, index) => {
+  const validated = demos.map((demo, index) => {
     if (!demo || typeof demo !== 'object') {
       throw new Error(`shotkit: demo entry ${index} must be an object`);
     }
@@ -32,10 +32,15 @@ function normalizeDemoConfigs(config = {}) {
     if (demo.captions != null && !Array.isArray(demo.captions)) {
       throw new Error(`shotkit: demo "${demo.name}".captions must be an array`);
     }
-    if (seen.has(demo.name)) throw new Error(`shotkit: duplicate demo name "${demo.name}"`);
-    seen.add(demo.name);
     return demo;
   });
+  const expanded = validated.flatMap(expandDemoTargets);
+  const seen = new Set();
+  for (const demo of expanded) {
+    if (seen.has(demo.name)) throw new Error(`shotkit: duplicate demo name "${demo.name}"`);
+    seen.add(demo.name);
+  }
+  return expanded;
 }
 
 function demoCaptionInitScript(options = {}) {

@@ -47,10 +47,17 @@
           "type": "array",
           "items": { "type": "string" }
         },
+        "requestedTargets": { "$ref": "#/$defs/names" },
+        "attempt": { "type": "integer", "minimum": 1 },
         "video": { "type": "boolean" },
         "noBuild": { "type": "boolean" },
         "mp4": { "type": "boolean" },
         "configuredDemos": { "$ref": "#/$defs/names" },
+        "configuredTargets": { "$ref": "#/$defs/names" },
+        "configuredTargetDemos": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/configuredTargetDemo" }
+        },
         "selectedDemos": { "$ref": "#/$defs/names" },
         "capturedDemos": { "$ref": "#/$defs/names" },
         "skippedDemos": { "$ref": "#/$defs/names" }
@@ -100,6 +107,7 @@
           "type": "array",
           "items": { "$ref": "#/$defs/adapterHint" }
         },
+        "automation": { "$ref": "#/$defs/automation" },
         "review": {
           "type": "object",
           "required": ["status", "warningCount", "warnings", "incomplete"],
@@ -122,7 +130,8 @@
           "properties": {
             "assetCount": { "type": "integer", "minimum": 0 },
             "demoCount": { "type": "integer", "minimum": 0 },
-            "readyAdapterCount": { "type": "integer", "minimum": 0 }
+            "readyAdapterCount": { "type": "integer", "minimum": 0 },
+            "publishReadyTargetCount": { "type": "integer", "minimum": 0 }
           }
         }
       }
@@ -161,6 +170,10 @@
         "outPath": { "type": "string" },
         "width": { "type": "integer", "minimum": 1 },
         "height": { "type": "integer", "minimum": 1 },
+        "target": { "type": "string" },
+        "channel": { "type": "string" },
+        "media": { "$ref": "#/$defs/mediaProbe" },
+        "visual": { "$ref": "#/$defs/visualQa" },
         "runId": { "type": "string" },
         "capturedAt": { "type": "string", "format": "date-time" },
         "state": { "enum": ["produced", "retained", "modified"] },
@@ -194,7 +207,147 @@
           "required": ["kind"],
           "properties": {
             "kind": { "type": "string" },
-            "name": { "type": "string" }
+            "name": { "type": "string" },
+            "story": { "type": "string" },
+            "target": { "type": "string" }
+          }
+        }
+      }
+    },
+    "configuredTargetDemo": {
+      "type": "object",
+      "required": ["name", "target"],
+      "properties": {
+        "name": { "type": "string" },
+        "story": { "type": "string" },
+        "target": { "type": "string" }
+      }
+    },
+    "mediaProbe": {
+      "type": "object",
+      "required": ["ok"],
+      "properties": {
+        "ok": { "type": "boolean" },
+        "error": { "type": "string" },
+        "codec": { "type": "string" },
+        "pixelFormat": { "type": "string" },
+        "width": { "type": "integer", "minimum": 1 },
+        "height": { "type": "integer", "minimum": 1 },
+        "durationSeconds": { "type": ["number", "null"], "minimum": 0 }
+      }
+    },
+    "visualQa": {
+      "type": "object",
+      "required": ["ok", "nonBlank"],
+      "properties": {
+        "ok": { "type": "boolean" },
+        "nonBlank": { "type": "boolean" },
+        "error": { "type": "string" },
+        "width": { "type": "integer", "minimum": 1 },
+        "height": { "type": "integer", "minimum": 1 },
+        "opaqueRatio": { "type": "number", "minimum": 0, "maximum": 1 },
+        "luminanceStdDev": { "type": "number", "minimum": 0 },
+        "colorBuckets": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "automation": {
+      "type": "object",
+      "required": [
+        "policy",
+        "status",
+        "manualFallback",
+        "userActionRequired",
+        "maxAttempts",
+        "attempt",
+        "targets",
+        "actions",
+        "retryScenes"
+      ],
+      "properties": {
+        "policy": { "const": "exception-only" },
+        "status": { "enum": ["not-requested", "needs-fix", "blocked", "publish-ready"] },
+        "manualFallback": { "type": "boolean" },
+        "userActionRequired": { "type": "boolean" },
+        "maxAttempts": { "type": "integer", "minimum": 1 },
+        "attempt": { "type": "integer", "minimum": 1 },
+        "targets": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/publishTarget" }
+        },
+        "actions": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/agentAction" }
+        },
+        "retryScenes": { "$ref": "#/$defs/names" }
+      }
+    },
+    "publishTarget": {
+      "type": "object",
+      "required": [
+        "target",
+        "label",
+        "platform",
+        "delivery",
+        "demo",
+        "story",
+        "status",
+        "checks",
+        "actions",
+        "upload"
+      ],
+      "properties": {
+        "target": { "type": "string" },
+        "label": { "type": "string" },
+        "platform": { "type": "string" },
+        "delivery": { "type": "string" },
+        "demo": { "type": "string" },
+        "story": { "type": "string" },
+        "status": { "enum": ["needs-fix", "blocked", "publish-ready"] },
+        "deliverable": { "type": ["object", "null"], "additionalProperties": true },
+        "thumbnail": { "type": ["object", "null"], "additionalProperties": true },
+        "checks": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/publishCheck" }
+        },
+        "actions": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/agentAction" }
+        },
+        "upload": {
+          "type": "object",
+          "required": ["connector", "requiresAuthorization", "specUrl"],
+          "properties": {
+            "connector": { "type": "string" },
+            "requiresAuthorization": { "type": "boolean" },
+            "specUrl": { "type": "string", "format": "uri" }
+          }
+        }
+      }
+    },
+    "publishCheck": {
+      "type": "object",
+      "required": ["code", "status", "message"],
+      "properties": {
+        "code": { "type": "string" },
+        "status": { "enum": ["pass", "fail"] },
+        "message": { "type": "string" }
+      }
+    },
+    "agentAction": {
+      "type": "object",
+      "required": ["code", "owner", "fix", "rerun"],
+      "properties": {
+        "code": { "type": "string" },
+        "owner": { "const": "agent" },
+        "demo": { "type": "string" },
+        "target": { "type": "string" },
+        "fix": { "type": "string" },
+        "rerun": {
+          "type": "object",
+          "additionalProperties": true,
+          "properties": {
+            "scene": { "type": "string" },
+            "target": { "type": "string" }
           }
         }
       }

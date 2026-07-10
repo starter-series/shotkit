@@ -18,6 +18,7 @@ const PRESETS = Object.freeze({
   'sns-og': { width: 1200, height: 630 }, // Open Graph (link previews)
   'sns-square': { width: 1080, height: 1080 }, // Instagram / square
   'sns-portrait': { width: 1080, height: 1350 }, // Instagram portrait (4:5)
+  'sns-vertical': { width: 720, height: 1280 }, // vertical short-form video (9:16)
 });
 
 /**

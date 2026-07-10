@@ -119,6 +119,51 @@ describe('normalizeDemoConfigs', () => {
     expect(() => normalizeDemoConfigs({ demos: [{ run }] })).toThrow(/needs a name/);
     expect(() => normalizeDemoConfigs({ demos: [{ name: 'demo' }] })).toThrow(/needs run/);
   });
+
+  test('expands one story into autonomous channel variants', () => {
+    const [cws, x, shorts] = normalizeDemoConfigs({
+      demo: {
+        name: 'skillbridge',
+        targets: ['cws-youtube', 'x', 'youtube-shorts'],
+        captions: [{ at: 0.5, text: 'Translate the lesson' }],
+        run,
+      },
+    });
+
+    expect(cws).toMatchObject({
+      name: 'skillbridge-cws-youtube',
+      story: 'skillbridge',
+      target: 'cws-youtube',
+      preset: 'sns-video',
+      mp4: { crf: 18 },
+      trim: { duration: 30 },
+      thumbnail: { at: 1.2 },
+    });
+    expect(x).toMatchObject({ name: 'skillbridge-x', target: 'x', preset: 'sns-video' });
+    expect(shorts).toMatchObject({
+      name: 'skillbridge-youtube-shorts',
+      target: 'youtube-shorts',
+      preset: 'sns-vertical',
+    });
+    expect(cws.run).toBe(run);
+    expect(shorts.targetProfile.viewport).toEqual({ width: 720, height: 1280 });
+  });
+
+  test('rejects unknown or malformed channel targets', () => {
+    expect(() => normalizeDemoConfigs({ demo: { name: 'demo', targets: ['unknown'], run } }))
+      .toThrow(/unknown channel target/);
+    expect(() => normalizeDemoConfigs({ demo: { name: 'demo', targets: [], run } }))
+      .toThrow(/non-empty string array/);
+  });
+
+  test('rejects malformed or undeclared target overrides', () => {
+    expect(() => normalizeDemoConfigs({
+      demo: { name: 'demo', targets: ['x'], targetOptions: { 'youtube-shorts': {} }, run },
+    })).toThrow(/contains undeclared target: youtube-shorts/);
+    expect(() => normalizeDemoConfigs({
+      demo: { name: 'demo', targets: ['x'], targetOptions: { x: true }, run },
+    })).toThrow(/targetOptions\.x must be an object/);
+  });
 });
 
 describe('lintDemoStoryboard', () => {

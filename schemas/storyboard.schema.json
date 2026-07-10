@@ -37,7 +37,22 @@
       "required": ["name", "audience", "viewport", "recommendedNextTool", "beats"],
       "properties": {
         "name": { "type": "string" },
+        "story": { "type": "string" },
+        "target": { "type": "string" },
+        "lintEnabled": { "type": "boolean" },
         "audience": { "type": "string" },
+        "channelProfile": {
+          "type": "object",
+          "additionalProperties": true,
+          "required": ["id", "label", "platform", "delivery", "specUrl"],
+          "properties": {
+            "id": { "type": "string" },
+            "label": { "type": "string" },
+            "platform": { "type": "string" },
+            "delivery": { "type": "string" },
+            "specUrl": { "type": "string", "format": "uri" }
+          }
+        },
         "preset": { "type": "string" },
         "viewport": { "$ref": "#/$defs/viewport" },
         "recommendedNextTool": { "type": "string" },

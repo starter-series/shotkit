@@ -2,10 +2,10 @@
 
 # shotkit
 
-**Agent-ready launch asset capture and handoff for browser extensions.**
+**Autonomous, publish-ready launch assets for browser extensions.**
 
-Build the shipped extension. Produce CWS/SNS source assets. Hand off a versioned,
-self-contained evidence pack.
+Name the story and channels. Agents capture, edit, validate, and retry. Humans
+only see final target files or a blocker after automation is exhausted.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Node ≥ 22](https://img.shields.io/badge/node-%E2%89%A522-brightgreen.svg)](.nvmrc)
@@ -22,10 +22,10 @@ self-contained evidence pack.
 
 ## Status & Scope
 
-- **Currently implemented** — An agent-ready launch asset **pipeline** whose capture engine builds and launches the *shipped* extension via Playwright, drives repo-owned scenes, and emits CWS screenshots/promo tiles, SNS demo clips, listing/privacy copy, plus a schema-backed evidence pack (`shotkit-manifest.json`, storyboard, captions, bundled schemas, structured review state, adapter hints, and per-file SHA-256). Its **CLI agent contract** provides `--json`, an optional repo `path`, explicit `0/1/2` exit codes, and the manifest entrypoint. The same engine is available through `capture()`, the Claude Code plugin + skill ([`skills/capture/`](skills/capture/SKILL.md); `/plugin install shotkit@starter-series`), and an AGENTS.md run-block. SNS post-processing covers H.264 mp4, trim, static crop/zoom, and thumbnails with a real ffmpeg.
+- **Currently implemented** — An autonomous launch asset **pipeline** whose Playwright engine builds and drives the *shipped* extension, expands one story into `cws-youtube`, `x`, and `youtube-shorts` variants, applies target viewport/H.264/trim/caption/thumbnail defaults, probes the final MP4 with ffprobe, checks the poster pixels for blank-frame failures, and emits `publish-ready`, `needs-fix`, or `blocked`. The schema-backed pack still carries source evidence, captions, run provenance, integrity, and agent-owned retry actions. The same engine is exposed through the CLI, `capture()`, skill, and AGENTS.md run-block.
 - **Story renderer** — Demo configs can use one `demo` or several `demos: []` entries, timed `captions`, pointer-highlighted clicks, paced cursor movement, static zoom/crop framing, thumbnail frames, storyboard lint, and a small `demo` helper (`caption`, `step`, `wait`, `click`) so an agent can turn a feature checklist into 20-40 second before → action → result stories without pulling in a general video editor.
 - **Design intent** — *One engine, many surfaces — matched to the tool's nature.* shotkit is a heavy, file-producing build tool, so its surfaces are CLI (+`--json`), skill, and CI — not MCP (see Non-goals). Captures are **deterministic** (login-free fixtures, frozen data) and the run **doubles as a real-bundle smoke test** — a screenshot only appears if that feature rendered from the shipped code. **Trademark-safe** by construction: a disclaimer band is composited onto every shot.
-- **Non-goals** — An **MCP server** inside shotkit (dropped by design: agents with a shell get a better contract from `--json` + the skill). Removing the per-repo **scene config** (which screens are *your* money shots is irreducible intent — it lives in your `shotkit.config.js`). A general-purpose video editor or hosted demo platform. shotkit creates source evidence and a handoff pack; Screen Studio, Canva, Supademo, or future MCP connectors can do polish later.
+- **Non-goals** — An **MCP server** inside shotkit (agents with a shell get a better contract from `--json` + the skill). Removing the per-repo **story/action config** (which product state proves the claim is irreducible intent). A general-purpose timeline editor or hosted demo platform. Repeatable channel work is automated; manual editors are fallback-only and disabled unless explicitly requested.
 - **Redacted** — none. Ships no private data, credentials, or third-party identifiers.
 
 ## Install
@@ -68,6 +68,8 @@ Add a `shotkit.config.js` (the per-repo capture contract), then:
 ```bash
 shotkit                         # produce everything into outDir
 shotkit --scene 01-feature      # just one scene/promoTile/demo/demos entry, "description", or "privacy"
+shotkit --target x              # render/retry only the configured X variants
+shotkit --attempt 2 --json      # next autonomous fix attempt
 shotkit --no-video              # skip the screencast (faster/CI)
 shotkit --no-build              # use an already-built bundle
 shotkit ../my-extension --json  # run against another checkout; JSON result on stdout
@@ -77,30 +79,24 @@ Outputs land in `outDir` (default `store-assets/`): `<scene>.png`, `<promoTile>.
 
 ### Handoff Pack
 
-shotkit is not trying to beat video editors. It is the starter layer before
-them: capture the real built extension, write source clips, and describe what
-the clips mean.
+The handoff pack is primarily an internal machine boundary: agents use it to
+fix and retry until channel assets are publish-ready. It is not a request for a
+human to inspect JSON or edit media.
 
 - `storyboard.json` — demo names, audience, viewport, trim/framing hints, beats,
   structured storyboard lint warnings, and suggested next tool.
 - `captions.json` — portable caption timings and text per demo.
 - `shotkit-manifest.json` — the entrypoint: asset inventory and integrity,
-  run/freshness metadata, review summary, bundled schema paths, and
-  `adapterHints` for likely next tools.
+  run/freshness metadata, bundled schema paths, and
+  `handoff.automation` with target checks and agent-owned retry actions.
 - `schemas/*.schema.json` — local validation contracts, copied into every pack
   so a downstream agent does not need the installed npm package.
 
-This makes external polish easier: an agent or MCP connector can read the
-manifest, open the mp4/webm + thumbnail + captions in Screen Studio, Canva,
-Supademo, or another editor, and keep the repo fixture/storyboard as the source
-of truth.
-
-The manifest also recommends possible downstream connections. For example,
-`figma-mcp` appears when the run has enough thumbnail/storyboard material for a
-design handoff, `higgsfield` appears for AI-video campaign variants, and
-`longcat-video-avatar` is marked as needing extra avatar/voice input when the
-captured assets are not enough by themselves. shotkit suggests the next tool;
-the agent's own MCP/tool environment performs the connection.
+Target workflows omit manual editor recommendations by default. Targetless
+legacy runs may still expose `adapterHints`; setting
+`automation.manualFallback:true` restores them for an explicitly requested
+manual path. Repo fixtures and the story/action script remain the repeatable
+source of truth in either mode.
 
 The convention is versioned and schema-backed. `$schema` values are stable URN
 identifiers; `handoff.schemaFiles` resolves them to files inside the output pack.
@@ -108,6 +104,38 @@ Every delivered file except the self-referential manifest carries byte size and
 SHA-256 integrity metadata. See
 [`docs/handoff-conventions.md`](docs/handoff-conventions.md) and the packaged
 schemas under [`schemas/`](schemas/).
+
+### Autonomous channel targets
+
+Keep one product story and declare destinations. Do not set viewport, codec,
+thumbnail, or duration mechanically unless a target genuinely needs an
+override:
+
+```js
+demo: {
+  name: 'skillbridge',
+  targets: ['cws-youtube', 'x', 'youtube-shorts'],
+  captions: [
+    { at: 0.5, text: 'Translate the lesson in place' },
+    { at: 18, text: 'Restore the original anytime' },
+  ],
+  async run({ page, env, demo, target }) {
+    // Reusable product actions. target contains the current channel profile.
+  },
+}
+```
+
+The story expands to `skillbridge-cws-youtube`, `skillbridge-x`, and
+`skillbridge-youtube-shorts`. Landscape targets use 1280×720; Shorts uses
+720×1280. All target variants receive H.264/yuv420p, a 30-second cap, a poster
+frame, and automated final-file checks. `targetOptions.<id>` is available for a
+channel-specific framing override.
+
+The default policy is exception-only: `needs-fix` actions belong to the agent,
+which edits the config and reruns `automation.retryScenes[]` with an incremented
+`--attempt`. User input is requested only when `blocked` is reached after
+`automation.maxAttempts` (default 3). Manual editor hints appear only with
+`automation: { manualFallback: true }`.
 
 Project-specific application plans stay repo-internal and are not included in
 the npm package.
@@ -120,9 +148,9 @@ legible at store dimensions.
 
 SNS demo clips are story surfaces: short, captioned walkthroughs that show the
 result quickly, then the action and safety/restore path. For X demo video,
-prefer `preset: 'sns-video'` (`1280×720`, 16:9) plus H.264 mp4 because H.264
-`yuv420p` wants even dimensions. Use `sns-twitter` (`1200×675`) for static X
-card images.
+the `x` target applies 1280×720 H.264 automatically. The lower-level
+`preset:'sns-video'` path remains available for legacy/custom captures. Use
+`sns-twitter` (`1200×675`) for static X card images.
 
 ### Demo → mp4 / trim (SNS)
 
@@ -197,7 +225,7 @@ demo: {
   crop: { x: 120, y: 0, width: 1040, height: 720 }, // output a cropped mp4
   zoom: { scale: 1.08 },                            // center zoom, still 16:9
   thumbnail: { at: 1.5 },                           // poster frame
-  storyboardLint: false,                            // optional escape hatch
+  storyboardLint: false,                            // legacy/short smoke clips only
 }
 ```
 
@@ -207,6 +235,8 @@ The same warnings are written to `storyboard.json` with `code`, `severity`,
 pass. Current checks cover missing mp4, first caption after 3 seconds, odd video
 dimensions, long captions, missing safety/restore beat, crop/zoom edge risk, and
 clips outside the 20-40 second target.
+Autonomous channel targets require lint to remain enabled; setting
+`storyboardLint:false` makes their automation status `needs-fix`.
 
 For several campaign cuts, keep the old single `demo` field out and use
 `demos: []`. Each entry writes `<name>.webm` and optional `<name>.mp4`, and
@@ -247,15 +277,16 @@ move cursor/click/typing actions slowly, and use mp4 for X.
 logs move to stderr):
 
 ```json
-{ "ok": true, "outDir": "/abs/store-assets", "manifest": "/abs/store-assets/shotkit-manifest.json", "produced": ["/abs/store-assets/01-popup.png"] }
+{ "ok": true, "status": "publish-ready", "outDir": "/abs/store-assets", "manifest": "/abs/store-assets/shotkit-manifest.json", "produced": ["/abs/store-assets/skillbridge-x.mp4"] }
 ```
 
 Exit codes: `0` ok · `1` runtime failure · `2` usage / no config found. Failure
 payloads also use the single stdout JSON object (`{"ok":false,"error":…}`).
-`ok:true` means the requested stages completed and the files were written. It
-does not certify channel completeness, visual approval, legal compliance, or
-availability of a downstream connector; read `handoff.review` and
-`handoff.adapterHints[]` from the returned manifest for those next decisions.
+`ok:true` means execution completed. `status:publish-ready` additionally means
+every requested target passed shotkit's story lint, H.264/yuv420p, actual
+dimensions, actual duration, thumbnail, nonblank-frame, integrity, and target
+profile checks. It does not mean an external upload occurred; publishing still
+requires an authorized connector or explicit external-write approval.
 Drop-in agent wiring: the run-block in
 [`AGENTS.md`](AGENTS.md) (read by Claude Code, Codex, Cursor, Gemini CLI, …) and
 the [`skills/capture/`](skills/capture/SKILL.md) skill (Agent Skills format —
@@ -288,15 +319,14 @@ module.exports = {
   promoTiles: [{ name: 'promo', template: 'path/to/promo.html', preset: 'cws-promo-small',
                  replacements: { NAME: 'My Ext' } }],
 
-  // Use `demo` for one canonical clip, or `demos: []` for campaign variants.
+  // One story can render several channel variants automatically.
   demos: [
-    { name: 'demo-feature', preset: 'sns-video', mp4: { crf: 18 },
-      trim: { start: 0, duration: '00:30' },
+    { name: 'demo-feature', targets: ['cws-youtube', 'x', 'youtube-shorts'],
       captions: [
         { at: 0.5, text: 'Show the result first' },
         { at: 18.0, text: 'Restore the original anytime' },
       ],
-      async run({ page, env, demo }) { /* walkthrough with demo.step/click/wait */ } },
+      async run({ page, env, demo, target }) { /* reusable walkthrough */ } },
   ],
 };
 ```
@@ -305,6 +335,8 @@ module.exports = {
 - The harness reduces a captioned scene's capture height by the band height and stacks the band under it, so the final image is exactly the preset size and **no UI is hidden**.
 - Demo captions are overlays inside the recorded page, not screenshot bands; they are meant for story clips, not CWS screenshots.
 - Demo names must be unique across `demo` and `demos` because they become output filenames.
+- Target demos expand to `<name>-<target>` filenames. Use `--target x` or
+  `--scene <expanded-name>` for an automatic retry pass.
 
 ### Product manifest listing/privacy
 
@@ -366,7 +398,8 @@ permission tables. It is intentionally not a privacy policy generator.
 `capture(config, opts)` · `serveDirectory` · `stageExtension` · `patchManifestForLocalhost` ·
 `launchWithExtension` · `closeContext` · `compositeCaption` · `renderPromoTile` ·
 `extractListing` · `extractProductManifest` · `renderDescriptionDoc` ·
-`renderPrivacyDisclosureDoc` · `PRESETS` · `resolveSize` ·
+`renderPrivacyDisclosureDoc` · `PRESETS` · `resolveSize` · `CHANNEL_PROFILES` ·
+`resolveChannelProfile` · `buildPublishPlan` ·
 `createDemoController` · `normalizeDemoConfigs` · `analyzeDemoStoryboard` ·
 `lintDemoStoryboard` · `installDemoCaptionOverlay` · `setDemoCaption` ·
 `buildVideoFilter` · `buildThumbnailArgs` · `HANDOFF_VERSION` ·
@@ -381,10 +414,10 @@ permission tables. It is intentionally not a privacy policy generator.
 | Claude Code skill ([`skills/capture/`](skills/capture/SKILL.md)) | ✅ now | Claude Code (portable to Codex/Cursor/Gemini via the Agent Skills format) |
 | `AGENTS.md` run-block | ✅ now | every agent that reads AGENTS.md |
 | npm package (`shotkit`) | release target | `npx` zero-install after publish |
-| Demo story rendering (`demo`, `demos[]`, captions, click highlight, pacing, crop/zoom, thumbnails, storyboard lint, `--mp4`, `trim`) | ✅ now | SNS clips |
+| Autonomous target rendering (`demo.targets`, CWS/YouTube, X, Shorts, ffprobe, pixel QA, retry actions) | ✅ now | publish-ready channel variants |
 | Capture-in-CI GitHub Action | ✅ now — ships in [`browser-extension-starter`](https://github.com/starter-series/browser-extension-starter)'s `capture.yml` (headless) | zero-local-browser runs + CI smoke test |
 | `starter-series` marketplace entry (`/plugin install shotkit@starter-series`) | ✅ now | discovery |
-| Timeline/audio/motion editing | non-goal | use a real editor after shotkit |
+| Timeline/audio/motion editing | non-goal | explicit `automation.manualFallback:true` only |
 
 An MCP stdio tool was considered and **dropped** — see Non-goals: shotkit is a heavy, file-producing build tool, so a `--json` CLI + skill serves agents better than an MCP server's per-session context cost.
 

@@ -144,4 +144,54 @@ describe('capture lifecycle cleanup', () => {
     expect(cleanup).not.toHaveBeenCalled();
     expect(fs.existsSync(path.join(cwd, 'store-assets'))).toBe(false);
   });
+
+  test('rejects unconfigured channel targets before capture work', async () => {
+    const prepareExtension = jest.fn(async () => preparedExtension(jest.fn()));
+    const cwd = tempCwd();
+
+    await expect(capture({
+      handoff: false,
+      prepareExtension,
+      demo: { name: 'skillbridge', targets: ['x'], run: async () => {} },
+    }, {
+      cwd,
+      targets: ['youtube-shorts'],
+      noBuild: true,
+      log: () => {},
+    })).rejects.toMatchObject({
+      message: 'target not configured: youtube-shorts. Configured: x',
+      exitCode: 2,
+    });
+
+    expect(prepareExtension).not.toHaveBeenCalled();
+    expect(launchWithExtension).not.toHaveBeenCalled();
+    expect(fs.existsSync(path.join(cwd, 'store-assets'))).toBe(false);
+  });
+
+  test('rejects scene and target filters whose intersection is empty', async () => {
+    const prepareExtension = jest.fn(async () => preparedExtension(jest.fn()));
+    const cwd = tempCwd();
+
+    await expect(capture({
+      handoff: false,
+      prepareExtension,
+      demos: [
+        { name: 'translate', targets: ['x'], run: async () => {} },
+        { name: 'restore', targets: ['youtube-shorts'], run: async () => {} },
+      ],
+    }, {
+      cwd,
+      scenes: ['translate'],
+      targets: ['youtube-shorts'],
+      noBuild: true,
+      log: () => {},
+    })).rejects.toMatchObject({
+      message: 'no configured demo matches the requested scene and target filters',
+      exitCode: 2,
+    });
+
+    expect(prepareExtension).not.toHaveBeenCalled();
+    expect(launchWithExtension).not.toHaveBeenCalled();
+    expect(fs.existsSync(path.join(cwd, 'store-assets'))).toBe(false);
+  });
 });

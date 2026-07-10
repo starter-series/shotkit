@@ -7,6 +7,15 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 ## [Unreleased]
 
 ### Added
+- Autonomous channel profiles for `cws-youtube`, `x`, and `youtube-shorts`.
+  One demo story can declare `targets[]`; shotkit expands target variants and
+  applies viewport, H.264, duration-cap, caption, and thumbnail defaults.
+- Final MP4 probing through ffprobe plus PNG pixel QA for blank/uniform poster
+  frames. The manifest now carries per-target checks and media metadata.
+- Publish targets cannot bypass story checks with `storyboardLint:false`.
+- Exception-only `handoff.automation`: `publish-ready`, `needs-fix`, and
+  exhausted `blocked` states, agent-owned fix/rerun actions, `--target`, and
+  bounded `--attempt` retries.
 - Every handoff pack now bundles its three JSON Schemas, exposes their
   manifest-relative paths, and records byte size plus SHA-256 integrity for
   each delivered file except the self-referential manifest.
@@ -19,8 +28,10 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 - The handoff manifest `tool` field now emits `shotkit`, matching the package
   and CLI identity.
 - `--json` success results now return the absolute `manifest` entrypoint.
-- Public messaging now leads with the agent-ready launch asset capture and
-  handoff pipeline; Playwright remains the implementation mechanism.
+- Public messaging now leads with the autonomous publish-ready launch asset
+  pipeline; Playwright remains the implementation mechanism.
+- Target workflows no longer route routine work to human review or manual
+  editors. Manual adapter hints require `automation.manualFallback:true`.
 
 ### Fixed
 - `step(text, fn, options)` now honors flat caption display options (e.g.

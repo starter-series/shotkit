@@ -19,6 +19,8 @@
         "required": ["name", "captions"],
         "properties": {
           "name": { "type": "string" },
+          "story": { "type": "string" },
+          "target": { "type": "string" },
           "captions": {
             "type": "array",
             "items": {

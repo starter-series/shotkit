@@ -7,6 +7,7 @@ describe('presets', () => {
     expect(resolveSize('sns-twitter')).toEqual({ width: 1200, height: 675 });
     expect(resolveSize('sns-video')).toEqual({ width: 1280, height: 720 });
     expect(resolveSize('sns-og')).toEqual({ width: 1200, height: 630 });
+    expect(resolveSize('sns-vertical')).toEqual({ width: 720, height: 1280 });
   });
 
   test('explicit size passes through', () => {
@@ -27,5 +28,6 @@ describe('presets', () => {
     expect(PRESETS).toHaveProperty('cws-screenshot');
     expect(PRESETS).toHaveProperty('sns-video', { width: 1280, height: 720 });
     expect(PRESETS).toHaveProperty('sns-square', { width: 1080, height: 1080 });
+    expect(PRESETS).toHaveProperty('sns-vertical', { width: 720, height: 1280 });
   });
 });

@@ -1,10 +1,10 @@
 /*
  * shotkit — public API.
  *
- * shotkit turns a BUILT browser extension (or any HTML) into source launch
- * assets plus a schema-backed handoff pack for agents and downstream editors.
- * Playwright is the capture engine; the product boundary is exposed through
- * the CLI (`shotkit`), `capture()`, and agent-readable docs/skills.
+ * shotkit turns a BUILT browser extension (or any HTML) into automatically
+ * validated channel assets. Playwright captures reusable stories; channel
+ * profiles, final-file QA, and agent-owned retry actions drive them to
+ * publish-ready through the CLI, capture(), and agent-readable skills.
  *
  * Config authors typically use `capture` indirectly (via the CLI) and import
  * the helpers below inside their `shotkit.config.js` to set up scenes:
@@ -30,6 +30,8 @@ const {
   splitSections,
 } = require('./describe');
 const { PRESETS, resolveSize } = require('./presets');
+const { CHANNEL_PROFILES, resolveChannelProfile } = require('./channels');
+const { buildPublishPlan } = require('./publish');
 const { findFfmpeg, buildFfmpegArgs, buildThumbnailArgs, buildVideoFilter, postProcessDemo } = require('./video');
 const { DEFAULT_TARGETS, buildHandoffRecommendations } = require('./integrations');
 const {
@@ -88,6 +90,8 @@ module.exports = {
   // sizes
   PRESETS,
   resolveSize,
+  CHANNEL_PROFILES,
+  resolveChannelProfile,
   // demo video post-processing
   findFfmpeg,
   buildFfmpegArgs,
@@ -97,6 +101,7 @@ module.exports = {
   // downstream handoff recommendations
   DEFAULT_TARGETS,
   buildHandoffRecommendations,
+  buildPublishPlan,
   // demo story rendering
   analyzeDemoStoryboard,
   createDemoController,

@@ -168,6 +168,7 @@ describe('handoff contract', () => {
       assetCount: 6,
       demoCount: 0,
       readyAdapterCount: 0,
+      publishReadyTargetCount: 0,
     });
     const storyboard = manifest.assets.find((asset) => asset.role === 'storyboard-contract');
     expect(storyboard.bytes).toBeGreaterThan(0);
@@ -360,5 +361,89 @@ describe('handoff contract', () => {
     });
     const supademo = manifest.handoff.adapterHints.find((hint) => hint.id === 'supademo');
     expect(supademo).toMatchObject({ readiness: 'needs-assets', missingRoles: ['storyboard-content'] });
+  });
+
+  test('publishes a schema-valid autonomous target plan without manual adapters', () => {
+    const { cwd, outDir } = tmpProject();
+    const { normalizeDemoConfigs } = require('../src/demo');
+    const [demo] = normalizeDemoConfigs({
+      demo: {
+        name: 'skillbridge',
+        targets: ['x'],
+        captions: [
+          { at: 0.5, text: 'Translate the lesson' },
+          { at: 18, text: 'Restore the original anytime' },
+        ],
+        run: async () => {},
+      },
+    });
+    const mp4Path = path.join(outDir, `${demo.name}.mp4`);
+    const thumbnailPath = path.join(outDir, `${demo.name}-thumbnail.png`);
+    fs.writeFileSync(mp4Path, 'mp4');
+    fs.writeFileSync(thumbnailPath, 'png');
+    const source = { kind: 'demo', name: demo.name, story: demo.story, target: demo.target };
+    const assets = [
+      assetRecord({
+        cwd,
+        outDir,
+        filePath: mp4Path,
+        name: demo.name,
+        type: 'video',
+        role: 'sns-demo-mp4',
+        target: 'x',
+        channel: 'x',
+        media: {
+          ok: true,
+          codec: 'h264',
+          pixelFormat: 'yuv420p',
+          width: 1280,
+          height: 720,
+          durationSeconds: 30,
+        },
+        source,
+      }),
+      assetRecord({
+        cwd,
+        outDir,
+        filePath: thumbnailPath,
+        name: `${demo.name}-thumbnail`,
+        type: 'image',
+        role: 'thumbnail',
+        target: 'x',
+        channel: 'x',
+        visual: { ok: true, nonBlank: true, colorBuckets: 32 },
+        source,
+      }),
+    ];
+
+    writeHandoffDocs({
+      cwd,
+      outDir,
+      config: {},
+      assets,
+      demoConfigs: [demo],
+      demoViewports: { [demo.name]: { width: 1280, height: 720 } },
+      demoWarnings: { [demo.name]: [] },
+      flags: {},
+      run: {
+        configuredDemos: [demo.name],
+        configuredTargets: ['x'],
+        configuredTargetDemos: [{ name: demo.name, story: demo.story, target: 'x' }],
+        selectedDemos: [demo.name],
+        capturedDemos: [demo.name],
+      },
+    });
+
+    const manifest = JSON.parse(fs.readFileSync(path.join(outDir, 'shotkit-manifest.json'), 'utf8'));
+    expect(manifest.handoff.automation).toMatchObject({
+      policy: 'exception-only',
+      status: 'publish-ready',
+      manualFallback: false,
+      userActionRequired: false,
+      targets: [{ target: 'x', demo: demo.name, status: 'publish-ready' }],
+      actions: [],
+    });
+    expect(manifest.handoff.adapterHints).toEqual([]);
+    expect(manifest.handoff.summary.publishReadyTargetCount).toBe(1);
   });
 });

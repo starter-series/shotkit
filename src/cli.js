@@ -10,7 +10,7 @@
 const fs = require('fs');
 const path = require('path');
 
-const USAGE = `shotkit — build an agent-ready launch asset pack from a browser extension
+const USAGE = `shotkit — autonomously build publish-ready launch assets from a browser extension
 
 Usage: shotkit [path] [options]
 
@@ -23,8 +23,11 @@ Options:
   --scene <name>    only capture this scene/promoTile/demo/demos entry,
                     "description", or "privacy";
                     repeatable, or comma-separated. When given, nothing else runs.
+  --target <id>     only render configured channel targets (cws-youtube, x,
+                    youtube-shorts); repeatable, or comma-separated
+  --attempt <n>     automation retry number (default: 1; agents increment it)
   --json            machine-readable mode: stdout gets one JSON object
-                    {ok, outDir, manifest, produced[]}; progress logs move to stderr
+                    {ok, status, outDir, manifest, produced[]}; logs go to stderr
   --no-video        skip the demo screencast
   --mp4             also convert the demo to H.264 mp4 (needs ffmpeg on PATH
                     or SHOTKIT_FFMPEG; SNS uploaders want mp4, not webm)
@@ -42,6 +45,8 @@ Exit codes: 0 ok · 1 runtime failure · 2 usage / no config found
 function parseArgs(argv) {
   const opts = {
     scenes: [],
+    targets: [],
+    attempt: 1,
     errors: [],
     noVideo: false,
     noBuild: false,
@@ -67,6 +72,18 @@ function parseArgs(argv) {
         else opts.errors.push('--scene requires a scene name');
       }
     }
+    else if (a === '--target' || a.startsWith('--target=')) {
+      const inline = a.startsWith('--target=');
+      const value = inline ? a.slice('--target='.length) : argv[++i];
+      if (!value || value.startsWith('-')) {
+        opts.errors.push('--target requires a channel target');
+        if (!inline && value && value.startsWith('-')) i--;
+      } else {
+        const targets = value.split(',').filter(Boolean);
+        if (targets.length) opts.targets.push(...targets);
+        else opts.errors.push('--target requires a channel target');
+      }
+    }
     else if (a === '--config' || a.startsWith('--config=')) {
       const inline = a.startsWith('--config=');
       const value = inline ? a.slice('--config='.length) : argv[++i];
@@ -75,6 +92,16 @@ function parseArgs(argv) {
         if (!inline && value && value.startsWith('-')) i--;
       } else {
         opts.config = value;
+      }
+    }
+    else if (a === '--attempt' || a.startsWith('--attempt=')) {
+      const inline = a.startsWith('--attempt=');
+      const value = inline ? a.slice('--attempt='.length) : argv[++i];
+      if (!value || value.startsWith('-') || !Number.isInteger(Number(value)) || Number(value) < 1) {
+        opts.errors.push('--attempt requires a positive integer');
+        if (!inline && value && value.startsWith('-')) i--;
+      } else {
+        opts.attempt = Number(value);
       }
     }
     else if (a === '--json') opts.json = true;

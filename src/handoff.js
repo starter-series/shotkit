@@ -1,9 +1,9 @@
 /*
  * shotkit — handoff contract exports.
  *
- * These files are the agent-ready product boundary: a self-contained bundle of
- * captured evidence, captions, story intent, integrity, review state, and
- * next-tool hints for editors or future MCP adapters.
+ * These files are the autonomous machine boundary: captured evidence,
+ * captions, integrity, target QA, and agent-owned fix/retry actions. Users see
+ * final publish-ready assets or an exhausted blocker, not routine review work.
  */
 
 const fs = require('fs');
@@ -11,6 +11,7 @@ const path = require('path');
 const crypto = require('crypto');
 const { normalizeDemoCaptions, parseTimeToMs } = require('./demo-time');
 const { buildHandoffRecommendations } = require('./integrations');
+const { buildPublishPlan } = require('./publish');
 const { isValidHandoffDocs, validateHandoffDocs } = require('./handoff-validator');
 const {
   copyHandoffSchemas,
@@ -70,7 +71,7 @@ function stableIdPart(value) {
     .replace(/^-+|-+$/g, '') || 'asset';
 }
 
-function assetRecord({ cwd, outDir, filePath, name, type, role, width, height, source }) {
+function assetRecord({ cwd, outDir, filePath, name, type, role, width, height, source, target, channel, media, visual }) {
   const assetName = name || path.basename(filePath, path.extname(filePath));
   return {
     id: `${stableIdPart(role)}:${stableIdPart(assetName)}`,
@@ -82,6 +83,10 @@ function assetRecord({ cwd, outDir, filePath, name, type, role, width, height, s
     outPath: rel(outDir, filePath),
     width,
     height,
+    target,
+    channel,
+    media,
+    visual,
     source,
   };
 }
@@ -91,6 +96,9 @@ function demoAudience(demoConfig) {
 }
 
 function demoNextTool(demoConfig) {
+  if (demoConfig.targetProfile && demoConfig.targetProfile.connector) {
+    return `${demoConfig.targetProfile.connector}-upload`;
+  }
   if (demoConfig.nextTool) return demoConfig.nextTool;
   if (demoConfig.handoff && demoConfig.handoff.nextTool) return demoConfig.handoff.nextTool;
   return 'manual-editor';
@@ -138,7 +146,17 @@ function demoStoryboard(demoConfig, viewport) {
   const startMs = trimStartMs(demoConfig);
   return {
     name: demoConfig.name,
+    story: demoConfig.story,
+    target: demoConfig.target,
+    lintEnabled: demoConfig.storyboardLint !== false,
     audience: demoAudience(demoConfig),
+    channelProfile: demoConfig.targetProfile ? {
+      id: demoConfig.targetProfile.id,
+      label: demoConfig.targetProfile.label,
+      platform: demoConfig.targetProfile.platform,
+      delivery: demoConfig.targetProfile.delivery,
+      specUrl: demoConfig.targetProfile.specUrl,
+    } : undefined,
     preset: storyboardPreset(demoConfig.preset),
     viewport,
     recommendedNextTool: demoNextTool(demoConfig),
@@ -161,6 +179,8 @@ function demoCaptions(demoConfig) {
   const startMs = trimStartMs(demoConfig);
   return {
     name: demoConfig.name,
+    story: demoConfig.story,
+    target: demoConfig.target,
     captions: deliverableBeats(normalizeDemoCaptions(demoConfig.captions || []), startMs),
   };
 }
@@ -200,17 +220,25 @@ function handoffReview(storyboardLint, run = {}, assets = []) {
 }
 
 function refreshManifestHandoff(manifest, storyboard, config) {
-  const adapterHints = buildHandoffRecommendations({
+  const automation = buildPublishPlan({
+    assets: manifest.assets,
+    storyboard,
+    run: manifest.run,
+    config,
+  });
+  const adapterHints = automation.status !== 'not-requested' && !automation.manualFallback ? [] : buildHandoffRecommendations({
     assets: manifest.assets,
     config,
     context: { storyboardDemoCount: storyboard.demos.length },
   });
   manifest.handoff.adapterHints = adapterHints;
+  manifest.handoff.automation = automation;
   manifest.handoff.review = handoffReview(storyboard.storyboardLint, manifest.run, manifest.assets);
   manifest.handoff.summary = {
     assetCount: manifest.assets.length,
     demoCount: storyboard.demos.length,
     readyAdapterCount: adapterHints.filter((hint) => hint.readiness === 'ready').length,
+    publishReadyTargetCount: automation.targets.filter((target) => target.status === 'publish-ready').length,
   };
 }
 
@@ -221,10 +249,14 @@ function buildHandoffDocs({ cwd, outDir, config, assets, demoConfigs, demoViewpo
     id: crypto.randomUUID(),
     mode: run.mode || 'full',
     requestedScenes: run.requestedScenes || [],
+    requestedTargets: run.requestedTargets || [],
+    attempt: run.attempt || 1,
     video: run.video !== false,
     noBuild: !!run.noBuild,
     mp4: !!run.mp4,
     configuredDemos: run.configuredDemos || [],
+    configuredTargets: run.configuredTargets || [],
+    configuredTargetDemos: run.configuredTargetDemos || [],
     selectedDemos: run.selectedDemos || [],
     capturedDemos: run.capturedDemos || [],
     skippedDemos: run.skippedDemos || [],
@@ -273,16 +305,19 @@ function buildHandoffDocs({ cwd, outDir, config, assets, demoConfigs, demoViewpo
       storyboards: 'storyboard.json',
       captions: 'captions.json',
       recommendedFlow: [
-        'use shotkit outputs as source evidence',
-        'polish in Screen Studio, Canva, Supademo, or another editor',
+        'read handoff.automation and apply every agent-owned action',
+        'retry listed scenes until every requested target is publish-ready',
+        'upload final deliverables through an authorized connector',
         'keep repo fixtures and storyboard as the repeatable source of truth',
       ],
       adapterHints: [],
+      automation: null,
       review: handoffReview(storyboard.storyboardLint, runInfo),
       summary: {
         assetCount: currentAssets.length,
         demoCount: storyboard.demos.length,
         readyAdapterCount: 0,
+        publishReadyTargetCount: 0,
       },
     },
     assets: currentAssets,

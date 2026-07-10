@@ -8,7 +8,7 @@ const BIN = path.resolve(__dirname, '..', 'bin', 'shotkit.js');
 
 describe('parseArgs', () => {
   test('defaults', () => {
-    expect(parseArgs([])).toMatchObject({ scenes: [], errors: [], json: false, noVideo: false, help: false, path: null });
+    expect(parseArgs([])).toMatchObject({ scenes: [], targets: [], errors: [], json: false, noVideo: false, help: false, path: null });
   });
 
   test('positional path + flags', () => {
@@ -23,11 +23,26 @@ describe('parseArgs', () => {
     expect(parseArgs(['--scene=a,b']).scenes).toEqual(['a', 'b']);
   });
 
+  test('--target accepts comma lists and repeats', () => {
+    expect(parseArgs(['--target', 'x,cws-youtube', '--target', 'youtube-shorts']).targets)
+      .toEqual(['x', 'cws-youtube', 'youtube-shorts']);
+    expect(parseArgs(['--target=x']).targets).toEqual(['x']);
+  });
+
+  test('--attempt accepts positive integers for agent retries', () => {
+    expect(parseArgs(['--attempt', '2']).attempt).toBe(2);
+    expect(parseArgs(['--attempt=3']).attempt).toBe(3);
+    expect(parseArgs(['--attempt', '0']).errors).toEqual(['--attempt requires a positive integer']);
+  });
+
   test('usage errors are explicit for missing values and unknown options', () => {
     expect(parseArgs(['--scene']).errors).toEqual(['--scene requires a scene name']);
     expect(parseArgs(['--scene=']).errors).toEqual(['--scene requires a scene name']);
     expect(parseArgs(['--config', '--json']).errors).toEqual(['--config requires a config path']);
     expect(parseArgs(['--config=']).errors).toEqual(['--config requires a config path']);
+    expect(parseArgs(['--target']).errors).toEqual(['--target requires a channel target']);
+    expect(parseArgs(['--target=']).errors).toEqual(['--target requires a channel target']);
+    expect(parseArgs(['--attempt=oops']).errors).toEqual(['--attempt requires a positive integer']);
     expect(parseArgs(['--wat']).errors).toEqual(['unknown option: --wat']);
   });
 

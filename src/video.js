@@ -75,6 +75,69 @@ function findFfmpeg(env = process.env) {
   return null;
 }
 
+function findFfprobe(env = process.env) {
+  const sibling = env.SHOTKIT_FFMPEG
+    ? path.join(path.dirname(env.SHOTKIT_FFMPEG), 'ffprobe')
+    : null;
+  for (const bin of [env.SHOTKIT_FFPROBE, sibling, 'ffprobe']) {
+    if (!bin) continue;
+    try {
+      const result = spawnSync(bin, ['-version'], {
+        stdio: ['ignore', 'pipe', 'ignore'],
+        encoding: 'utf8',
+        env,
+        timeout: 10_000,
+      });
+      if (result.status === 0 && /ffprobe version/i.test(result.stdout || '')) return bin;
+    } catch (_err) {
+      /* try the next candidate */
+    }
+  }
+  return null;
+}
+
+function parseProbeOutput(stdout) {
+  const data = JSON.parse(stdout);
+  const stream = data.streams && data.streams[0];
+  if (!stream) throw new Error('ffprobe returned no video stream');
+  const durationSeconds = Number(data.format && data.format.duration);
+  return {
+    ok: true,
+    codec: stream.codec_name,
+    pixelFormat: stream.pix_fmt,
+    width: stream.width,
+    height: stream.height,
+    durationSeconds: Number.isFinite(durationSeconds) ? durationSeconds : null,
+  };
+}
+
+function probeVideo(filePath, env = process.env) {
+  const bin = findFfprobe(env);
+  if (!bin) {
+    return { ok: false, error: 'no ffprobe found; install ffmpeg or set SHOTKIT_FFPROBE' };
+  }
+  const result = spawnSync(bin, [
+    '-v', 'error',
+    '-select_streams', 'v:0',
+    '-show_entries', 'stream=codec_name,pix_fmt,width,height:format=duration',
+    '-of', 'json',
+    filePath,
+  ], {
+    stdio: ['ignore', 'pipe', 'pipe'],
+    encoding: 'utf8',
+    env,
+    timeout: 20_000,
+  });
+  if (result.status !== 0) {
+    return { ok: false, error: (result.stderr || `ffprobe exited ${result.status}`).trim() };
+  }
+  try {
+    return parseProbeOutput(result.stdout);
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+}
+
 /**
  * Build the ffmpeg argv. Pure (unit-tested).
  *
@@ -242,4 +305,14 @@ function postProcessDemo({ webmPath, mp4, trim, crop, zoom, thumbnail, log, env 
   return produced;
 }
 
-module.exports = { findFfmpeg, buildFfmpegArgs, buildThumbnailArgs, buildVideoFilter, postProcessDemo, INSTALL_HINT };
+module.exports = {
+  findFfmpeg,
+  findFfprobe,
+  parseProbeOutput,
+  probeVideo,
+  buildFfmpegArgs,
+  buildThumbnailArgs,
+  buildVideoFilter,
+  postProcessDemo,
+  INSTALL_HINT,
+};
