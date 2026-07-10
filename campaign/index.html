@@ -1,0 +1,204 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="light">
+    <title>Shotkit Campaigns</title>
+    <link rel="stylesheet" href="./styles.css">
+  </head>
+  <body>
+    <div class="app" id="app" aria-busy="true">
+      <header class="topbar">
+        <a class="brand" href="./" aria-label="Shotkit campaigns">
+          <span class="brand-mark" aria-hidden="true">SK</span>
+          <span class="brand-copy">
+            <strong>Shotkit</strong>
+            <small id="projectName">Loading project</small>
+          </span>
+        </a>
+
+        <nav class="steps" aria-label="Campaign stages" role="tablist">
+          <button class="step" id="planTab" type="button" role="tab" data-view="plan" aria-selected="true">
+            <span>1</span>Plan
+          </button>
+          <button class="step" id="productionTab" type="button" role="tab" data-view="production" aria-selected="false" disabled>
+            <span>2</span>Production
+          </button>
+          <button class="step" id="reviewTab" type="button" role="tab" data-view="review" aria-selected="false" disabled>
+            <span>3</span>Review
+          </button>
+        </nav>
+
+        <div class="topbar-actions">
+          <span class="connection" id="connectionState"><i aria-hidden="true"></i><span>Connecting</span></span>
+          <a class="icon-link" id="advancedLink" href="/" title="Open composition calibrator" aria-label="Open composition calibrator">
+            <svg class="icon" aria-hidden="true"><use href="#icon-sliders"></use></svg>
+          </a>
+        </div>
+      </header>
+
+      <main>
+        <section class="view plan-view" id="planView" data-view="plan" role="tabpanel" aria-labelledby="planTab">
+          <header class="view-heading">
+            <div>
+              <p class="eyebrow">Campaign recipe</p>
+              <h1>Select a story</h1>
+            </div>
+            <span class="selection-count" id="recipeCount">0 recipes</span>
+          </header>
+
+          <div class="plan-layout">
+            <div class="recipe-grid" id="recipeGrid" role="radiogroup" aria-label="Campaign recipes"></div>
+
+            <aside class="channel-panel" aria-label="Delivery channels">
+              <header>
+                <div>
+                  <p class="eyebrow">Channel profile</p>
+                  <h2 id="selectedRecipeName">No recipe selected</h2>
+                </div>
+                <span id="channelCount">0</span>
+              </header>
+              <p class="recipe-description" id="recipeDescription"></p>
+              <fieldset id="channelList">
+                <legend>Outputs</legend>
+              </fieldset>
+              <div class="plan-action">
+                <div class="plan-summary">
+                  <strong id="planOutputCount">0 outputs</strong>
+                  <span id="planFormatSummary">No channels selected</span>
+                </div>
+                <button class="button button-primary" id="startButton" type="button" disabled>
+                  <svg class="icon" aria-hidden="true"><use href="#icon-play"></use></svg>
+                  Start production
+                </button>
+              </div>
+            </aside>
+          </div>
+        </section>
+
+        <section class="view production-view" id="productionView" data-view="production" role="tabpanel" aria-labelledby="productionTab" hidden>
+          <header class="view-heading production-heading">
+            <div>
+              <p class="eyebrow">Production</p>
+              <h1 id="productionTitle">Preparing outputs</h1>
+            </div>
+            <span class="run-state" id="runState">Idle</span>
+          </header>
+
+          <div class="production-layout">
+            <section class="production-board" aria-label="Production progress">
+              <div class="progress-track" aria-hidden="true"><span id="progressBar"></span></div>
+              <div class="target-progress-list" id="targetProgressList"></div>
+            </section>
+
+            <aside class="production-summary">
+              <div class="metric-row">
+                <span>Outputs</span>
+                <strong id="productionOutputCount">0</strong>
+              </div>
+              <div class="metric-row">
+                <span>Machine ready</span>
+                <strong id="readyOutputCount">0</strong>
+              </div>
+              <div class="metric-row">
+                <span>Review ready</span>
+                <strong id="reviewOutputCount">0</strong>
+              </div>
+              <p class="run-message" id="runMessage" role="status" aria-live="polite"></p>
+              <button class="button button-secondary" id="retryButton" type="button" hidden>
+                <svg class="icon" aria-hidden="true"><use href="#icon-rotate"></use></svg>
+                Retry production
+              </button>
+              <button class="button button-primary" id="openReviewButton" type="button" hidden>
+                <svg class="icon" aria-hidden="true"><use href="#icon-review"></use></svg>
+                Review outputs
+              </button>
+            </aside>
+          </div>
+        </section>
+
+        <section class="view review-view" id="reviewView" data-view="review" role="tabpanel" aria-labelledby="reviewTab" hidden>
+          <header class="view-heading review-heading">
+            <div>
+              <p class="eyebrow">Final review</p>
+              <h1 id="reviewTitle">Campaign outputs</h1>
+            </div>
+            <span class="approval-state" id="approvalState">Awaiting decision</span>
+          </header>
+
+          <div class="review-layout">
+            <section class="media-panel" aria-label="Final media">
+              <div class="target-tabs" id="reviewTargetTabs" role="tablist" aria-label="Output channels"></div>
+              <div class="media-stage" id="mediaStage">
+                <video id="reviewVideo" controls playsinline preload="metadata" hidden></video>
+                <img id="reviewImage" alt="Campaign output" hidden>
+                <div class="media-placeholder" id="mediaPlaceholder">
+                  <svg class="placeholder-icon" aria-hidden="true"><use href="#icon-film"></use></svg>
+                  <strong>Output unavailable</strong>
+                </div>
+              </div>
+            </section>
+
+            <aside class="review-panel">
+              <header>
+                <div>
+                  <p class="eyebrow">Selected output</p>
+                  <h2 id="reviewTargetName">No output selected</h2>
+                </div>
+                <span class="target-review-state" id="targetReviewState">Not ready</span>
+              </header>
+              <dl class="output-facts">
+                <div><dt>Channel</dt><dd id="reviewPlatform">--</dd></div>
+                <div><dt>Format</dt><dd id="reviewFormat">--</dd></div>
+                <div><dt>QA</dt><dd id="reviewQa">--</dd></div>
+              </dl>
+              <section class="warning-block">
+                <h3>Checks</h3>
+                <ul id="reviewWarnings"></ul>
+              </section>
+              <label class="feedback-label" for="reviewNote">Feedback</label>
+              <textarea id="reviewNote" maxlength="2000" rows="4" placeholder="Describe the change to make"></textarea>
+              <div class="review-actions">
+                <button class="button button-review" id="requestChangesButton" type="button" disabled>
+                  <svg class="icon" aria-hidden="true"><use href="#icon-message"></use></svg>
+                  Request changes
+                </button>
+                <button class="button button-success" id="approveButton" type="button" disabled>
+                  <svg class="icon" aria-hidden="true"><use href="#icon-check"></use></svg>
+                  Approve campaign
+                </button>
+              </div>
+            </aside>
+          </div>
+        </section>
+
+        <section class="empty-view" id="emptyView" hidden>
+          <span class="brand-mark" aria-hidden="true">SK</span>
+          <h1>No campaign recipes</h1>
+          <a class="button button-secondary" href="/">Open calibrator</a>
+        </section>
+      </main>
+    </div>
+
+    <div class="notice" id="notice" role="alert" aria-live="assertive" hidden>
+      <div><strong id="noticeTitle">Request failed</strong><span id="noticeMessage"></span></div>
+      <button class="icon-button" id="noticeClose" type="button" title="Dismiss" aria-label="Dismiss message">
+        <svg class="icon" aria-hidden="true"><use href="#icon-close"></use></svg>
+      </button>
+    </div>
+
+    <svg class="icon-sprite" aria-hidden="true" focusable="false">
+      <symbol id="icon-play" viewBox="0 0 24 24"><path d="m6 3 14 9-14 9Z"></path></symbol>
+      <symbol id="icon-rotate" viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-2.64-6.36L21 8"></path><path d="M21 3v5h-5"></path></symbol>
+      <symbol id="icon-review" viewBox="0 0 24 24"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"></path><circle cx="12" cy="12" r="3"></circle></symbol>
+      <symbol id="icon-film" viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="18" rx="2"></rect><path d="M7 3v18M17 3v18M2 8h5M17 8h5M2 16h5M17 16h5"></path></symbol>
+      <symbol id="icon-message" viewBox="0 0 24 24"><path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4Z"></path></symbol>
+      <symbol id="icon-check" viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"></path></symbol>
+      <symbol id="icon-sliders" viewBox="0 0 24 24"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"></path></symbol>
+      <symbol id="icon-close" viewBox="0 0 24 24"><path d="m18 6-12 12M6 6l12 12"></path></symbol>
+    </svg>
+
+    <script type="module" src="./app.js"></script>
+  </body>
+</html>

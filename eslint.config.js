@@ -25,7 +25,7 @@ module.exports = [
     languageOptions: { sourceType: 'module' },
   },
   {
-    files: ['calibrator/**/*.js'],
+    files: ['calibrator/**/*.js', 'campaign/**/*.js'],
     languageOptions: { sourceType: 'module' },
   },
   {

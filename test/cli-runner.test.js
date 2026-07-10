@@ -110,4 +110,42 @@ describe('runCli', () => {
     });
     expect(capture).not.toHaveBeenCalled();
   });
+
+  test('starts the campaign dashboard without changing the calibrator entrypoint', async () => {
+    const { cwd, configPath } = tmpProject();
+    const stdout = streamBuffer();
+    const stderr = streamBuffer();
+    const capture = jest.fn();
+    const startCalibrator = jest.fn(async () => ({
+      url: 'http://127.0.0.1:4312',
+      campaignUrl: 'http://127.0.0.1:4312/campaign/',
+    }));
+    const config = { calibration: { from: 'shotkit.calibration.json' } };
+
+    const code = await runCli(['--campaign', '--port', '4312', '--no-open', '--json'], {
+      stdout: stdout.stream,
+      stderr: stderr.stream,
+      processCwd: () => cwd,
+    }, {
+      capture,
+      startCalibrator,
+      loadConfig: jest.fn(() => config),
+    });
+
+    expect(code).toBe(0);
+    expect(JSON.parse(stdout.read())).toEqual({
+      ok: true,
+      status: 'campaign-dashboard',
+      url: 'http://127.0.0.1:4312/campaign/',
+    });
+    expect(startCalibrator).toHaveBeenCalledWith({
+      cwd,
+      config,
+      configPath,
+      port: 4312,
+      open: false,
+      view: 'campaign',
+    });
+    expect(capture).not.toHaveBeenCalled();
+  });
 });

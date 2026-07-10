@@ -7,6 +7,7 @@ describe('npm package boundary', () => {
       'src',
       'bin',
       'calibrator',
+      'campaign',
       'skills/capture',
       'docs/handoff-conventions.md',
       'schemas',

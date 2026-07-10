@@ -93,17 +93,33 @@ function loadApproval(outDir) {
   }
 }
 
-function updateApprovalDecision(outDir, story, target, decision) {
-  story = approvalKey(story, 'approval story');
-  target = approvalKey(target, 'approval target');
-  const loaded = loadApproval(outDir);
-  const normalized = normalizeDecision({ ...decision, decidedAt: decision.decidedAt || new Date().toISOString() });
-  if (!Object.prototype.hasOwnProperty.call(loaded.document.decisions, story)) {
-    loaded.document.decisions[story] = {};
+function updateApprovalDecisions(outDir, updates, now = () => new Date()) {
+  if (!Array.isArray(updates) || !updates.length) {
+    throw new Error('shotkit: approval updates must be a non-empty array');
   }
-  loaded.document.decisions[story][target] = normalized;
+  const decidedAt = now().toISOString();
+  const normalizedUpdates = updates.map((update, index) => ({
+    story: approvalKey(update.story, `approval updates[${index}].story`),
+    target: approvalKey(update.target, `approval updates[${index}].target`),
+    decision: normalizeDecision({
+      ...update.decision,
+      decidedAt: update.decision.decidedAt || decidedAt,
+    }, `approval updates[${index}].decision`),
+  }));
+  const loaded = loadApproval(outDir);
+  for (const update of normalizedUpdates) {
+    if (!Object.prototype.hasOwnProperty.call(loaded.document.decisions, update.story)) {
+      loaded.document.decisions[update.story] = {};
+    }
+    loaded.document.decisions[update.story][update.target] = update.decision;
+  }
   writeJson(loaded.path, loaded.document);
-  return { ...loaded, decision: normalized };
+  return { ...loaded, updates: normalizedUpdates };
+}
+
+function updateApprovalDecision(outDir, story, target, decision) {
+  const updated = updateApprovalDecisions(outDir, [{ story, target, decision }]);
+  return { ...updated, decision: updated.updates[0].decision };
 }
 
 function decisionFor(document, story, target) {
@@ -198,4 +214,5 @@ module.exports = {
   normalizeDecision,
   syncManifestApproval,
   updateApprovalDecision,
+  updateApprovalDecisions,
 };

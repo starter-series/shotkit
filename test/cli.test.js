@@ -10,7 +10,7 @@ describe('parseArgs', () => {
   test('defaults', () => {
     expect(parseArgs([])).toMatchObject({
       scenes: [], targets: [], errors: [], json: false, noVideo: false,
-      calibrate: false, port: null, open: true, help: false, path: null,
+      campaign: false, calibrate: false, port: null, open: true, help: false, path: null,
     });
   });
 
@@ -47,6 +47,17 @@ describe('parseArgs', () => {
     expect(parseArgs(['--port=65536']).errors).toEqual(['--port requires an integer between 0 and 65535']);
   });
 
+  test('--campaign is additive and cannot be combined with --calibrate', () => {
+    expect(parseArgs(['--campaign', '--port', '4312', '--no-open'])).toMatchObject({
+      campaign: true,
+      calibrate: false,
+      port: 4312,
+      open: false,
+    });
+    expect(parseArgs(['--campaign', '--calibrate']).errors)
+      .toEqual(['--campaign and --calibrate cannot be used together']);
+  });
+
   test('usage errors are explicit for missing values and unknown options', () => {
     expect(parseArgs(['--scene']).errors).toEqual(['--scene requires a scene name']);
     expect(parseArgs(['--scene=']).errors).toEqual(['--scene requires a scene name']);
@@ -77,6 +88,7 @@ describe('parseArgs', () => {
 
   test('USAGE documents the agent contract', () => {
     expect(USAGE).toContain('--json');
+    expect(USAGE).toContain('--campaign');
     expect(USAGE).toContain('--calibrate');
     expect(USAGE).toContain('Exit codes');
   });

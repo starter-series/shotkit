@@ -62,6 +62,7 @@ shotkit                         # outDir에 전부 산출
 shotkit --scene 01-feature      # 특정 scene/타일/데모/demos 항목 또는 "description"만
 shotkit --target x              # 설정된 X variant만 제작/재시도
 shotkit --attempt 2 --json      # 두 번째 자동 수정 시도
+shotkit --campaign              # Recipe 선택, 자동 제작, 최종 영상 검수
 shotkit --calibrate             # 로컬 구도 Calibrator 열기
 shotkit --no-video              # 스크린캐스트 생략
 shotkit --no-build              # 이미 빌드된 번들 사용
@@ -69,6 +70,19 @@ shotkit ../my-extension --json  # 다른 체크아웃 대상 실행; 결과 JSON
 ```
 
 산출물은 `outDir`(기본 `store-assets/`): `<scene>.png`, `<promoTile>.png`, `<demo>.webm`, 선택적 `<demo>.mp4`, 선택적 `<demo>-thumbnail.png`, `description.md`, 그리고 기본값으로 `storyboard.json`, `captions.json`, `shotkit-manifest.json`, `schemas/*.schema.json`입니다(`handoff: false`면 handoff pack을 끕니다). 첫 검수 결정 시 `shotkit-approval.json`이 생성됩니다.
+
+### 캠페인 대시보드
+
+`shotkit --campaign`은 로컬 Campaign Dashboard를 엽니다. 채널 target이 있는
+story는 기본적으로 하나의 Campaign Recipe가 되며, Recipe가 설정된 channel
+profile 전체를 소유합니다. 따라서 사용자는 채널 조합이나 영상 편집 설정을
+반복해서 고르지 않고 Recipe 하나를 선택한 뒤 최종 산출물만 검수합니다.
+
+선택한 Recipe는 `shotkit-campaign.json`에 별도로 기록됩니다. 이 파일은 config,
+manifest, calibration, approval 계약을 바꾸지 않습니다. `config.campaign.recipes`
+로 Recipe의 이름과 설명을 붙일 수 있으며, calibration을 사용하지 않는 repo도
+Campaign Dashboard에서 제작과 digest-bound 승인을 사용할 수 있습니다.
+구도 예외가 있을 때만 Advanced의 기존 Calibrator를 엽니다.
 
 ### 구도 Calibrator
 
@@ -82,8 +96,9 @@ JSON만 기록합니다. 현재 profile로 실제 story를 재촬영해 `publish
 
 이는 상시 수동 검수나 범용 timeline/layer editor가 아니라 예외 구도용
 calibration surface입니다. 에이전트가 이 제어면에서 구도를 수정하고 기술 QA를
-통과시키면, 사용자는 같은 대시보드에서 최종 영상만 확인해 Approve 또는
-Request changes를 선택합니다.
+통과시키면, 사용자는 Campaign Dashboard에서 최종 영상만 확인해 Approve 또는
+Request changes를 선택합니다. 기존 Calibrator는 Advanced/Debug 도구로 그대로
+남습니다.
 
 ### Handoff Pack
 

@@ -57,7 +57,7 @@ rendered from the shipped code. By default, it also writes a handoff pack:
    regions. Save the profile, trigger the real recapture, and continue only
    from its resulting `publish-ready` or structured `needs-fix` state. Do not
    ask the user to diagnose composition or operate the controls. Once technical
-   QA passes, use the same dashboard for the user's final media decision.
+   QA passes, open `shotkit --campaign` for the user's final media decision.
 
    Before npm publication, run the source checkout with
    `node bin/shotkit.js --json --attempt 1`, or use a project wrapper such as
@@ -80,8 +80,9 @@ rendered from the shipped code. By default, it also writes a handoff pack:
      `--attempt 2`. Repeat through `automation.maxAttempts`.
    - `blocked`: automated attempts are exhausted. Report only the concrete
      technical blocker and attempted fixes; ask for technical input.
-   - `awaiting-approval`: technical QA passed. Open the Calibrator and present
-     the rendered candidate to the user. Do not approve on the user's behalf.
+   - `awaiting-approval`: technical QA passed. Open the Campaign Dashboard and
+     present the rendered candidate to the user. Keep the Calibrator under
+     Advanced for agent-owned composition work. Do not approve on the user's behalf.
    - `changes-requested`: read the digest-bound decision note, implement it as
      the next agent-owned edit, recapture, and return the new candidate for
      another decision.

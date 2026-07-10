@@ -1,8 +1,9 @@
 const fs = require('fs');
+const http = require('http');
 const os = require('os');
 const path = require('path');
 
-const { safeStaticPath, startCalibrator } = require('../src/calibrator-server');
+const { safeCampaignStaticPath, safeStaticPath, startCalibrator } = require('../src/calibrator-server');
 
 const DIGEST = 'a'.repeat(64);
 
@@ -56,6 +57,39 @@ function projectFixture() {
   return { cwd, config, name };
 }
 
+function multiTargetFixture() {
+  const fixture = projectFixture();
+  const outDir = path.join(fixture.cwd, 'store-assets');
+  const xName = 'demo-x';
+  const xDigest = 'b'.repeat(64);
+  fs.writeFileSync(path.join(outDir, `${xName}.mp4`), Buffer.from('x-video'));
+  const manifestPath = path.join(outDir, 'shotkit-manifest.json');
+  const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+  manifest.assets.push({
+    id: `sns-demo-mp4:${xName}`,
+    role: 'sns-demo-mp4',
+    type: 'video',
+    outPath: `${xName}.mp4`,
+    source: { kind: 'demo', name: xName, story: 'demo', target: 'x' },
+    integrity: { algorithm: 'sha256', digest: xDigest },
+  });
+  manifest.handoff.automation.targets.push({
+    demo: xName,
+    story: 'demo',
+    target: 'x',
+    status: 'publish-ready',
+    deliverable: { id: `sns-demo-mp4:${xName}` },
+  });
+  writeJson(manifestPath, manifest);
+  const storyboardPath = path.join(outDir, 'storyboard.json');
+  const storyboard = JSON.parse(fs.readFileSync(storyboardPath, 'utf8'));
+  storyboard.demos.push({ name: xName, viewport: { width: 1280, height: 720 }, beats: [] });
+  storyboard.storyboardLint.push({ name: xName, warnings: [] });
+  writeJson(storyboardPath, storyboard);
+  fixture.config.demos[0].targets = ['youtube-shorts', 'x'];
+  return { ...fixture, xDigest };
+}
+
 describe('calibrator server', () => {
   test('confines static paths and rejects malformed encodings', () => {
     const staticRoot = path.dirname(safeStaticPath('/'));
@@ -63,6 +97,346 @@ describe('calibrator server', () => {
     expect(traversal.startsWith(`${staticRoot}${path.sep}`)).toBe(true);
     expect(safeStaticPath('/%E0%A4%A')).toBeNull();
     expect(safeStaticPath('/%00')).toBeNull();
+    const campaignRoot = path.dirname(safeCampaignStaticPath('/campaign/'));
+    const campaignTraversal = safeCampaignStaticPath('/campaign/%2e%2e/%2e%2e/package.json');
+    expect(campaignTraversal.startsWith(`${campaignRoot}${path.sep}`)).toBe(true);
+    expect(safeCampaignStaticPath('/campaign/%E0%A4%A')).toBeNull();
+  });
+
+  test.each(['calibrator', 'campaign'])('%s static DOM keeps every JavaScript id binding valid', (surface) => {
+    const root = path.join(__dirname, '..', surface);
+    const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
+    const script = fs.readFileSync(path.join(root, 'app.js'), 'utf8');
+    const ids = [...html.matchAll(/\sid="([^"]+)"/g)].map((match) => match[1]);
+    expect(new Set(ids).size).toBe(ids.length);
+    const bindings = [...script.matchAll(/\$\('([^']+)'\)/g)].map((match) => match[1]);
+    for (const binding of bindings) expect(ids).toContain(binding);
+  });
+
+  test('adds a campaign workflow while preserving the calibrator and approval APIs', async () => {
+    const { cwd, config } = projectFixture();
+    const campaignConfig = { ...config, calibration: undefined };
+    const captureTarget = jest.fn(async () => ({
+      ok: true,
+      status: 'awaiting-approval',
+      machineStatus: 'publish-ready',
+      produced: [],
+    }));
+    const calibrator = await startCalibrator({
+      cwd,
+      config: campaignConfig,
+      configPath: path.join(cwd, 'shotkit.config.js'),
+      port: 0,
+      open: false,
+      view: 'campaign',
+      captureTarget,
+    });
+
+    try {
+      const root = await fetch(calibrator.url).then((response) => response.text());
+      expect(root).toContain('<title>Shotkit Calibrator</title>');
+      expect(root).toContain('href="/campaign/"');
+      const redirect = await fetch(`${calibrator.url}/campaign`, { redirect: 'manual' });
+      expect(redirect.status).toBe(302);
+      expect(redirect.headers.get('location')).toBe('/campaign/');
+      const dashboard = await fetch(calibrator.campaignUrl).then((response) => response.text());
+      expect(dashboard).toContain('<title>Shotkit Campaigns</title>');
+      expect(dashboard).toContain('href="/"');
+      for (const [assetPath, contentType] of [
+        ['/styles.css', 'text/css'],
+        ['/app.js', 'text/javascript'],
+        ['/model.js', 'text/javascript'],
+        ['/preview.js', 'text/javascript'],
+        ['/regions.js', 'text/javascript'],
+        ['/campaign/styles.css', 'text/css'],
+        ['/campaign/app.js', 'text/javascript'],
+      ]) {
+        const response = await fetch(`${calibrator.url}${assetPath}`);
+        expect(response.status).toBe(200);
+        expect(response.headers.get('content-type')).toContain(contentType);
+        expect(response.headers.get('x-content-type-options')).toBe('nosniff');
+      }
+
+      const initial = await fetch(`${calibrator.url}/api/campaign`).then((response) => response.json());
+      expect(initial).toMatchObject({
+        version: 1,
+        project: path.basename(cwd),
+        phase: 'plan',
+        calibratorAvailable: false,
+        calibratorUrl: null,
+        recipes: [{
+          id: 'demo',
+          story: 'demo',
+          targets: [expect.objectContaining({ id: 'youtube-shorts', status: 'awaiting-approval' })],
+        }],
+        selection: { recipeId: 'demo', persisted: false },
+        run: { status: 'idle' },
+      });
+
+      const started = await fetch(`${calibrator.url}/api/campaign/run`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ recipeId: 'demo' }),
+      });
+      expect(started.status).toBe(202);
+
+      let campaign;
+      for (let index = 0; index < 20; index++) {
+        campaign = await fetch(`${calibrator.url}/api/campaign`).then((response) => response.json());
+        if (campaign.run.status !== 'running') break;
+        await new Promise((resolve) => setTimeout(resolve, 10));
+      }
+      expect(campaign).toMatchObject({
+        phase: 'review',
+        selection: { recipeId: 'demo', targets: ['youtube-shorts'], persisted: true },
+        run: {
+          status: 'completed',
+          targets: [{ target: 'youtube-shorts', status: 'publish-ready' }],
+        },
+        summary: { selected: 1, publishReady: 1, reviewable: 1, approved: 0 },
+      });
+      expect(captureTarget).toHaveBeenCalledWith(expect.objectContaining({
+        cwd,
+        story: 'demo',
+        targets: ['youtube-shorts'],
+        attempt: 2,
+      }));
+      expect(fs.existsSync(path.join(cwd, 'shotkit.calibration.json'))).toBe(false);
+
+      const approved = await fetch(`${calibrator.url}/api/campaign/review`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          recipeId: 'demo',
+          candidates: [{ target: 'youtube-shorts', assetDigest: DIGEST }],
+          status: 'approved',
+        }),
+      }).then((response) => response.json());
+      expect(approved).toMatchObject({
+        ok: true,
+        campaign: { phase: 'complete', summary: { approved: 1 } },
+      });
+    } finally {
+      await calibrator.close();
+      fs.rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+
+  test('rejects unsafe write requests and media paths without side effects', async () => {
+    const { cwd, config } = projectFixture();
+    const captureTarget = jest.fn(async () => ({ machineStatus: 'publish-ready' }));
+    const calibrator = await startCalibrator({
+      cwd,
+      config,
+      configPath: path.join(cwd, 'shotkit.config.js'),
+      port: 0,
+      open: false,
+      view: 'campaign',
+      captureTarget,
+    });
+
+    try {
+      const html = await fetch(calibrator.campaignUrl);
+      expect(html.headers.get('content-security-policy')).toContain("default-src 'self'");
+
+      const wrongType = await fetch(`${calibrator.url}/api/campaign/run`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain' },
+        body: '{}',
+      });
+      expect(wrongType.status).toBe(415);
+
+      const crossOrigin = await fetch(`${calibrator.url}/api/campaign/run`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Origin: 'https://example.invalid' },
+        body: JSON.stringify({ recipeId: 'demo' }),
+      });
+      expect(crossOrigin.status).toBe(403);
+
+      const rebindingStatus = await new Promise((resolve, reject) => {
+        const request = http.get(`${calibrator.url}/api/campaign`, { headers: { Host: 'example.invalid' } }, (response) => {
+          response.resume();
+          response.once('end', () => resolve(response.statusCode));
+        });
+        request.once('error', reject);
+      });
+      expect(rebindingStatus).toBe(403);
+
+      const malformed = await fetch(`${calibrator.url}/api/campaign/run`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: '{',
+      });
+      expect(malformed.status).toBe(400);
+
+      const oversized = await fetch(`${calibrator.url}/api/campaign/run`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ recipeId: 'demo', padding: 'x'.repeat(300_000) }),
+      });
+      expect(oversized.status).toBe(413);
+
+      const malformedMedia = await fetch(`${calibrator.url}/media/%E0%A4%A`);
+      expect(malformedMedia.status).toBe(400);
+      const outside = path.join(os.tmpdir(), `shotkit-outside-${Date.now()}.mp4`);
+      fs.writeFileSync(outside, 'outside');
+      fs.symlinkSync(outside, path.join(cwd, 'store-assets', 'outside.mp4'));
+      expect((await fetch(`${calibrator.url}/media/outside.mp4`)).status).toBe(404);
+      fs.rmSync(outside, { force: true });
+
+      expect(captureTarget).not.toHaveBeenCalled();
+      expect(fs.existsSync(path.join(cwd, 'store-assets', 'shotkit-campaign.json'))).toBe(false);
+    } finally {
+      await calibrator.close();
+      fs.rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+
+  test('does not verify a calibration profile changed during capture', async () => {
+    const { cwd, config } = projectFixture();
+    let finishCapture;
+    const captureTarget = jest.fn(() => new Promise((resolve) => { finishCapture = resolve; }));
+    const calibrator = await startCalibrator({
+      cwd,
+      config,
+      configPath: path.join(cwd, 'shotkit.config.js'),
+      port: 0,
+      open: false,
+      view: 'campaign',
+      captureTarget,
+    });
+
+    try {
+      const profile = {
+        layoutPreset: 'focus-column',
+        framing: { scale: 1.04, focusX: 0.5, focusY: 0.45 },
+        captionOptions: { position: 'bottom-left', appearance: 'outline', bottomOffset: 80 },
+        protectedRegions: [],
+      };
+      expect((await fetch(`${calibrator.url}/api/profile`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ story: 'demo', target: 'youtube-shorts', profile }),
+      })).status).toBe(200);
+
+      expect((await fetch(`${calibrator.url}/api/campaign/run`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ recipeId: 'demo' }),
+      })).status).toBe(202);
+      expect(captureTarget).toHaveBeenCalledTimes(1);
+
+      const blockedProfile = await fetch(`${calibrator.url}/api/profile`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          story: 'demo',
+          target: 'youtube-shorts',
+          profile: { ...profile, captionOptions: { ...profile.captionOptions, bottomOffset: 120 } },
+        }),
+      });
+      expect(blockedProfile.status).toBe(409);
+
+      const calibrationPath = path.join(cwd, 'shotkit.calibration.json');
+      const calibration = JSON.parse(fs.readFileSync(calibrationPath, 'utf8'));
+      calibration.profiles.demo['youtube-shorts'] = {
+        ...profile,
+        captionOptions: { ...profile.captionOptions, bottomOffset: 160 },
+      };
+      writeJson(calibrationPath, calibration);
+      finishCapture({ ok: true, status: 'awaiting-approval', machineStatus: 'publish-ready' });
+
+      let campaign;
+      for (let index = 0; index < 20; index++) {
+        campaign = await fetch(`${calibrator.url}/api/campaign`).then((response) => response.json());
+        if (campaign.run.status !== 'running') break;
+        await new Promise((resolve) => setTimeout(resolve, 10));
+      }
+      expect(campaign.run.status).toBe('needs-fix');
+      const saved = JSON.parse(fs.readFileSync(calibrationPath, 'utf8'))
+        .profiles.demo['youtube-shorts'];
+      expect(saved.captionOptions.bottomOffset).toBe(160);
+      expect(saved.verification).toBeUndefined();
+    } finally {
+      await calibrator.close();
+      fs.rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+
+  test('runs a recipe in one attempt and rejects an atomic review when any candidate is stale', async () => {
+    const { cwd, config, xDigest } = multiTargetFixture();
+    const campaignConfig = { ...config, calibration: undefined };
+    const captureTarget = jest.fn(async () => ({
+      ok: true,
+      status: 'awaiting-approval',
+      machineStatus: 'publish-ready',
+    }));
+    const calibrator = await startCalibrator({
+      cwd,
+      config: campaignConfig,
+      configPath: path.join(cwd, 'shotkit.config.js'),
+      port: 0,
+      open: false,
+      view: 'campaign',
+      captureTarget,
+    });
+
+    try {
+      await fetch(`${calibrator.url}/api/campaign/run`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ recipeId: 'demo' }),
+      });
+      let campaign;
+      for (let index = 0; index < 20; index++) {
+        campaign = await fetch(`${calibrator.url}/api/campaign`).then((response) => response.json());
+        if (campaign.run.status !== 'running') break;
+        await new Promise((resolve) => setTimeout(resolve, 10));
+      }
+      expect(campaign.run).toMatchObject({ status: 'completed', attempt: 2 });
+      expect(captureTarget).toHaveBeenCalledTimes(1);
+      expect(captureTarget).toHaveBeenCalledWith(expect.objectContaining({
+        targets: ['youtube-shorts', 'x'],
+        attempt: 2,
+      }));
+
+      const stale = await fetch(`${calibrator.url}/api/campaign/review`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          recipeId: 'demo',
+          status: 'approved',
+          candidates: [
+            { target: 'youtube-shorts', assetDigest: DIGEST },
+            { target: 'x', assetDigest: 'c'.repeat(64) },
+          ],
+        }),
+      });
+      expect(stale.status).toBe(409);
+      expect(fs.existsSync(path.join(cwd, 'store-assets', 'shotkit-approval.json'))).toBe(false);
+
+      const approved = await fetch(`${calibrator.url}/api/campaign/review`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          recipeId: 'demo',
+          status: 'approved',
+          candidates: [
+            { target: 'youtube-shorts', assetDigest: DIGEST },
+            { target: 'x', assetDigest: xDigest },
+          ],
+        }),
+      });
+      expect(approved.status).toBe(200);
+      const decisions = JSON.parse(fs.readFileSync(
+        path.join(cwd, 'store-assets', 'shotkit-approval.json'),
+        'utf8',
+      )).decisions.demo;
+      expect(Object.keys(decisions).sort()).toEqual(['x', 'youtube-shorts']);
+    } finally {
+      await calibrator.close();
+      fs.rmSync(cwd, { recursive: true, force: true });
+    }
   });
 
   test('reads capture state, serves media ranges, and persists an unverified profile', async () => {
@@ -150,7 +524,13 @@ describe('calibrator server', () => {
       const approved = await fetch(`${calibrator.url}/api/review`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ story: 'demo', target: 'youtube-shorts', status: 'approved' }),
+        body: JSON.stringify({
+          story: 'demo',
+          target: 'youtube-shorts',
+          status: 'approved',
+          assetDigest: DIGEST,
+          profileHash: saved.profileHash,
+        }),
       }).then((response) => response.json());
       expect(approved).toMatchObject({ ok: true, approvalStatus: 'approved', review: { status: 'approved' } });
       const approvedState = await fetch(`${calibrator.url}/api/state`).then((response) => response.json());
@@ -163,6 +543,8 @@ describe('calibrator server', () => {
           story: 'demo',
           target: 'youtube-shorts',
           status: 'changes-requested',
+          assetDigest: DIGEST,
+          profileHash: saved.profileHash,
           note: 'Move the result higher.',
         }),
       }).then((response) => response.json());

@@ -44,16 +44,19 @@ async function runCli(argv, io = {}, deps = {}) {
 
   try {
     const config = loadConfig(configPath);
-    if (opts.calibrate) {
+    if (opts.calibrate || opts.campaign) {
       const calibrator = await startCalibrator({
         cwd,
         config,
         configPath,
         port: opts.port == null ? 0 : opts.port,
         open: opts.open,
+        ...(opts.campaign ? { view: 'campaign' } : {}),
       });
-      if (opts.json) writeJson(stdout, { ok: true, status: 'calibrating', url: calibrator.url });
-      else stdout.write(`[shotkit] calibrator: ${calibrator.url}\n`);
+      const dashboardUrl = opts.campaign ? calibrator.campaignUrl || `${calibrator.url}/campaign/` : calibrator.url;
+      const status = opts.campaign ? 'campaign-dashboard' : 'calibrating';
+      if (opts.json) writeJson(stdout, { ok: true, status, url: dashboardUrl });
+      else stdout.write(`[shotkit] ${opts.campaign ? 'campaign dashboard' : 'calibrator'}: ${dashboardUrl}\n`);
       return 0;
     }
     const log = opts.json ? (m) => stderr.write(`[shotkit] ${m}\n`) : undefined;

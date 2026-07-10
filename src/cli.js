@@ -26,9 +26,10 @@ Options:
   --target <id>     only render configured channel targets (cws-youtube, x,
                     youtube-shorts); repeatable, or comma-separated
   --attempt <n>     automation retry number (default: 1; agents increment it)
+  --campaign        open the local campaign recipe dashboard
   --calibrate       open the local exception-only composition calibrator
-  --port <n>        calibrator port (default: choose an available local port)
-  --no-open         start the calibrator without opening a browser window
+  --port <n>        local dashboard port (default: choose an available port)
+  --no-open         start the dashboard without opening a browser window
   --json            machine-readable mode: stdout gets one JSON object
                     {ok, status, machineStatus, outDir, manifest, produced[]};
                     logs go to stderr. machineStatus is technical QA; status
@@ -52,6 +53,7 @@ function parseArgs(argv) {
     scenes: [],
     targets: [],
     attempt: 1,
+    campaign: false,
     calibrate: false,
     port: null,
     open: true,
@@ -122,6 +124,7 @@ function parseArgs(argv) {
         opts.port = Number(value);
       }
     }
+    else if (a === '--campaign') opts.campaign = true;
     else if (a === '--calibrate') opts.calibrate = true;
     else if (a === '--no-open') opts.open = false;
     else if (a === '--json') opts.json = true;
@@ -135,6 +138,7 @@ function parseArgs(argv) {
     else if (!a.startsWith('-')) opts.errors.push(`unexpected positional argument: ${a}`);
     else opts.errors.push(`unknown option: ${a}`);
   }
+  if (opts.campaign && opts.calibrate) opts.errors.push('--campaign and --calibrate cannot be used together');
   return opts;
 }
 

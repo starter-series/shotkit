@@ -9,6 +9,7 @@ const {
   loadApproval,
   syncManifestApproval,
   updateApprovalDecision,
+  updateApprovalDecisions,
 } = require('../src/approval');
 
 const DIGEST = 'a'.repeat(64);
@@ -138,6 +139,27 @@ describe('user approval gate', () => {
         status: 'approved',
         assetDigest: DIGEST,
       })).toThrow('uses a reserved key');
+    } finally {
+      fs.rmSync(outDir, { recursive: true, force: true });
+    }
+  });
+
+  test('validates a multi-target decision batch before writing it once', () => {
+    const outDir = fs.mkdtempSync(path.join(os.tmpdir(), 'shotkit-approval-'));
+    const filePath = path.join(outDir, 'shotkit-approval.json');
+    try {
+      expect(() => updateApprovalDecisions(outDir, [
+        { story: 'demo', target: 'x', decision: { status: 'approved', assetDigest: DIGEST } },
+        { story: 'demo', target: 'youtube-shorts', decision: { status: 'approved', assetDigest: 'invalid' } },
+      ])).toThrow('must be a SHA-256 digest');
+      expect(fs.existsSync(filePath)).toBe(false);
+
+      const updated = updateApprovalDecisions(outDir, [
+        { story: 'demo', target: 'x', decision: { status: 'approved', assetDigest: DIGEST } },
+        { story: 'demo', target: 'youtube-shorts', decision: { status: 'approved', assetDigest: DIGEST } },
+      ], () => new Date('2026-07-11T12:00:00.000Z'));
+      expect(updated.document.decisions.demo.x.decidedAt).toBe('2026-07-11T12:00:00.000Z');
+      expect(updated.document.decisions.demo['youtube-shorts'].decidedAt).toBe('2026-07-11T12:00:00.000Z');
     } finally {
       fs.rmSync(outDir, { recursive: true, force: true });
     }

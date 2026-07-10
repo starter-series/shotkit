@@ -165,7 +165,12 @@ import { createRegionEditor } from './regions.js';
   async function loadState(preferredKey = state.selectedKey) {
     setBusy(true, 'Loading');
     try {
-      state.document = await api('/api/state');
+      const currentUrl = new URL(window.location.href);
+      const requestedTarget = new URLSearchParams();
+      if (currentUrl.searchParams.get('story')) requestedTarget.set('story', currentUrl.searchParams.get('story'));
+      if (currentUrl.searchParams.get('target')) requestedTarget.set('target', currentUrl.searchParams.get('target'));
+      const targetQuery = requestedTarget.toString();
+      state.document = await api(`/api/state${targetQuery ? `?${targetQuery}` : ''}`);
       elements.projectName.textContent = state.document.project || 'Project';
       elements.targetCount.textContent = String(state.document.targets.length);
       const preferred = state.document.targets.find((target) => keyFor(target) === preferredKey);
@@ -390,7 +395,9 @@ import { createRegionEditor } from './regions.js';
           story: state.target.story,
           target: state.target.target,
           status,
-          ...(note ? { note } : {}),
+          assetDigest: state.target.assetDigest,
+          ...(state.target.profileHash ? { profileHash: state.target.profileHash } : {}),
+          ...(status === 'changes-requested' ? { note } : {}),
         }),
       });
       await loadState(selectedKey);

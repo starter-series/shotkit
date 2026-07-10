@@ -71,6 +71,7 @@ shotkit                         # produce everything into outDir
 shotkit --scene 01-feature      # just one scene/promoTile/demo/demos entry, "description", or "privacy"
 shotkit --target x              # render/retry only the configured X variants
 shotkit --attempt 2 --json      # next autonomous fix attempt
+shotkit --campaign              # choose a recipe, produce, and review final media
 shotkit --calibrate             # open the local composition calibrator
 shotkit --no-video              # skip the screencast (faster/CI)
 shotkit --no-build              # use an already-built bundle
@@ -78,6 +79,39 @@ shotkit ../my-extension --json  # run against another checkout; JSON result on s
 ```
 
 Outputs land in `outDir` (default `store-assets/`): `<scene>.png`, `<promoTile>.png`, `<demo>.webm`, optional `<demo>.mp4`, optional `<demo>-thumbnail.png`, `description.md`, optional `privacy-disclosure.md`, and, by default, `storyboard.json`, `captions.json`, `shotkit-manifest.json`, plus four schemas under `schemas/` (`handoff: false` disables the handoff pack). The first review decision creates `shotkit-approval.json`.
+
+### Campaign Dashboard
+
+Run `shotkit --campaign` to open the local campaign dashboard. A channel-targeted
+story becomes a Campaign Recipe automatically; the recipe owns its configured
+channel profiles, so the user selects one story rather than assembling outputs
+one by one. The dashboard starts production, follows agent-owned capture and QA,
+and presents the resulting media for the user's digest-bound Approve or Request
+changes decision.
+
+Recipe labels can be added without changing the existing demo contract:
+
+```js
+module.exports = {
+  campaign: {
+    defaultRecipe: 'before-after-proof',
+    recipes: [{
+      id: 'before-after-proof',
+      name: 'Before / After Proof',
+      description: 'Show the original workflow, the product action, and the verified result.',
+      story: 'launch-story',
+      targets: ['cws-youtube', 'x', 'youtube-shorts'],
+    }],
+  },
+};
+```
+
+The existing Calibrator remains available through `shotkit --calibrate` and the
+dashboard's Advanced control. Campaign selection is stored separately in
+`shotkit-campaign.json`; it does not rewrite config source or replace the
+manifest, calibration, or approval contracts. Projects without
+`config.calibration` can still use the Campaign Dashboard; Advanced is exposed
+only when calibration is configured.
 
 ### Composition Calibrator
 
