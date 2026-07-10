@@ -39,6 +39,7 @@ src/
   serve.js       → serveDirectory (path-traversal-safe localhost fixture server)
   caption.js     → compositeCaption (disclaimer/caption band, stacked UNDER the shot)
   demo.js        → demo story helpers (caption/pointer + demo.caption/step/wait/click/select)
+  demo-caption-focus.js → deterministic short-form caption chunks + active-word frames
   demo-select.js → recordable native-select mirror and real value-change action
   channels.js    → autonomous CWS/YouTube, X, and Shorts target profiles
   promo.js       → renderPromoTile (HTML template → image)
@@ -75,6 +76,14 @@ test/            → unit tests for the pure/safe modules (no browser)
   disclaimer badge stays top-left. Keep this lightweight: one `demo` or several
   `demos[]` entries, timed captions, `demo.caption/step/wait/click/select`, static
   `zoom`/`crop`, `thumbnail`, and storyboard lint — not a timeline editor.
+- **Shorts focus captions are authored-story animation, not transcription**:
+  `youtube-shorts` defaults to `captionOptions.mode:'focus'`, three-word chunks,
+  current-word emphasis, and a bottom safe offset. Keep CWS/X static by default.
+  Preserve every authored word; `dense-focus-caption` means the agent must
+  lengthen the beat or shorten its copy before publishing. `captions.json`
+  carries the resolved trim-relative frame timeline for downstream adapters.
+  Add Whisper-style alignment only as an optional future audio adapter; silent
+  product demos already have deterministic caption timing.
 - **Handoff JSON is the machine boundary**: target workflows use
   `handoff.automation` to fix and retry until `publish-ready`; users do not read
   manifests or review media. Use `assets[].role` and bundled schemas instead of

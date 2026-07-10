@@ -21,6 +21,18 @@
           "name": { "type": "string" },
           "story": { "type": "string" },
           "target": { "type": "string" },
+          "style": {
+            "type": "object",
+            "required": ["mode", "position"],
+            "properties": {
+              "mode": { "enum": ["static", "focus"] },
+              "position": { "type": "string" },
+              "bottomOffset": { "type": "integer", "minimum": 0 },
+              "wordsPerChunk": { "type": "integer", "minimum": 1, "maximum": 6 },
+              "wordMs": { "type": "integer", "minimum": 120, "maximum": 2000 },
+              "activeColor": { "type": "string" }
+            }
+          },
           "captions": {
             "type": "array",
             "items": {
@@ -30,6 +42,24 @@
                 "at": { "type": "number", "minimum": 0 },
                 "atMs": { "type": "integer", "minimum": 0 },
                 "text": { "type": "string" }
+              }
+            }
+          },
+          "timeline": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["at", "atMs", "text", "sourceText", "words", "activeWordIndex", "condensed"],
+              "properties": {
+                "at": { "type": "number", "minimum": 0 },
+                "atMs": { "type": "integer", "minimum": 0 },
+                "endAt": { "type": "number", "minimum": 0 },
+                "endMs": { "type": "integer", "minimum": 0 },
+                "text": { "type": "string" },
+                "sourceText": { "type": "string" },
+                "words": { "type": "array", "items": { "type": "string" } },
+                "activeWordIndex": { "type": ["integer", "null"], "minimum": 0 },
+                "condensed": { "type": "boolean" }
               }
             }
           }

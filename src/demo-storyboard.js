@@ -1,4 +1,5 @@
 const { normalizeDemoCaptions, parseTimeToMs } = require('./demo-time');
+const { analyzeFocusCaptionDensity } = require('./demo-caption-focus');
 
 function storyboardWarning(code, message, fix, details) {
   return {
@@ -45,6 +46,23 @@ function analyzeDemoStoryboard(demoConfig, { viewport, mp4Requested } = {}) {
       'first caption starts after 3s',
       'show the result sooner',
       { atMs: captions[0].atMs },
+    ));
+  }
+  try {
+    for (const density of analyzeFocusCaptionDensity(captions, demoConfig.captionOptions)) {
+      const earliestNextAt = (captions[density.index].atMs + density.recommendedMs) / 1000;
+      warnings.push(storyboardWarning(
+        'dense-focus-caption',
+        `focus caption ${density.index + 1} has ${density.availableMs}ms before the next beat`,
+        `move the next caption to at least ${earliestNextAt}s or shorten this caption`,
+        density,
+      ));
+    }
+  } catch (e) {
+    warnings.push(storyboardWarning(
+      'invalid-caption-options',
+      e.message,
+      'fix demo.captionOptions before capture',
     ));
   }
   for (const caption of captions) {

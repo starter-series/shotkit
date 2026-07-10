@@ -17,6 +17,7 @@ class FakePage extends EventEmitter {
   constructor() {
     super();
     this.captions = [];
+    this.captionCalls = [];
     this.clicks = [];
     this.waits = [];
     this.inits = [];
@@ -39,6 +40,7 @@ class FakePage extends EventEmitter {
     if (fn.name === 'demoCaptionInitScript') this.inits.push(arg);
     if (arg && Object.prototype.hasOwnProperty.call(arg, 'captionText')) {
       this.captions.push(arg.captionText);
+      this.captionCalls.push({ text: arg.captionText, options: arg.captionOptions });
     }
     if (arg && Object.prototype.hasOwnProperty.call(arg, 'pointerPoint')) {
       this.pointerMoves.push({ point: arg.pointerPoint, options: arg.pointerOptions });
@@ -175,6 +177,16 @@ describe('normalizeDemoConfigs', () => {
       preset: 'sns-vertical',
     });
     expect(cws.run).toBe(run);
+    expect(cws.captionOptions).toEqual({ position: 'bottom' });
+    expect(x.captionOptions).toEqual({ position: 'bottom' });
+    expect(shorts.captionOptions).toEqual({
+      position: 'bottom-left',
+      mode: 'focus',
+      wordsPerChunk: 3,
+      wordMs: 360,
+      activeColor: '#facc15',
+      bottomOffset: 380,
+    });
     expect(shorts.targetProfile.viewport).toEqual({ width: 720, height: 1280 });
   });
 
@@ -227,6 +239,39 @@ describe('lintDemoStoryboard', () => {
         { at: 8, text: 'Restore the original anytime' },
       ],
     }, { viewport: { width: 1280, height: 720 }, mp4Requested: true })).toEqual([]);
+  });
+
+  test('asks agents to space focus-caption beats before publishing', () => {
+    const warnings = analyzeDemoStoryboard({
+      name: 'demo',
+      mp4: true,
+      trim: { duration: 25 },
+      captionOptions: { mode: 'focus', wordMs: 300 },
+      captions: [
+        { at: 0, text: 'One two three four' },
+        { at: 0.5, text: 'Restore the original' },
+      ],
+    }, { viewport: { width: 720, height: 1280 }, mp4Requested: true });
+
+    expect(warnings).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        code: 'dense-focus-caption',
+        fix: 'move the next caption to at least 1.2s or shorten this caption',
+      }),
+    ]));
+  });
+
+  test('surfaces malformed caption display options as structured lint', () => {
+    expect(analyzeDemoStoryboard({
+      name: 'demo',
+      captionOptions: { mode: 'focus', bottomOffset: -1 },
+      captions: [{ at: 0, text: 'Restore the original' }],
+    })).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        code: 'invalid-caption-options',
+        fix: 'fix demo.captionOptions before capture',
+      }),
+    ]));
   });
 
   test('warns about weak story shape and odd video dimensions', () => {
@@ -355,6 +400,37 @@ describe('createDemoController', () => {
 
     demo.stop();
     expect(page.listenerCount('domcontentloaded')).toBe(0);
+  });
+
+  test('scheduled focus captions advance the active word without crossing beats', async () => {
+    jest.useFakeTimers();
+    const page = new FakePage();
+    const demo = createDemoController({
+      page,
+      captions: [
+        { at: 0.2, text: 'Translate the lesson now' },
+        { at: 0.7, text: 'Restore anytime' },
+      ],
+      captionOptions: { mode: 'focus', wordsPerChunk: 2, wordMs: 200 },
+    });
+
+    await jest.advanceTimersByTimeAsync(200);
+    expect(page.captionCalls.at(-1)).toMatchObject({
+      text: 'Translate the',
+      options: {
+        mode: 'focus',
+        focusWords: ['Translate', 'the'],
+        activeWordIndex: 0,
+      },
+    });
+    await jest.advanceTimersByTimeAsync(200);
+    expect(page.captionCalls.at(-1).options.activeWordIndex).toBe(1);
+    await jest.advanceTimersByTimeAsync(300);
+    expect(page.captionCalls.at(-1)).toMatchObject({
+      text: 'Restore anytime',
+      options: { activeWordIndex: 0 },
+    });
+    demo.stop();
   });
 
   test('replays the active caption after navigation', async () => {

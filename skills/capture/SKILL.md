@@ -37,8 +37,10 @@ rendered from the shipped code. By default, it also writes a handoff pack:
    ```
 
    Shotkit expands target-specific names, viewport, H.264 MP4, 30-second cap,
-   poster frame, and caption placement. Use `targetOptions.<id>` only when the
-   shared story genuinely needs target-specific framing.
+   poster frame, and caption treatment. The `youtube-shorts` profile uses
+   three-word focus chunks with an animated current-word highlight and a
+   visual-guide-safe left/bottom placement. Use `targetOptions.<id>` only when the shared
+   story genuinely needs target-specific framing or caption tuning.
 4. **Run attempt 1** (from the repo, or pass its path):
 
    ```bash
@@ -99,6 +101,14 @@ rendered from the shipped code. By default, it also writes a handoff pack:
   overlays during recording and avoid the top-left disclaimer badge. Always
   use `demo.select()` for a native `<select>` because its OS popup is not part
   of the Playwright page screencast.
+- For short-form focus captions, prefer authored timed captions and
+  `captionOptions: { mode: 'focus', wordsPerChunk: 3, wordMs: 360 }`. Shotkit
+  animates those words deterministically even when the product demo is silent;
+  do not add speech transcription solely to create caption motion. Shorts
+  enables this mode by default, while CWS and X stay static unless overridden.
+  The resolved style is recorded in both caption and storyboard handoff docs;
+  `captions.json` also carries the trim-relative rendered `timeline[]`. Treat a
+  `dense-focus-caption` lint as an agent-owned timing fix, never drop words.
 - `storyboard.json` carries structured lint (`code`, `severity`, `message`,
   `fix`) for agents. Treat those warnings as the edit list for the next
   `shotkit.config.js` pass.

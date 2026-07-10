@@ -16,6 +16,12 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 - `demo.select()` mirrors native select options into page recordings while
   applying the real value change; pointer actions now use a visible arrow and
   click ripple instead of an ambiguous circle.
+- Timed captions now support a dependency-free `focus` mode with compact word
+  chunks, active-word color/pop emphasis, configurable pacing, and a platform
+  safe-area offset. YouTube Shorts enables it by default; CWS and X remain
+  static. Resolved caption style is included in storyboard and captions handoff
+  documents, along with a trim-relative rendered frame timeline. Dense beats
+  preserve their full text and produce an agent-fixable storyboard warning.
 - Exception-only `handoff.automation`: `publish-ready`, `needs-fix`, and
   exhausted `blocked` states, agent-owned fix/rerun actions, `--target`, and
   bounded `--attempt` retries.

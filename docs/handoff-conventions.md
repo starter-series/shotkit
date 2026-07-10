@@ -70,7 +70,16 @@ target counts.
 One demo story can declare `targets: ['cws-youtube', 'x', 'youtube-shorts']`.
 Each expanded target records its profile in `storyboard.json` and receives
 mechanical defaults for viewport, H.264/yuv420p, duration cap, caption position,
-and thumbnail.
+and thumbnail. `youtube-shorts` resolves timed story captions to the built-in
+`focus` style: compact word chunks, current-word emphasis, and a bottom safe
+offset. The style is deterministic for silent demos and requires no transcript
+engine. CWS and X use `static` unless the config overrides `captionOptions`.
+
+`storyboard.demos[].captionStyle` and `captions.demos[].style` preserve the
+resolved `mode`, `position`, timing, chunk size, active color, and safe offset
+for downstream agents. `captions.demos[].timeline[]` is the reproducible
+trim-relative render plan: each frame includes its start/end, rendered chunk,
+source phrase, words, and active-word index.
 
 `handoff.automation.targets[]` validates:
 

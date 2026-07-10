@@ -10,6 +10,7 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const { normalizeDemoCaptions, parseTimeToMs } = require('./demo-time');
+const { buildCaptionFrames, buildCaptionTimeline, captionStyle } = require('./demo-caption-focus');
 const { buildHandoffRecommendations } = require('./integrations');
 const { buildPublishPlan } = require('./publish');
 const { isValidHandoffDocs, validateHandoffDocs } = require('./handoff-validator');
@@ -117,6 +118,16 @@ function trimStartMs(demoConfig) {
   }
 }
 
+function trimEndMs(demoConfig, startMs) {
+  const trim = demoConfig.trim;
+  if (!trim || typeof trim !== 'object' || trim.duration == null) return null;
+  try {
+    return startMs + parseTimeToMs(trim.duration, 'trim.duration');
+  } catch (_e) {
+    return null;
+  }
+}
+
 // Shift caption times by the trimmed-off prefix and drop captions that fall
 // before the clip starts (they are not in the deliverable). Output conforms to
 // the beat/caption schema: at >= 0 (number), atMs >= 0 (integer).
@@ -165,6 +176,7 @@ function demoStoryboard(demoConfig, viewport) {
       crop: demoConfig.crop || null,
       zoom: demoConfig.zoom || null,
     },
+    captionStyle: captionStyle(demoConfig.captionOptions || {}),
     thumbnail: storyboardThumbnail(demoConfig.thumbnail),
     recommendedStory: {
       durationSeconds: { min: 20, max: 40 },
@@ -177,11 +189,15 @@ function demoStoryboard(demoConfig, viewport) {
 
 function demoCaptions(demoConfig) {
   const startMs = trimStartMs(demoConfig);
+  const captions = normalizeDemoCaptions(demoConfig.captions || []);
+  const frames = buildCaptionFrames(captions, demoConfig.captionOptions);
   return {
     name: demoConfig.name,
     story: demoConfig.story,
     target: demoConfig.target,
-    captions: deliverableBeats(normalizeDemoCaptions(demoConfig.captions || []), startMs),
+    style: captionStyle(demoConfig.captionOptions || {}),
+    captions: deliverableBeats(captions, startMs),
+    timeline: buildCaptionTimeline(frames, { startMs, endMs: trimEndMs(demoConfig, startMs) }),
   };
 }
 

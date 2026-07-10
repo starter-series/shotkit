@@ -23,7 +23,7 @@ only see final target files or a blocker after automation is exhausted.
 ## Status & Scope
 
 - **Currently implemented** — An autonomous launch asset **pipeline** whose Playwright engine builds and drives the *shipped* extension, expands one story into `cws-youtube`, `x`, and `youtube-shorts` variants, applies target viewport/H.264/trim/caption/thumbnail defaults, probes the final MP4 with ffprobe, checks the poster pixels for blank-frame failures, and emits `publish-ready`, `needs-fix`, or `blocked`. The schema-backed pack still carries source evidence, captions, run provenance, integrity, and agent-owned retry actions. The same engine is exposed through the CLI, `capture()`, skill, and AGENTS.md run-block.
-- **Story renderer** — Demo configs can use one `demo` or several `demos: []` entries, timed `captions`, pointer-highlighted clicks, recordable native-select changes, paced cursor movement, static zoom/crop framing, thumbnail frames, storyboard lint, and a small `demo` helper (`caption`, `step`, `wait`, `click`, `select`) so an agent can turn a feature checklist into 20-40 second before → action → result stories without pulling in a general video editor.
+- **Story renderer** — Demo configs can use one `demo` or several `demos: []` entries, timed static or Shorts-style focus captions, pointer-highlighted clicks, recordable native-select changes, paced cursor movement, static zoom/crop framing, thumbnail frames, storyboard lint, and a small `demo` helper (`caption`, `step`, `wait`, `click`, `select`) so an agent can turn a feature checklist into 20-40 second before → action → result stories without pulling in a general video editor.
 - **Design intent** — *One engine, many surfaces — matched to the tool's nature.* shotkit is a heavy, file-producing build tool, so its surfaces are CLI (+`--json`), skill, and CI — not MCP (see Non-goals). Captures are **deterministic** (login-free fixtures, frozen data) and the run **doubles as a real-bundle smoke test** — a screenshot only appears if that feature rendered from the shipped code. **Trademark-safe** by construction: a disclaimer band is composited onto every shot.
 - **Non-goals** — An **MCP server** inside shotkit (agents with a shell get a better contract from `--json` + the skill). Removing the per-repo **story/action config** (which product state proves the claim is irreducible intent). A general-purpose timeline editor or hosted demo platform. Repeatable channel work is automated; manual editors are fallback-only and disabled unless explicitly requested.
 - **Redacted** — none. Ships no private data, credentials, or third-party identifiers.
@@ -128,8 +128,11 @@ demo: {
 The story expands to `skillbridge-cws-youtube`, `skillbridge-x`, and
 `skillbridge-youtube-shorts`. Landscape targets use 1280×720; Shorts uses
 720×1280. All target variants receive H.264/yuv420p, a 30-second cap, a poster
-frame, and automated final-file checks. `targetOptions.<id>` is available for a
-channel-specific framing override.
+frame, and automated final-file checks. The Shorts profile also turns timed
+captions into three-word focus chunks, highlights the current word, and keeps
+the overlay inside YouTube's visual-guide safe region. CWS and X retain the quieter
+static caption style. `targetOptions.<id>` is available for a channel-specific
+framing or caption override.
 
 The default policy is exception-only: `needs-fix` actions belong to the agent,
 which edits the config and reruns `automation.retryScenes[]` with an incremented
@@ -182,6 +185,34 @@ Captions render as a DOM overlay while Playwright records the page. The default
 position is lower-left, with a translucent background, large text, safe padding,
 and no collision with the top-left disclaimer badge.
 
+Timed captions can use the built-in short-form focus treatment without speech
+transcription. Shotkit derives a deterministic synthetic word schedule from the authored
+story, so silent product demos do not need Whisper, Python, or a second render
+engine. `youtube-shorts` enables this automatically; custom and target-specific
+captures can opt in or tune it directly:
+
+```js
+targetOptions: {
+  'youtube-shorts': {
+    captionOptions: {
+      position: 'bottom-left',
+      mode: 'focus',
+      wordsPerChunk: 3,
+      wordMs: 360,
+      activeColor: '#facc15',
+      bottomOffset: 380,
+    },
+  },
+}
+```
+
+Set `mode: 'static'` to disable the treatment for a target. The resolved style
+is also written to `storyboard.json` and `captions.json`; the latter includes a
+trim-relative `timeline[]` with rendered chunks, active-word indexes, and frame
+boundaries for downstream agents. When authored beats are too close for the
+requested pace, every word is preserved but storyboard lint returns
+`dense-focus-caption` so the agent lengthens the beat before publishing.
+
 Clicks made through `demo.click(selectorOrLocator)` show a high-contrast arrow
 pointer and click ripple in the recording. Tune pacing with
 `{ moveMs, beforeMs, holdMs }`, or turn it off with `{ highlight: false }`. A
@@ -230,6 +261,10 @@ demo: {
   },
 }
 ```
+
+Focus sequencing applies to timed `captions[]`. Direct `demo.caption()` and
+`demo.step()` calls remain immediate full-phrase callouts so their existing
+control-flow timing does not change.
 
 Framing options are intentionally small:
 
@@ -430,7 +465,7 @@ permission tables. It is intentionally not a privacy policy generator.
 | Autonomous target rendering (`demo.targets`, CWS/YouTube, X, Shorts, ffprobe, pixel QA, retry actions) | ✅ now | publish-ready channel variants |
 | Capture-in-CI GitHub Action | ✅ now — ships in [`browser-extension-starter`](https://github.com/starter-series/browser-extension-starter)'s `capture.yml` (headless) | zero-local-browser runs + CI smoke test |
 | `starter-series` marketplace entry (`/plugin install shotkit@starter-series`) | ✅ now | discovery |
-| Timeline/audio/motion editing | non-goal | explicit `automation.manualFallback:true` only |
+| General timeline/audio editing | non-goal | explicit `automation.manualFallback:true` only |
 
 An MCP stdio tool was considered and **dropped** — see Non-goals: shotkit is a heavy, file-producing build tool, so a `--json` CLI + skill serves agents better than an MCP server's per-session context cost.
 

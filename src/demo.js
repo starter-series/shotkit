@@ -12,6 +12,7 @@ const DEFAULT_CLICK_BEFORE_MS = 120;
 const DEFAULT_STEP_HOLD_MS = 800;
 
 const { normalizeDelayMs, normalizeDemoCaptions, parseTimeToMs } = require('./demo-time');
+const { buildCaptionFrames } = require('./demo-caption-focus');
 const { analyzeDemoStoryboard, formatStoryboardLint, lintDemoStoryboard } = require('./demo-storyboard');
 const { expandDemoTargets } = require('./channels');
 const { hideDemoSelect, installDemoSelectOverlay, performDemoSelect } = require('./demo-select');
@@ -80,13 +81,44 @@ function demoCaptionInitScript(options = {}) {
         opacity: 1;
         transform: translateY(0);
       }
+      #${rootId}[data-mode="focus"] {
+        width: min(660px, calc(100vw - 56px));
+        min-height: 78px;
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: center;
+        column-gap: .22em;
+        row-gap: .08em;
+        padding: 14px 22px 16px;
+        background: rgba(8,11,16,.86);
+        font-size: 32px;
+        font-weight: 800;
+        line-height: 1.15;
+        text-align: center;
+        overflow-wrap: anywhere;
+      }
+      #${rootId}[data-mode="focus"][data-condensed="true"] {
+        font-size: 26px;
+        line-height: 1.18;
+      }
+      #${rootId} .shotkit-caption-word {
+        display: inline-block;
+        color: rgba(255,255,255,.72);
+        transform-origin: center bottom;
+      }
+      #${rootId} .shotkit-caption-word[data-active="true"] {
+        color: var(--shotkit-caption-active-color, #facc15);
+        text-shadow: 0 2px 14px rgba(0,0,0,.52);
+        animation: shotkit-caption-focus-pop 180ms cubic-bezier(.2,.9,.3,1.2);
+      }
       #${rootId}[data-position="bottom-left"] {
         left: max(28px, env(safe-area-inset-left));
-        bottom: max(26px, env(safe-area-inset-bottom));
+        bottom: max(var(--shotkit-caption-bottom-offset, 26px), env(safe-area-inset-bottom));
       }
       #${rootId}[data-position="bottom"] {
         left: 50%;
-        bottom: max(26px, env(safe-area-inset-bottom));
+        bottom: max(var(--shotkit-caption-bottom-offset, 26px), env(safe-area-inset-bottom));
         transform: translate(-50%, 8px);
         text-align: center;
       }
@@ -101,10 +133,23 @@ function demoCaptionInitScript(options = {}) {
         }
         #${rootId}[data-position="bottom-left"] {
           left: max(18px, env(safe-area-inset-left));
-          bottom: max(18px, env(safe-area-inset-bottom));
+          bottom: max(var(--shotkit-caption-bottom-offset, 18px), env(safe-area-inset-bottom));
         }
         #${rootId}[data-position="bottom"] {
-          bottom: max(18px, env(safe-area-inset-bottom));
+          bottom: max(var(--shotkit-caption-bottom-offset, 18px), env(safe-area-inset-bottom));
+        }
+        #${rootId}[data-mode="focus"] {
+          width: calc(100vw - 220px);
+          max-width: 500px;
+          min-height: 88px;
+          padding: 15px 18px 17px;
+          font-size: 34px;
+        }
+        #${rootId}[data-mode="focus"][data-position="bottom-left"] {
+          left: max(48px, env(safe-area-inset-left));
+        }
+        #${rootId}[data-mode="focus"][data-condensed="true"] {
+          font-size: 25px;
         }
       }
       #${pointerId} {
@@ -161,6 +206,11 @@ function demoCaptionInitScript(options = {}) {
         0% { opacity: .95; transform: scale(.6); }
         100% { opacity: 0; transform: scale(1.9); }
       }
+      @keyframes shotkit-caption-focus-pop {
+        0% { opacity: .55; transform: translateY(5px) scale(.86); }
+        70% { opacity: 1; transform: translateY(-1px) scale(1.1); }
+        100% { opacity: 1; transform: translateY(0) scale(1.06); }
+      }
     `;
     document.head.appendChild(style);
   }
@@ -197,7 +247,32 @@ function demoCaptionInitScript(options = {}) {
     if (!root) return;
     const position = nextOptions.position || baseOptions.position;
     root.dataset.position = position;
-    root.textContent = String(text);
+    root.dataset.mode = nextOptions.mode === 'focus' ? 'focus' : 'static';
+    root.dataset.condensed = nextOptions.condensed || (
+      root.dataset.mode === 'focus' && String(text).length > 42
+    ) ? 'true' : 'false';
+    if (Number.isFinite(nextOptions.bottomOffset) && nextOptions.bottomOffset >= 0) {
+      root.style.setProperty('--shotkit-caption-bottom-offset', `${Math.round(nextOptions.bottomOffset)}px`);
+    } else {
+      root.style.removeProperty('--shotkit-caption-bottom-offset');
+    }
+    root.style.setProperty('--shotkit-caption-active-color', nextOptions.activeColor || '#facc15');
+    root.textContent = '';
+    if (root.dataset.mode === 'focus' && Array.isArray(nextOptions.focusWords)) {
+      nextOptions.focusWords.forEach((word, index) => {
+        const span = document.createElement('span');
+        span.className = 'shotkit-caption-word';
+        span.dataset.active = index === nextOptions.activeWordIndex ? 'true' : 'false';
+        span.textContent = String(word);
+        root.appendChild(span);
+      });
+      root.setAttribute('aria-label', String(nextOptions.fullText || text));
+      root.setAttribute('aria-live', 'off');
+    } else {
+      root.textContent = String(text);
+      root.removeAttribute('aria-label');
+      root.setAttribute('aria-live', 'polite');
+    }
     root.dataset.visible = text ? 'true' : 'false';
   }
 
@@ -323,6 +398,7 @@ async function clickTarget(page, target, clickOptions) {
 
 function createDemoController({ page, captions = [], captionOptions = {} }) {
   const schedule = normalizeDemoCaptions(captions);
+  const captionFrames = buildCaptionFrames(schedule, captionOptions);
   const timers = [];
   let activeText = '';
   let activeOptions = {};
@@ -348,8 +424,8 @@ function createDemoController({ page, captions = [], captionOptions = {} }) {
   };
   page.on('domcontentloaded', replay);
 
-  for (const caption of schedule) {
-    timers.push(setTimeout(() => render(caption.text), caption.atMs));
+  for (const frame of captionFrames) {
+    timers.push(setTimeout(() => render(frame.text, frame.options), frame.atMs));
   }
 
   return {
