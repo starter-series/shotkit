@@ -14,6 +14,7 @@ const DEFAULT_STEP_HOLD_MS = 800;
 const { normalizeDelayMs, normalizeDemoCaptions, parseTimeToMs } = require('./demo-time');
 const { analyzeDemoStoryboard, formatStoryboardLint, lintDemoStoryboard } = require('./demo-storyboard');
 const { expandDemoTargets } = require('./channels');
+const { hideDemoSelect, installDemoSelectOverlay, performDemoSelect } = require('./demo-select');
 
 function normalizeDemoConfigs(config = {}) {
   const demos = [];
@@ -110,14 +111,11 @@ function demoCaptionInitScript(options = {}) {
         position: fixed;
         left: 0;
         top: 0;
-        z-index: 2147483646;
-        width: 24px;
-        height: 24px;
-        margin: -12px 0 0 -12px;
-        border: 3px solid rgba(37,99,235,.96);
-        border-radius: 999px;
-        background: rgba(255,255,255,.94);
-        box-shadow: 0 8px 22px rgba(0,0,0,.32), 0 0 0 3px rgba(255,255,255,.82);
+        z-index: 2147483647;
+        width: 44px;
+        height: 52px;
+        margin: -9px 0 0 -9px;
+        background: radial-gradient(circle at 9px 9px, rgba(37,99,235,.42) 0 8px, rgba(37,99,235,.14) 9px 17px, transparent 18px);
         pointer-events: none;
         opacity: 0;
         transform: translate(-120px, -120px);
@@ -128,10 +126,29 @@ function demoCaptionInitScript(options = {}) {
       #${pointerId}[data-visible="true"] {
         opacity: 1;
       }
+      #${pointerId}::before {
+        content: "";
+        position: absolute;
+        left: 6px;
+        top: 5px;
+        width: 28px;
+        height: 38px;
+        background: #fff;
+        clip-path: polygon(0 0, 0 78%, 29% 62%, 50% 100%, 75% 91%, 53% 57%, 100% 57%);
+        filter: drop-shadow(-2px -1px 0 #0f172a) drop-shadow(2px 2px 0 #0f172a) drop-shadow(0 5px 5px rgba(0,0,0,.35));
+        transform-origin: 8px 8px;
+        transition: transform 90ms ease;
+      }
+      #${pointerId}[data-clicking="true"]::before {
+        transform: translate(1px, 1px) scale(.92);
+      }
       #${pointerId}::after {
         content: "";
         position: absolute;
-        inset: -16px;
+        left: -12px;
+        top: -12px;
+        width: 42px;
+        height: 42px;
         border: 3px solid rgba(37,99,235,.42);
         border-radius: 999px;
         opacity: 0;
@@ -223,6 +240,7 @@ function demoCaptionInitScript(options = {}) {
 
 async function installDemoCaptionOverlay(context, options = {}) {
   await context.addInitScript(demoCaptionInitScript, options);
+  await installDemoSelectOverlay(context);
 }
 
 async function ensureDemoCaptionOverlay(page, options = {}) {
@@ -353,6 +371,18 @@ function createDemoController({ page, captions = [], captionOptions = {} }) {
       return page.waitForTimeout(normalizeDelayMs(ms, 'wait ms'));
     },
 
+    async select(target, value, options = {}) {
+      return performDemoSelect({
+        page,
+        target,
+        value,
+        options,
+        targetCenter,
+        movePointer: moveDemoPointer,
+        pulsePointer: pulseDemoPointer,
+      });
+    },
+
     async click(target, options = {}) {
       const {
         holdMs = DEFAULT_CLICK_HOLD_MS,
@@ -379,6 +409,7 @@ function createDemoController({ page, captions = [], captionOptions = {} }) {
     async hide() {
       await render('');
       await hideDemoPointer(page).catch(() => {});
+      await hideDemoSelect(page).catch(() => {});
     },
 
     hidePointer() {

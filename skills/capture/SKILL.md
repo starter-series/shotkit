@@ -93,9 +93,12 @@ rendered from the shipped code. By default, it also writes a handoff pack:
   (`1200×675`) for static X card images.
 - Demo configs can use timed `demo.captions` plus the helper passed to
   `demo.run`: `demo.caption(text)`, `demo.step(text, async () => { ... })`,
-  `demo.wait(ms)`, and `demo.click(selectorOrLocator, { moveMs, beforeMs, holdMs })`.
-  Captions and click highlights render as DOM overlays during recording and
-  avoid the top-left disclaimer badge.
+  `demo.wait(ms)`, `demo.click(selectorOrLocator, { moveMs, beforeMs, holdMs })`,
+  and `demo.select(selectorOrLocator, value, { openMs, holdMs })`. Captions,
+  arrow-pointer clicks, and mirrored native-select options render as DOM
+  overlays during recording and avoid the top-left disclaimer badge. Always
+  use `demo.select()` for a native `<select>` because its OS popup is not part
+  of the Playwright page screencast.
 - `storyboard.json` carries structured lint (`code`, `severity`, `message`,
   `fix`) for agents. Treat those warnings as the edit list for the next
   `shotkit.config.js` pass.

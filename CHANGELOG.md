@@ -13,6 +13,9 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 - Final MP4 probing through ffprobe plus PNG pixel QA for blank/uniform poster
   frames. The manifest now carries per-target checks and media metadata.
 - Publish targets cannot bypass story checks with `storyboardLint:false`.
+- `demo.select()` mirrors native select options into page recordings while
+  applying the real value change; pointer actions now use a visible arrow and
+  click ripple instead of an ambiguous circle.
 - Exception-only `handoff.automation`: `publish-ready`, `needs-fix`, and
   exhausted `blocked` states, agent-owned fix/rerun actions, `--target`, and
   bounded `--attempt` retries.

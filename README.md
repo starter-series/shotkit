@@ -23,7 +23,7 @@ only see final target files or a blocker after automation is exhausted.
 ## Status & Scope
 
 - **Currently implemented** — An autonomous launch asset **pipeline** whose Playwright engine builds and drives the *shipped* extension, expands one story into `cws-youtube`, `x`, and `youtube-shorts` variants, applies target viewport/H.264/trim/caption/thumbnail defaults, probes the final MP4 with ffprobe, checks the poster pixels for blank-frame failures, and emits `publish-ready`, `needs-fix`, or `blocked`. The schema-backed pack still carries source evidence, captions, run provenance, integrity, and agent-owned retry actions. The same engine is exposed through the CLI, `capture()`, skill, and AGENTS.md run-block.
-- **Story renderer** — Demo configs can use one `demo` or several `demos: []` entries, timed `captions`, pointer-highlighted clicks, paced cursor movement, static zoom/crop framing, thumbnail frames, storyboard lint, and a small `demo` helper (`caption`, `step`, `wait`, `click`) so an agent can turn a feature checklist into 20-40 second before → action → result stories without pulling in a general video editor.
+- **Story renderer** — Demo configs can use one `demo` or several `demos: []` entries, timed `captions`, pointer-highlighted clicks, recordable native-select changes, paced cursor movement, static zoom/crop framing, thumbnail frames, storyboard lint, and a small `demo` helper (`caption`, `step`, `wait`, `click`, `select`) so an agent can turn a feature checklist into 20-40 second before → action → result stories without pulling in a general video editor.
 - **Design intent** — *One engine, many surfaces — matched to the tool's nature.* shotkit is a heavy, file-producing build tool, so its surfaces are CLI (+`--json`), skill, and CI — not MCP (see Non-goals). Captures are **deterministic** (login-free fixtures, frozen data) and the run **doubles as a real-bundle smoke test** — a screenshot only appears if that feature rendered from the shipped code. **Trademark-safe** by construction: a disclaimer band is composited onto every shot.
 - **Non-goals** — An **MCP server** inside shotkit (agents with a shell get a better contract from `--json` + the skill). Removing the per-repo **story/action config** (which product state proves the claim is irreducible intent). A general-purpose timeline editor or hosted demo platform. Repeatable channel work is automated; manual editors are fallback-only and disabled unless explicitly requested.
 - **Redacted** — none. Ships no private data, credentials, or third-party identifiers.
@@ -182,10 +182,23 @@ Captions render as a DOM overlay while Playwright records the page. The default
 position is lower-left, with a translucent background, large text, safe padding,
 and no collision with the top-left disclaimer badge.
 
-Clicks made through `demo.click(selectorOrLocator)` show a synthetic pointer and
-click ripple in the recording. Tune pacing with `{ moveMs, beforeMs, holdMs }`,
-or turn it off with `{ highlight: false }`. A Playwright Locator or `{ x, y }`
-point also works when selectors are awkward.
+Clicks made through `demo.click(selectorOrLocator)` show a high-contrast arrow
+pointer and click ripple in the recording. Tune pacing with
+`{ moveMs, beforeMs, holdMs }`, or turn it off with `{ highlight: false }`. A
+Playwright Locator or `{ x, y }` point also works when selectors are awkward.
+
+Native `<select>` popups are OS/browser UI and do not appear in Playwright's
+page screencast. Use `demo.select()` so shotkit mirrors the element's real DOM
+options inside the recorded page, shows the pointer, and then applies the real
+selection:
+
+```js
+await demo.select('#language', 'ko', {
+  moveMs: 550,
+  openMs: 900,
+  holdMs: 700,
+});
+```
 
 Use either timed captions, the helper API, or both:
 
@@ -212,7 +225,7 @@ demo: {
       await page.waitForSelector('[data-demo-translated="true"]');
     });
     await demo.caption('Restore the original anytime');
-    await demo.click('[data-demo-restore]');
+    await demo.select('#language', 'en');
     await demo.wait(900);
   },
 }

@@ -22,6 +22,10 @@ class FakePage extends EventEmitter {
     this.inits = [];
     this.pointerMoves = [];
     this.pointerPulses = 0;
+    this.selectFocuses = [];
+    this.selectReads = [];
+    this.selects = [];
+    this.selectMirrorEvents = [];
     this.box = null;
     this.mouseClicks = [];
     this.mouse = {
@@ -39,6 +43,13 @@ class FakePage extends EventEmitter {
     if (arg && Object.prototype.hasOwnProperty.call(arg, 'pointerPoint')) {
       this.pointerMoves.push({ point: arg.pointerPoint, options: arg.pointerOptions });
     }
+    if (arg && Object.prototype.hasOwnProperty.call(arg, 'selectModel')) {
+      this.selectMirrorEvents.push({ type: 'show', model: arg.selectModel });
+    }
+    if (arg && Object.prototype.hasOwnProperty.call(arg, 'selectedValue')) {
+      this.selectMirrorEvents.push({ type: 'commit', value: arg.selectedValue });
+    }
+    if (String(fn).includes('__shotkitDemoSelect.hide()')) this.selectMirrorEvents.push({ type: 'hide' });
     if (String(fn).includes('__shotkitDemoPointer.pulse')) this.pointerPulses += 1;
   }
 
@@ -50,9 +61,27 @@ class FakePage extends EventEmitter {
     this.clicks.push({ selector, options });
   }
 
-  locator() {
+  locator(selector) {
     return {
       boundingBox: async () => this.box,
+      evaluate: async (_fn, input) => {
+        this.selectReads.push({ selector, input });
+        return {
+          rect: { left: 10, top: 20, right: 110, bottom: 60, width: 100, height: 40 },
+          currentValue: 'en',
+          targetValue: input.value,
+          items: [
+            { index: 0, value: 'en', label: 'English' },
+            { gap: true },
+            { index: 12, value: input.value, label: '한국어' },
+          ],
+        };
+      },
+      focus: async () => this.selectFocuses.push(selector),
+      selectOption: async (value) => {
+        this.selects.push({ selector, value });
+        return [value];
+      },
     };
   }
 }
@@ -278,12 +307,36 @@ describe('createDemoController', () => {
     ]);
   });
 
-  test('wait and click reject invalid delays', async () => {
+  test('select mirrors native options and records a visible pointer action', async () => {
+    const page = new FakePage();
+    page.box = { x: 10, y: 20, width: 100, height: 40 };
+    const demo = createDemoController({ page });
+
+    await expect(demo.select('#language', 'ko', {
+      moveMs: 30,
+      beforeMs: 5,
+      openMs: 40,
+      holdMs: 25,
+    })).resolves.toEqual(['ko']);
+    demo.stop();
+
+    expect(page.selectReads).toEqual([{ selector: '#language', input: { value: 'ko', maxOptions: 7 } }]);
+    expect(page.selectFocuses).toEqual(['#language']);
+    expect(page.selects).toEqual([{ selector: '#language', value: 'ko' }]);
+    expect(page.pointerMoves).toEqual([{ point: { x: 60, y: 40 }, options: { durationMs: 30 } }]);
+    expect(page.pointerPulses).toBe(1);
+    expect(page.waits).toEqual([35, 40, 25]);
+    expect(page.selectMirrorEvents.map((event) => event.type)).toEqual(['show', 'commit', 'hide']);
+  });
+
+  test('wait, click, and select reject invalid controls', async () => {
     const page = new FakePage();
     const demo = createDemoController({ page });
 
     expect(() => demo.wait(-1)).toThrow(/wait ms/);
     await expect(demo.click('.primary', { holdMs: -1 })).rejects.toThrow(/click holdMs/);
+    await expect(demo.select('#language', '')).rejects.toThrow(/non-empty option value/);
+    await expect(demo.select('#language', 'ko', { maxOptions: 10 })).rejects.toThrow(/between 2 and 9/);
     demo.stop();
   });
 
@@ -326,9 +379,11 @@ describe('targetCenter', () => {
 });
 
 describe('installDemoCaptionOverlay', () => {
-  test('registers the browser init script', async () => {
+  test('registers caption/pointer and native-select init scripts', async () => {
     const context = { addInitScript: jest.fn() };
     await installDemoCaptionOverlay(context, { position: 'bottom-left' });
-    expect(context.addInitScript).toHaveBeenCalledWith(expect.any(Function), { position: 'bottom-left' });
+    expect(context.addInitScript).toHaveBeenCalledTimes(2);
+    expect(context.addInitScript).toHaveBeenNthCalledWith(1, expect.any(Function), { position: 'bottom-left' });
+    expect(context.addInitScript).toHaveBeenNthCalledWith(2, expect.any(Function));
   });
 });

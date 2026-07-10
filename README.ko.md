@@ -21,7 +21,7 @@
 ## 상태와 범위 (Status & Scope)
 
 - **현재 구현된 것** — Playwright로 *실제 출하 빌드*를 실행하고 하나의 story를 `cws-youtube`, `x`, `youtube-shorts` variant로 확장합니다. target별 viewport/H.264/trim/caption/thumbnail을 자동 적용하고, 최종 MP4를 ffprobe로 검사하며, thumbnail 픽셀의 blank-frame 여부까지 확인해 `publish-ready`, `needs-fix`, `blocked`를 산출합니다. manifest에는 에이전트가 실행할 retry action과 source evidence가 함께 남습니다.
-- **스토리 렌더러** — 데모 config는 단일 `demo` 또는 여러 `demos: []`, timed `captions`, click highlight, cursor pacing, 정적 zoom/crop, thumbnail frame, storyboard lint, 작은 `demo` helper(`caption`, `step`, `wait`, `click`)를 쓸 수 있습니다. 에이전트가 기능 체크리스트를 20~40초짜리 before → action → result → safety/restore 캠페인 컷으로 바꾸기 쉬운 정도까지만 제공합니다.
+- **스토리 렌더러** — 데모 config는 단일 `demo` 또는 여러 `demos: []`, timed `captions`, click highlight, 녹화 가능한 native select 변경, cursor pacing, 정적 zoom/crop, thumbnail frame, storyboard lint, 작은 `demo` helper(`caption`, `step`, `wait`, `click`, `select`)를 쓸 수 있습니다. 에이전트가 기능 체크리스트를 20~40초짜리 before → action → result → safety/restore 캠페인 컷으로 바꾸기 쉬운 정도까지만 제공합니다.
 - **설계 의도** — *엔진 1개, 표면 여러 개 — 단, 도구 성격에 맞는 표면.* shotkit은 무겁고 파일을 산출하는 빌드 도구라 표면이 CLI(+`--json`)·skill·CI입니다 — MCP가 아니라(하지 않기로 한 것 참고). 캡처는 **결정적**(로그인 불필요 픽스처, freeze된 데이터)이고, 실행이 **실제 빌드본 smoke test를 겸함** — 스크린샷이 나온다 = 그 기능이 출하 코드에서 렌더됨. 모든 샷에 면책 밴드를 합성해 **상표 안전**.
 - **하지 않기로 한 것** — shotkit 내부 MCP 서버, repo별 story/action 의도 제거, 범용 timeline editor, 호스티드 데모 플랫폼. 반복 가능한 채널 작업은 자동화하고 수동 편집기는 명시적으로 요청한 fallback일 때만 노출합니다.
 - **공개하지 않음** — 없음.
@@ -164,10 +164,15 @@ demo: {
 }
 ```
 
-`demo.click(selectorOrLocator)`는 녹화에 synthetic pointer와 click ripple을
+`demo.click(selectorOrLocator)`는 녹화에 고대비 화살표 cursor와 click ripple을
 보여줍니다. `{ moveMs, beforeMs, holdMs }`로 속도를 조절하고,
 `{ highlight: false }`로 끌 수 있습니다. selector가 어색한 경우 Playwright
 Locator나 `{ x, y }` point도 받을 수 있습니다. 영상 framing은 작게 유지합니다:
+
+native `<select>` popup은 OS/browser UI라 Playwright page 녹화에 잡히지 않습니다.
+`demo.select('#language', 'ko', { moveMs: 550, openMs: 900, holdMs: 700 })`를
+사용하면 실제 DOM option을 페이지 안에 미러링하고 cursor를 보여준 뒤 실제
+선택을 적용합니다.
 
 ```js
 demo: {

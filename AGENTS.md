@@ -38,7 +38,8 @@ src/
   extension.js   → stageExtension / patchManifestForLocalhost
   serve.js       → serveDirectory (path-traversal-safe localhost fixture server)
   caption.js     → compositeCaption (disclaimer/caption band, stacked UNDER the shot)
-  demo.js        → demo story helpers (DOM caption overlay + demo.caption/step/wait/click)
+  demo.js        → demo story helpers (caption/pointer + demo.caption/step/wait/click/select)
+  demo-select.js → recordable native-select mirror and real value-change action
   channels.js    → autonomous CWS/YouTube, X, and Shorts target profiles
   promo.js       → renderPromoTile (HTML template → image)
   describe.js    → extractListing / renderDescriptionDoc (STORE_LISTING.md → copy)
@@ -70,9 +71,9 @@ test/            → unit tests for the pure/safe modules (no browser)
   headless in CI.
 - **Caption band stacks UNDER the shot** (scene captured at `height - bandHeight`,
   band appended) so the final image is the exact preset size and no UI is hidden.
-- **Demo captions and pointer highlights overlay the recorded page**, while the
+- **Demo captions, arrow pointers, and select mirrors overlay the recorded page**, while the
   disclaimer badge stays top-left. Keep this lightweight: one `demo` or several
-  `demos[]` entries, timed captions, `demo.caption/step/wait/click`, static
+  `demos[]` entries, timed captions, `demo.caption/step/wait/click/select`, static
   `zoom`/`crop`, `thumbnail`, and storyboard lint — not a timeline editor.
 - **Handoff JSON is the machine boundary**: target workflows use
   `handoff.automation` to fix and retry until `publish-ready`; users do not read
@@ -124,7 +125,10 @@ enough to read.
 Use `demos: []` for multiple campaign cuts such as `demo-translate`,
 `demo-restore`, or `demo-popup`; `--scene <name>` reruns just one clip.
 Use `demo.click(selectorOrLocator, { moveMs, beforeMs, holdMs })` for visible cursor
-pacing. Prefer `thumbnail: { at: 1.2 }`; use `zoom: { scale: 1.04 }` or a
+pacing. Native select popups are outside page video; always use
+`demo.select(selectorOrLocator, value, { openMs, holdMs })` so real DOM options,
+the arrow cursor, and the real value change are recorded. Prefer
+`thumbnail: { at: 1.2 }`; use `zoom: { scale: 1.04 }` or a
 small `crop` only when the key UI is too small. Storyboard lint must stay on
 for channel targets; `storyboardLint:false` is only for legacy, non-publishing
 smoke clips and must produce `needs-fix` for a target.
