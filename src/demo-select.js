@@ -87,6 +87,8 @@ function demoSelectInitScript() {
     if (!root) {
       root = document.createElement('div');
       root.id = rootId;
+      root.className = 'notranslate';
+      root.setAttribute('translate', 'no');
       root.setAttribute('role', 'listbox');
       document.body.appendChild(root);
     }
@@ -120,9 +122,9 @@ function demoSelectInitScript() {
       row.dataset.value = item.value;
       row.dataset.selected = item.value === model.currentValue ? 'true' : 'false';
       row.dataset.pending = item.value === model.targetValue && item.value !== model.currentValue ? 'true' : 'false';
-      const label = document.createElement('span');
+      const label = document.createElement('b');
       label.textContent = item.label;
-      const marker = document.createElement('span');
+      const marker = document.createElement('i');
       marker.className = 'shotkit-select-marker';
       row.append(label, marker);
       root.appendChild(row);

@@ -74,4 +74,38 @@ describe('runCli', () => {
     expect(JSON.parse(stdout.read())).toEqual({ ok: false, error: 'boom', code: 1 });
     expect(stderr.read()).toBe('');
   });
+
+  test('starts the calibrator without running capture', async () => {
+    const { cwd, configPath } = tmpProject();
+    const stdout = streamBuffer();
+    const stderr = streamBuffer();
+    const capture = jest.fn();
+    const startCalibrator = jest.fn(async () => ({ url: 'http://127.0.0.1:4312' }));
+    const config = { calibration: { from: 'shotkit.calibration.json' } };
+
+    const code = await runCli(['--calibrate', '--port', '4312', '--no-open', '--json'], {
+      stdout: stdout.stream,
+      stderr: stderr.stream,
+      processCwd: () => cwd,
+    }, {
+      capture,
+      startCalibrator,
+      loadConfig: jest.fn(() => config),
+    });
+
+    expect(code).toBe(0);
+    expect(JSON.parse(stdout.read())).toEqual({
+      ok: true,
+      status: 'calibrating',
+      url: 'http://127.0.0.1:4312',
+    });
+    expect(startCalibrator).toHaveBeenCalledWith({
+      cwd,
+      config,
+      configPath,
+      port: 4312,
+      open: false,
+    });
+    expect(capture).not.toHaveBeenCalled();
+  });
 });

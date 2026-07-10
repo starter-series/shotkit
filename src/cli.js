@@ -26,6 +26,9 @@ Options:
   --target <id>     only render configured channel targets (cws-youtube, x,
                     youtube-shorts); repeatable, or comma-separated
   --attempt <n>     automation retry number (default: 1; agents increment it)
+  --calibrate       open the local exception-only composition calibrator
+  --port <n>        calibrator port (default: choose an available local port)
+  --no-open         start the calibrator without opening a browser window
   --json            machine-readable mode: stdout gets one JSON object
                     {ok, status, outDir, manifest, produced[]}; logs go to stderr
   --no-video        skip the demo screencast
@@ -47,6 +50,9 @@ function parseArgs(argv) {
     scenes: [],
     targets: [],
     attempt: 1,
+    calibrate: false,
+    port: null,
+    open: true,
     errors: [],
     noVideo: false,
     noBuild: false,
@@ -104,6 +110,18 @@ function parseArgs(argv) {
         opts.attempt = Number(value);
       }
     }
+    else if (a === '--port' || a.startsWith('--port=')) {
+      const inline = a.startsWith('--port=');
+      const value = inline ? a.slice('--port='.length) : argv[++i];
+      if (!value || value.startsWith('-') || !Number.isInteger(Number(value)) || Number(value) < 0 || Number(value) > 65535) {
+        opts.errors.push('--port requires an integer between 0 and 65535');
+        if (!inline && value && value.startsWith('-')) i--;
+      } else {
+        opts.port = Number(value);
+      }
+    }
+    else if (a === '--calibrate') opts.calibrate = true;
+    else if (a === '--no-open') opts.open = false;
     else if (a === '--json') opts.json = true;
     else if (a === '--mp4') opts.mp4 = true;
     else if (a === '--no-video') opts.noVideo = true;

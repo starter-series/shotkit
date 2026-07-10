@@ -52,6 +52,7 @@ const CHANNEL_PROFILES = Object.freeze({
     captionOptions: Object.freeze({
       position: 'bottom-left',
       mode: 'focus',
+      appearance: 'outline',
       wordsPerChunk: 3,
       wordMs: 360,
       activeColor: '#facc15',

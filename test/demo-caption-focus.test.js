@@ -152,9 +152,11 @@ describe('focused demo captions', () => {
     expect(captionStyle({
       position: 'bottom',
       mode: 'focus',
+      appearance: 'outline',
       bottomOffset: 119.7,
     })).toEqual({
       mode: 'focus',
+      appearance: 'outline',
       position: 'bottom',
       bottomOffset: 120,
       wordsPerChunk: 3,
@@ -170,6 +172,8 @@ describe('focused demo captions', () => {
     expect(() => normalizeFocusOptions({ mode: 'focus', wordsPerChunk: 0 })).toThrow(/wordsPerChunk/);
     expect(() => normalizeFocusOptions({ mode: 'focus', wordMs: 20 })).toThrow(/wordMs/);
     expect(() => normalizeFocusOptions({ mode: 'focus', bottomOffset: -1 })).toThrow(/bottomOffset/);
+    expect(() => normalizeFocusOptions({ mode: 'focus', position: 'middle' })).toThrow(/position/);
+    expect(() => normalizeFocusOptions({ mode: 'focus', appearance: 'bubble' })).toThrow(/appearance/);
     expect(() => normalizeFocusOptions('focus')).toThrow(/must be an object/);
   });
 });

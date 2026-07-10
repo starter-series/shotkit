@@ -101,6 +101,24 @@ describe('handoff docs conform to the published JSON schemas', () => {
     expect(tc.captions[0].atMs).toBe(2000);
   });
 
+  it('validates the tracked calibration document contract', () => {
+    const validate = ajv.compile(loadSchema('calibration.schema.json'));
+    const document = {
+      version: 1,
+      profiles: {
+        launch: {
+          'youtube-shorts': {
+            layoutPreset: 'focus-column',
+            framing: { scale: 1.04, focusX: 0.5, focusY: 0.45 },
+            captionOptions: { position: 'bottom-left', appearance: 'outline', bottomOffset: 420 },
+            protectedRegions: [{ id: 'result', x: 40, y: 120, width: 640, height: 480 }],
+          },
+        },
+      },
+    };
+    expect(validate(document)).toBe(true);
+  });
+
   it('keeps additive manifest fields compatible with the original v1 shape', () => {
     const legacy = JSON.parse(JSON.stringify(docs.manifest));
     delete legacy.category;

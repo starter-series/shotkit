@@ -13,12 +13,13 @@
   "files": [
     "src",
     "bin",
+    "calibrator",
     "skills/capture",
     "docs/handoff-conventions.md",
     "schemas"
   ],
   "scripts": {
-    "lint": "eslint src/ bin/ scripts/ test/",
+    "lint": "eslint src/ bin/ calibrator/ scripts/ test/",
     "research": "node scripts/research-to-product-fit.mjs",
     "test": "jest --verbose --coverage",
     "pack:check": "node scripts/verify-pack.mjs",
@@ -66,6 +67,8 @@
   "jest": {
     "collectCoverageFrom": [
       "src/channels.js",
+      "src/calibration.js",
+      "src/calibrator-server.js",
       "src/presets.js",
       "src/describe.js",
       "src/extension.js",
@@ -76,6 +79,7 @@
       "src/video.js",
       "src/demo.js",
       "src/demo-caption-focus.js",
+      "src/demo-caption-qa.js",
       "src/demo-select.js",
       "src/demo-time.js",
       "src/demo-storyboard.js",

@@ -38,6 +38,8 @@ const {
 const { resolveSize } = require('./presets');
 const { postProcessDemo, probeVideo } = require('./video');
 const { analyzeDemoStoryboard, createDemoController, installDemoCaptionOverlay, normalizeDemoConfigs } = require('./demo');
+const { analyzeDemoCaptionMetrics } = require('./demo-caption-qa');
+const { applyCalibrationProfiles, loadCalibration } = require('./calibration');
 const { assetRecord, writeHandoffDocs } = require('./handoff');
 const { analyzePng } = require('./image-qa');
 
@@ -138,7 +140,8 @@ async function capture(config, opts = {}) {
   let manifest = null;
   let status = 'not-requested';
   const assets = [];
-  const demoConfigs = normalizeDemoConfigs(config);
+  const calibration = loadCalibration(config, cwd);
+  const demoConfigs = applyCalibrationProfiles(normalizeDemoConfigs(config), calibration.document);
   const capturedDemoConfigs = [];
   const demoViewports = {};
   const demoWarnings = {};
@@ -366,8 +369,17 @@ async function capture(config, opts = {}) {
       try {
         await installDemoCaptionOverlay(demoCtx.context, demoConfig.captionOptions || {});
 
-        // Keep a small "unofficial" badge on screen across navigations.
-        if (config.disclaimer) {
+        // Keep a small "unofficial" badge on screen across navigations. A
+        // target-specific story may shorten or disable the global screenshot
+        // disclaimer when the video header has less room.
+        const demoDisclaimer = Object.prototype.hasOwnProperty.call(demoConfig, 'disclaimer')
+          ? demoConfig.disclaimer
+          : config.disclaimer;
+        if (demoDisclaimer != null && demoDisclaimer !== false
+          && (typeof demoDisclaimer !== 'string' || !demoDisclaimer.trim())) {
+          throw new Error(`demo "${demoConfig.name}".disclaimer must be a non-empty string or false`);
+        }
+        if (demoDisclaimer) {
           await demoCtx.context.addInitScript((text) => {
             const add = () => {
               if (document.getElementById('__shotkit_badge__') || !document.body) return;
@@ -379,7 +391,7 @@ async function capture(config, opts = {}) {
             };
             if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', add, { once: true });
             else add();
-          }, config.disclaimer);
+          }, demoDisclaimer);
         }
 
         setup2 = normalizeSetup(
@@ -392,6 +404,7 @@ async function capture(config, opts = {}) {
           captions: demoConfig.captions,
           captionOptions: demoConfig.captionOptions,
         });
+        let captionMetricReport;
         try {
           await demoConfig.run({
             page,
@@ -402,9 +415,21 @@ async function capture(config, opts = {}) {
             flags: passFlags,
             demo,
             target: demoConfig.targetProfile || null,
+            calibration: demoConfig.calibrationProfile || null,
           });
         } finally {
+          captionMetricReport = demo.captionMetrics();
           demo.stop();
+        }
+        const calibrationProfile = demoConfig.calibrationProfile || {};
+        const runtimeCaptionWarnings = analyzeDemoCaptionMetrics(captionMetricReport, {
+          viewport,
+          protectedRegions: calibrationProfile.protectedRegions || [],
+          framing: calibrationProfile.framing || null,
+        });
+        demoWarnings[demoConfig.name].push(...runtimeCaptionWarnings);
+        for (const warning of runtimeCaptionWarnings) {
+          log(`⚠️  ${demoConfig.name}: ${warning.message}${warning.fix ? `; ${warning.fix}` : ''}`);
         }
         // Ordering: grab the video handle, page.close() (finalizes recording +
         // drops the page socket), video.saveAs() while the browser is still up,

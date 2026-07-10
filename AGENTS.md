@@ -40,7 +40,9 @@ src/
   caption.js     → compositeCaption (disclaimer/caption band, stacked UNDER the shot)
   demo.js        → demo story helpers (caption/pointer + demo.caption/step/wait/click/select)
   demo-caption-focus.js → deterministic short-form caption chunks + active-word frames
+  demo-caption-qa.js → measured caption/protected-region composition QA
   demo-select.js → recordable native-select mirror and real value-change action
+  calibration.js / calibrator-server.js → tracked profiles + local dashboard API
   channels.js    → autonomous CWS/YouTube, X, and Shorts target profiles
   promo.js       → renderPromoTile (HTML template → image)
   describe.js    → extractListing / renderDescriptionDoc (STORE_LISTING.md → copy)
@@ -54,6 +56,7 @@ src/
   cli.js         → CLI arg parsing + config resolution (unit-tested)
   index.js       → public API (the contract — don't break exports)
 bin/shotkit.js   → CLI (thin wrapper over capture(); --json agent contract)
+calibrator/      → local constrained composition UI (actual capture media)
 skills/capture/  → Claude Code skill wrapping the CLI (Agent Skills format)
 test/            → unit tests for the pure/safe modules (no browser)
 ```
@@ -94,6 +97,12 @@ test/            → unit tests for the pure/safe modules (no browser)
 - **Storyboard lint is structured for agents**: runtime logs are human strings,
   but `storyboard.json` carries `code`, `severity`, `message`, and `fix` so the
   next config edit can be mechanical.
+- **Calibration is exception-only**: `shotkit --calibrate` may adjust only a
+  declared layout preset, bounded framing, caption lane/appearance, and up to
+  three protected regions. It writes `shotkit.calibration.json`, never config
+  source. A profile is verified only after a matching real recapture returns
+  `publish-ready`; stale profiles stay `needs-fix`. Do not grow this into a
+  free-layer, keyframe, or timeline editor.
 - **`promo.js` innerHTML** is trusted, build-time content only (the repo's own
   template + config replacements) rendered in a throwaway page — not user input.
 - **`config.build`** is a repo-committed command string run via shell on purpose
@@ -141,6 +150,10 @@ the arrow cursor, and the real value change are recorded. Prefer
 small `crop` only when the key UI is too small. Storyboard lint must stay on
 for channel targets; `storyboardLint:false` is only for legacy, non-publishing
 smoke clips and must produce `needs-fix` for a target.
+For a desktop product that does not reflow at 720×1280, use the Shorts
+`targetOptions` override for a narrower story and capture-only fixture layout.
+Do not squeeze the complete desktop page into 9:16. Runtime caption QA must pass
+actual bounds, overflow, line-count, stroke, presence, and timing checks.
 Prefer one story with `targets:['cws-youtube','x','youtube-shorts']`; shotkit
 replays the action script with target-specific framing. Read
 `handoff.automation`, apply agent-owned fixes, and rerun only

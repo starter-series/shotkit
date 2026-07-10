@@ -65,6 +65,19 @@ function analyzeDemoStoryboard(demoConfig, { viewport, mp4Requested } = {}) {
       'fix demo.captionOptions before capture',
     ));
   }
+  const bottomOffset = demoConfig.captionOptions && demoConfig.captionOptions.bottomOffset;
+  if (viewport && Number.isFinite(bottomOffset)) {
+    const estimatedCaptionHeight = demoConfig.captionOptions.mode === 'focus' ? 96 : 64;
+    const maximumOffset = Math.max(0, viewport.height - estimatedCaptionHeight);
+    if (bottomOffset > maximumOffset) {
+      warnings.push(storyboardWarning(
+        'caption-outside-viewport',
+        `caption bottomOffset ${bottomOffset}px leaves no room in a ${viewport.height}px viewport`,
+        `set captionOptions.bottomOffset to ${maximumOffset}px or less`,
+        { bottomOffset, maximumOffset, viewportHeight: viewport.height },
+      ));
+    }
+  }
   for (const caption of captions) {
     if (caption.text.length > 70) {
       warnings.push(storyboardWarning(

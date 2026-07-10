@@ -26,7 +26,8 @@
             "required": ["mode", "position"],
             "properties": {
               "mode": { "enum": ["static", "focus"] },
-              "position": { "type": "string" },
+              "appearance": { "enum": ["panel", "outline"] },
+              "position": { "enum": ["bottom-left", "bottom"] },
               "bottomOffset": { "type": "integer", "minimum": 0 },
               "wordsPerChunk": { "type": "integer", "minimum": 1, "maximum": 6 },
               "wordMs": { "type": "integer", "minimum": 120, "maximum": 2000 },

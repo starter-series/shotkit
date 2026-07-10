@@ -25,6 +25,10 @@ module.exports = [
     languageOptions: { sourceType: 'module' },
   },
   {
+    files: ['calibrator/**/*.js'],
+    languageOptions: { sourceType: 'module' },
+  },
+  {
     ignores: ['node_modules/', 'coverage/'],
   },
 ];

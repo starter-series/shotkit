@@ -1,9 +1,11 @@
 const EventEmitter = require('events');
+const { demoSelectInitScript } = require('../src/demo-select');
 const {
   DEFAULT_CLICK_HOLD_MS,
   DEFAULT_STEP_HOLD_MS,
   analyzeDemoStoryboard,
   createDemoController,
+  demoCaptionInitScript,
   installDemoCaptionOverlay,
   lintDemoStoryboard,
   normalizeDelayMs,
@@ -182,6 +184,7 @@ describe('normalizeDemoConfigs', () => {
     expect(shorts.captionOptions).toEqual({
       position: 'bottom-left',
       mode: 'focus',
+      appearance: 'outline',
       wordsPerChunk: 3,
       wordMs: 360,
       activeColor: '#facc15',
@@ -272,6 +275,25 @@ describe('lintDemoStoryboard', () => {
         fix: 'fix demo.captionOptions before capture',
       }),
     ]));
+  });
+
+  test('rejects caption placement outside the rendered viewport', () => {
+    expect(analyzeDemoStoryboard({
+      name: 'demo',
+      mp4: true,
+      trim: { duration: 25 },
+      captionOptions: { mode: 'focus', bottomOffset: 2000 },
+      captions: [
+        { at: 0.5, text: 'Show the result' },
+        { at: 8, text: 'Restore the original' },
+      ],
+    }, { viewport: { width: 720, height: 1280 }, mp4Requested: true }))
+      .toEqual(expect.arrayContaining([
+        expect.objectContaining({
+          code: 'caption-outside-viewport',
+          details: { bottomOffset: 2000, maximumOffset: 1184, viewportHeight: 1280 },
+        }),
+      ]));
   });
 
   test('warns about weak story shape and odd video dimensions', () => {
@@ -382,6 +404,7 @@ describe('createDemoController', () => {
     await expect(demo.click('.primary', { holdMs: -1 })).rejects.toThrow(/click holdMs/);
     await expect(demo.select('#language', '')).rejects.toThrow(/non-empty option value/);
     await expect(demo.select('#language', 'ko', { maxOptions: 10 })).rejects.toThrow(/between 2 and 9/);
+    await expect(demo.caption('Bad position', { position: 'middle' })).rejects.toThrow(/position/);
     demo.stop();
   });
 
@@ -461,5 +484,14 @@ describe('installDemoCaptionOverlay', () => {
     expect(context.addInitScript).toHaveBeenCalledTimes(2);
     expect(context.addInitScript).toHaveBeenNthCalledWith(1, expect.any(Function), { position: 'bottom-left' });
     expect(context.addInitScript).toHaveBeenNthCalledWith(2, expect.any(Function));
+  });
+
+  test('keeps outline rendering and authored text isolated from host localization', () => {
+    const source = String(demoCaptionInitScript);
+    expect(source).toContain('[data-appearance="outline"] {');
+    expect(source).toContain('[data-appearance="outline"][data-condensed="true"]');
+    expect(source).toContain("root.setAttribute('translate', 'no')");
+    expect(source).toContain("document.createElement('b')");
+    expect(String(demoSelectInitScript)).toContain("root.setAttribute('translate', 'no')");
   });
 });

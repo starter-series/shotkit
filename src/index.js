@@ -31,6 +31,13 @@ const {
 } = require('./describe');
 const { PRESETS, resolveSize } = require('./presets');
 const { CHANNEL_PROFILES, resolveChannelProfile } = require('./channels');
+const {
+  applyCalibrationProfiles,
+  calibrationProfileHash,
+  loadCalibration,
+  updateCalibrationProfile,
+} = require('./calibration');
+const { startCalibrator } = require('./calibrator-server');
 const { buildPublishPlan } = require('./publish');
 const { findFfmpeg, buildFfmpegArgs, buildThumbnailArgs, buildVideoFilter, postProcessDemo } = require('./video');
 const { DEFAULT_TARGETS, buildHandoffRecommendations } = require('./integrations');
@@ -92,6 +99,11 @@ module.exports = {
   resolveSize,
   CHANNEL_PROFILES,
   resolveChannelProfile,
+  applyCalibrationProfiles,
+  calibrationProfileHash,
+  loadCalibration,
+  updateCalibrationProfile,
+  startCalibrator,
   // demo video post-processing
   findFfmpeg,
   buildFfmpegArgs,

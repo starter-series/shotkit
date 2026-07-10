@@ -7,6 +7,12 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 ## [Unreleased]
 
 ### Added
+- A local exception-only composition Calibrator (`shotkit --calibrate`) backed
+  by tracked `shotkit.calibration.json`: declared layout presets, bounded
+  framing, caption lane/appearance controls, up to three protected regions,
+  actual capture media, and save-then-recapture verification.
+- Protected-region collision QA and profile hashes. Changed calibration stays
+  `needs-fix` until the exact profile produces a real `publish-ready` capture.
 - Autonomous channel profiles for `cws-youtube`, `x`, and `youtube-shorts`.
   One demo story can declare `targets[]`; shotkit expands target variants and
   applies viewport, H.264, duration-cap, caption, and thumbnail defaults.
@@ -22,6 +28,10 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
   static. Resolved caption style is included in storyboard and captions handoff
   documents, along with a trim-relative rendered frame timeline. Dense beats
   preserve their full text and produce an agent-fixable storyboard warning.
+- Shorts focus captions default to the transparent `outline` appearance, with
+  `panel|outline` preserved in both handoff schemas. Runtime caption QA measures
+  actual bounds, overflow, line count, stroke, frame presence, and timing drift
+  and routes failures into the existing agent retry plan.
 - Exception-only `handoff.automation`: `publish-ready`, `needs-fix`, and
   exhausted `blocked` states, agent-owned fix/rerun actions, `--target`, and
   bounded `--attempt` retries.
@@ -43,6 +53,12 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
   editors. Manual adapter hints require `automation.manualFallback:true`.
 
 ### Fixed
+- Caption and native-select overlays are isolated from host-page translation,
+  so localization products cannot rewrite authored campaign text. Outline also
+  applies to direct helper/static captions, and condensed outline sizing now
+  works on wide viewports.
+- Unsupported caption positions and bottom offsets that leave no viewport room
+  can no longer pass storyboard lint and claim `publish-ready`.
 - `step(text, fn, options)` now honors flat caption display options (e.g.
   `{ position }`, by analogy with `caption()`) instead of silently dropping
   anything outside `options.captionOptions`.

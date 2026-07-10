@@ -2,7 +2,7 @@
 /*
  * shotkit CLI — thin wrapper over capture().
  *
- *   shotkit [path] [--config <path>] [--scene <name>]... [--json]
+ *   shotkit [path] [--config <path>] [--scene <name>]... [--json|--calibrate]
  *           [--no-video] [--no-build] [--live-gt] [--freeze]
  *
  * `path` (optional positional) is the repo to run against (default: cwd) —

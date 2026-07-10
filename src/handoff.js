@@ -176,6 +176,11 @@ function demoStoryboard(demoConfig, viewport) {
       crop: demoConfig.crop || null,
       zoom: demoConfig.zoom || null,
     },
+    calibration: demoConfig.calibrationProfile ? {
+      profileHash: demoConfig.calibrationProfile.profileHash,
+      layoutPreset: demoConfig.calibrationProfile.layoutPreset,
+      protectedRegions: demoConfig.calibrationProfile.protectedRegions || [],
+    } : null,
     captionStyle: captionStyle(demoConfig.captionOptions || {}),
     thumbnail: storyboardThumbnail(demoConfig.thumbnail),
     recommendedStory: {

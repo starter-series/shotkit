@@ -38,15 +38,25 @@ rendered from the shipped code. By default, it also writes a handoff pack:
 
    Shotkit expands target-specific names, viewport, H.264 MP4, 30-second cap,
    poster frame, and caption treatment. The `youtube-shorts` profile uses
-   three-word focus chunks with an animated current-word highlight and a
+   three-word outline focus chunks with an animated current-word highlight and a
    visual-guide-safe left/bottom placement. Use `targetOptions.<id>` only when the shared
    story genuinely needs target-specific framing or caption tuning.
+   If a desktop UI does not reflow at 720×1280, give Shorts a focused `run`
+   override and fixture layout that removes secondary panels and enlarges the
+   action/result. Never squeeze the complete desktop story into the vertical frame.
 4. **Run attempt 1** (from the repo, or pass its path):
 
    ```bash
    shotkit --json --attempt 1
    shotkit <path> --json --attempt 1
    ```
+
+   If repeated composition fixes remain unresolved and the repo declares
+   `config.calibration`, start `shotkit --calibrate`. Keep adjustments inside
+   its authored presets, bounded framing/caption controls, and three protected
+   regions. Save the profile, trigger the real recapture, and continue only
+   from its resulting `publish-ready` or structured `needs-fix` state. Do not
+   turn this into a user media-review step.
 
    Before npm publication, run the source checkout with
    `node bin/shotkit.js --json --attempt 1`, or use a project wrapper such as
@@ -102,13 +112,16 @@ rendered from the shipped code. By default, it also writes a handoff pack:
   use `demo.select()` for a native `<select>` because its OS popup is not part
   of the Playwright page screencast.
 - For short-form focus captions, prefer authored timed captions and
-  `captionOptions: { mode: 'focus', wordsPerChunk: 3, wordMs: 360 }`. Shotkit
+  `captionOptions: { mode: 'focus', appearance: 'outline', wordsPerChunk: 3, wordMs: 360 }`. Shotkit
   animates those words deterministically even when the product demo is silent;
   do not add speech transcription solely to create caption motion. Shorts
   enables this mode by default, while CWS and X stay static unless overridden.
   The resolved style is recorded in both caption and storyboard handoff docs;
   `captions.json` also carries the trim-relative rendered `timeline[]`. Treat a
   `dense-focus-caption` lint as an agent-owned timing fix, never drop words.
+- Runtime caption QA measures the actual DOM frames for bounds, overflow, line
+  count, outline stroke, missing frames, and timing drift. Treat every resulting
+  storyboard warning as an agent-owned config fix and rerun the target.
 - `storyboard.json` carries structured lint (`code`, `severity`, `message`,
   `fix`) for agents. Treat those warnings as the edit list for the next
   `shotkit.config.js` pass.

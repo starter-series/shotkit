@@ -61,12 +61,27 @@ shotkit                         # outDir에 전부 산출
 shotkit --scene 01-feature      # 특정 scene/타일/데모/demos 항목 또는 "description"만
 shotkit --target x              # 설정된 X variant만 제작/재시도
 shotkit --attempt 2 --json      # 두 번째 자동 수정 시도
+shotkit --calibrate             # 로컬 구도 Calibrator 열기
 shotkit --no-video              # 스크린캐스트 생략
 shotkit --no-build              # 이미 빌드된 번들 사용
 shotkit ../my-extension --json  # 다른 체크아웃 대상 실행; 결과 JSON을 stdout에
 ```
 
 산출물은 `outDir`(기본 `store-assets/`): `<scene>.png`, `<promoTile>.png`, `<demo>.webm`, 선택적 `<demo>.mp4`, 선택적 `<demo>-thumbnail.png`, `description.md`, 그리고 기본값으로 `storyboard.json`, `captions.json`, `shotkit-manifest.json`, `schemas/*.schema.json`입니다(`handoff: false`면 handoff pack을 끕니다).
+
+### 구도 Calibrator
+
+자동 재시도로 세로 구도가 해결되지 않는 repo는 `config.calibration`에 추적할
+`shotkit.calibration.json` 경로와 허용할 layout preset 목록을 선언할 수
+있습니다. `shotkit --calibrate`는 실제 캡처 MP4를 사용하는 로컬 대시보드를
+열며, 조정 범위를 layout preset, 1.00~1.20 framing, caption 위치/표현, 최대
+3개의 protected region으로 제한합니다. 저장은 CommonJS config를 고치지 않고
+JSON만 기록합니다. 현재 profile로 실제 story를 재촬영해 `publish-ready`가
+나오고 profile hash까지 일치할 때만 Verified가 됩니다.
+
+이는 상시 수동 검수나 범용 timeline/layer editor가 아니라 예외 구도용
+calibration surface입니다. 에이전트도 같은 JSON과 제어면을 사용하므로 사용자가
+매번 영상을 검토할 필요는 없습니다.
 
 ### Handoff Pack
 

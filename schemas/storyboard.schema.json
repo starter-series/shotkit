@@ -58,6 +58,19 @@
         "recommendedNextTool": { "type": "string" },
         "trim": { "type": ["object", "null"], "additionalProperties": true },
         "framing": { "type": "object", "additionalProperties": true },
+        "calibration": {
+          "type": ["object", "null"],
+          "required": ["profileHash", "protectedRegions"],
+          "properties": {
+            "profileHash": { "type": "string", "minLength": 1 },
+            "layoutPreset": { "type": "string" },
+            "protectedRegions": {
+              "type": "array",
+              "maxItems": 3,
+              "items": { "$ref": "#/$defs/protectedRegion" }
+            }
+          }
+        },
         "captionStyle": { "$ref": "#/$defs/captionStyle" },
         "thumbnail": { "type": ["object", "boolean", "null"], "additionalProperties": true },
         "recommendedStory": { "type": "object", "additionalProperties": true },
@@ -81,11 +94,24 @@
       "required": ["mode", "position"],
       "properties": {
         "mode": { "enum": ["static", "focus"] },
-        "position": { "type": "string" },
+        "appearance": { "enum": ["panel", "outline"] },
+        "position": { "enum": ["bottom-left", "bottom"] },
         "bottomOffset": { "type": "integer", "minimum": 0 },
         "wordsPerChunk": { "type": "integer", "minimum": 1, "maximum": 6 },
         "wordMs": { "type": "integer", "minimum": 120, "maximum": 2000 },
         "activeColor": { "type": "string" }
+      }
+    },
+    "protectedRegion": {
+      "type": "object",
+      "required": ["id", "x", "y", "width", "height"],
+      "properties": {
+        "id": { "type": "string" },
+        "label": { "type": "string" },
+        "x": { "type": "number", "minimum": 0 },
+        "y": { "type": "number", "minimum": 0 },
+        "width": { "type": "number", "exclusiveMinimum": 0 },
+        "height": { "type": "number", "exclusiveMinimum": 0 }
       }
     },
     "beat": {

@@ -12,7 +12,7 @@ const DEFAULT_CLICK_BEFORE_MS = 120;
 const DEFAULT_STEP_HOLD_MS = 800;
 
 const { normalizeDelayMs, normalizeDemoCaptions, parseTimeToMs } = require('./demo-time');
-const { buildCaptionFrames } = require('./demo-caption-focus');
+const { buildCaptionFrames, captionStyle } = require('./demo-caption-focus');
 const { analyzeDemoStoryboard, formatStoryboardLint, lintDemoStoryboard } = require('./demo-storyboard');
 const { expandDemoTargets } = require('./channels');
 const { hideDemoSelect, installDemoSelectOverlay, performDemoSelect } = require('./demo-select');
@@ -102,6 +102,36 @@ function demoCaptionInitScript(options = {}) {
         font-size: 26px;
         line-height: 1.18;
       }
+      #${rootId}[data-appearance="outline"] {
+        min-height: 0;
+        padding: 5px 0 7px;
+        border: 0;
+        background: transparent;
+        color: #fff;
+        box-shadow: none;
+        -webkit-text-stroke: 2px rgba(7,10,15,.92);
+        paint-order: stroke fill;
+        text-shadow: 0 2px 0 rgba(0,0,0,.58), 0 6px 12px rgba(0,0,0,.26);
+      }
+      #${rootId}[data-mode="focus"][data-appearance="outline"] {
+        font-size: 40px;
+        font-weight: 900;
+        line-height: 1.08;
+      }
+      #${rootId}[data-mode="focus"][data-appearance="outline"][data-condensed="true"] {
+        font-size: 32px;
+      }
+      #${rootId}[data-appearance="outline"] .shotkit-caption-word {
+        color: #fff;
+        -webkit-text-stroke: 2px rgba(7,10,15,.92);
+        paint-order: stroke fill;
+        text-shadow: inherit;
+      }
+      #${rootId}[data-appearance="outline"] .shotkit-caption-word[data-active="true"] {
+        color: var(--shotkit-caption-active-color, #facc15);
+        text-shadow: 0 2px 0 rgba(0,0,0,.62), 0 6px 13px rgba(0,0,0,.3);
+        animation-duration: 230ms;
+      }
       #${rootId} .shotkit-caption-word {
         display: inline-block;
         color: rgba(255,255,255,.72);
@@ -150,6 +180,12 @@ function demoCaptionInitScript(options = {}) {
         }
         #${rootId}[data-mode="focus"][data-condensed="true"] {
           font-size: 25px;
+        }
+        #${rootId}[data-mode="focus"][data-appearance="outline"] {
+          font-size: 42px;
+        }
+        #${rootId}[data-mode="focus"][data-appearance="outline"][data-condensed="true"] {
+          font-size: 32px;
         }
       }
       #${pointerId} {
@@ -222,6 +258,8 @@ function demoCaptionInitScript(options = {}) {
     if (!root) {
       root = document.createElement('div');
       root.id = rootId;
+      root.className = 'notranslate';
+      root.setAttribute('translate', 'no');
       root.setAttribute('role', 'status');
       root.setAttribute('aria-live', 'polite');
       root.dataset.position = baseOptions.position;
@@ -244,10 +282,11 @@ function demoCaptionInitScript(options = {}) {
 
   function show(text, nextOptions = {}) {
     const root = ensureRoot();
-    if (!root) return;
+    if (!root) return null;
     const position = nextOptions.position || baseOptions.position;
     root.dataset.position = position;
     root.dataset.mode = nextOptions.mode === 'focus' ? 'focus' : 'static';
+    root.dataset.appearance = nextOptions.appearance === 'outline' ? 'outline' : 'panel';
     root.dataset.condensed = nextOptions.condensed || (
       root.dataset.mode === 'focus' && String(text).length > 42
     ) ? 'true' : 'false';
@@ -260,11 +299,13 @@ function demoCaptionInitScript(options = {}) {
     root.textContent = '';
     if (root.dataset.mode === 'focus' && Array.isArray(nextOptions.focusWords)) {
       nextOptions.focusWords.forEach((word, index) => {
-        const span = document.createElement('span');
-        span.className = 'shotkit-caption-word';
-        span.dataset.active = index === nextOptions.activeWordIndex ? 'true' : 'false';
-        span.textContent = String(word);
-        root.appendChild(span);
+        // Use an element most page translators do not scan. The root's
+        // translate=no marker covers standards-aware localization tools too.
+        const wordElement = document.createElement('b');
+        wordElement.className = 'shotkit-caption-word';
+        wordElement.dataset.active = index === nextOptions.activeWordIndex ? 'true' : 'false';
+        wordElement.textContent = String(word);
+        root.appendChild(wordElement);
       });
       root.setAttribute('aria-label', String(nextOptions.fullText || text));
       root.setAttribute('aria-live', 'off');
@@ -274,6 +315,48 @@ function demoCaptionInitScript(options = {}) {
       root.setAttribute('aria-live', 'polite');
     }
     root.dataset.visible = text ? 'true' : 'false';
+
+    const rect = root.getBoundingClientRect();
+    const rootStyle = window.getComputedStyle(root);
+    const firstWord = root.querySelector('.shotkit-caption-word');
+    const textStyle = firstWord ? window.getComputedStyle(firstWord) : rootStyle;
+    const wordElements = Array.from(root.querySelectorAll('.shotkit-caption-word'));
+    let lineCount;
+    if (wordElements.length) {
+      // offsetTop ignores the active-word scale animation, so a pop cannot be
+      // mistaken for a second line.
+      lineCount = new Set(wordElements.map((wordElement) => wordElement.offsetTop)).size;
+    } else {
+      const range = document.createRange();
+      range.selectNodeContents(root);
+      lineCount = new Set(
+        Array.from(range.getClientRects())
+          .filter((lineRect) => lineRect.width > 0 && lineRect.height > 0)
+          .map((lineRect) => Math.round(lineRect.top)),
+      ).size;
+    }
+    const stroke = textStyle.webkitTextStrokeWidth
+      || textStyle.getPropertyValue('-webkit-text-stroke-width')
+      || '0';
+    return {
+      text: String(text),
+      sourceText: String(nextOptions.fullText || text),
+      mode: root.dataset.mode,
+      appearance: root.dataset.appearance,
+      rect: {
+        left: rect.left,
+        top: rect.top,
+        right: rect.right,
+        bottom: rect.bottom,
+        width: rect.width,
+        height: rect.height,
+      },
+      viewport: { width: window.innerWidth, height: window.innerHeight },
+      overflowX: root.scrollWidth > root.clientWidth + 1,
+      overflowY: root.scrollHeight > root.clientHeight + 1,
+      lineCount,
+      strokeWidth: Number.parseFloat(stroke) || 0,
+    };
   }
 
   function hide() {
@@ -324,9 +407,9 @@ async function ensureDemoCaptionOverlay(page, options = {}) {
 
 async function setDemoCaption(page, text, options = {}) {
   await ensureDemoCaptionOverlay(page, options);
-  await page.evaluate(
+  return page.evaluate(
     ({ captionText, captionOptions }) => {
-      window.__shotkitDemoCaption.show(captionText, captionOptions);
+      return window.__shotkitDemoCaption.show(captionText, captionOptions);
     },
     {
       captionText: String(text),
@@ -400,17 +483,31 @@ function createDemoController({ page, captions = [], captionOptions = {} }) {
   const schedule = normalizeDemoCaptions(captions);
   const captionFrames = buildCaptionFrames(schedule, captionOptions);
   const timers = [];
+  const captionSamples = [];
+  const startedAt = Date.now();
   let activeText = '';
   let activeOptions = {};
+  let activeExpectedAtMs = null;
   let stopped = false;
 
-  async function render(text, options = {}) {
+  async function render(text, options = {}, expectedAtMs = null) {
     if (stopped) return;
     activeText = String(text || '');
     activeOptions = options || {};
+    activeExpectedAtMs = expectedAtMs;
+    const nextOptions = { ...captionOptions, ...activeOptions };
+    captionStyle(nextOptions);
     try {
-      const nextOptions = { ...captionOptions, ...activeOptions };
-      if (activeText) await setDemoCaption(page, activeText, nextOptions);
+      if (activeText) {
+        const sample = await setDemoCaption(page, activeText, nextOptions);
+        if (sample) {
+          captionSamples.push({
+            ...sample,
+            expectedAtMs,
+            actualAtMs: Date.now() - startedAt,
+          });
+        }
+      }
       else await hideDemoCaption(page);
     } catch (_e) {
       // Navigations can briefly destroy the execution context. The next helper
@@ -420,12 +517,12 @@ function createDemoController({ page, captions = [], captionOptions = {} }) {
 
   const replay = () => {
     if (!activeText || stopped) return;
-    setTimeout(() => render(activeText, activeOptions), 0);
+    setTimeout(() => render(activeText, activeOptions, activeExpectedAtMs), 0);
   };
   page.on('domcontentloaded', replay);
 
   for (const frame of captionFrames) {
-    timers.push(setTimeout(() => render(frame.text, frame.options), frame.atMs));
+    timers.push(setTimeout(() => render(frame.text, frame.options, frame.atMs), frame.atMs));
   }
 
   return {
@@ -490,6 +587,13 @@ function createDemoController({ page, captions = [], captionOptions = {} }) {
 
     hidePointer() {
       return hideDemoPointer(page);
+    },
+
+    captionMetrics() {
+      return {
+        expectedFrames: captionFrames.map((frame) => ({ atMs: frame.atMs, text: frame.text })),
+        samples: captionSamples.map((sample) => ({ ...sample, rect: { ...sample.rect } })),
+      };
     },
 
     stop() {

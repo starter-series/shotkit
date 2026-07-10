@@ -70,12 +70,46 @@ shotkit                         # produce everything into outDir
 shotkit --scene 01-feature      # just one scene/promoTile/demo/demos entry, "description", or "privacy"
 shotkit --target x              # render/retry only the configured X variants
 shotkit --attempt 2 --json      # next autonomous fix attempt
+shotkit --calibrate             # open the local composition calibrator
 shotkit --no-video              # skip the screencast (faster/CI)
 shotkit --no-build              # use an already-built bundle
 shotkit ../my-extension --json  # run against another checkout; JSON result on stdout
 ```
 
 Outputs land in `outDir` (default `store-assets/`): `<scene>.png`, `<promoTile>.png`, `<demo>.webm`, optional `<demo>.mp4`, optional `<demo>-thumbnail.png`, `description.md`, optional `privacy-disclosure.md`, and, by default, `storyboard.json`, `captions.json`, `shotkit-manifest.json`, plus the three schemas under `schemas/` (`handoff: false` disables the handoff pack).
+
+### Composition Calibrator
+
+When automated retries cannot settle a vertical composition, a repo can expose
+a small set of authored layout presets and a tracked calibration document:
+
+```js
+module.exports = {
+  calibration: {
+    from: 'shotkit.calibration.json',
+    layouts: ['focus-column', 'compact-column'],
+  },
+  demos: [{
+    name: 'launch-story',
+    targets: ['youtube-shorts'],
+    async run({ page, calibration }) {
+      // Apply calibration.layoutPreset to capture-only product layout CSS.
+    },
+  }],
+};
+```
+
+Run `shotkit --calibrate` to open the local-only dashboard. It previews the
+actual captured MP4 and intentionally limits adjustment to the declared layout
+preset, 1.00-1.20 framing, caption lane/appearance, and at most three protected
+UI regions. Save writes `shotkit.calibration.json`; it never rewrites the
+CommonJS config. Recapture replays the real story and current profile, and only
+a matching `publish-ready` result marks that profile verified. Changed or stale
+profiles remain `needs-fix`.
+
+This is an exception-only calibration surface, not a layer canvas, timeline,
+keyframe editor, or replacement for autonomous QA. Agents can operate the same
+controls and consume the resulting JSON without asking a user to review media.
 
 ### Handoff Pack
 
@@ -129,10 +163,17 @@ The story expands to `skillbridge-cws-youtube`, `skillbridge-x`, and
 `skillbridge-youtube-shorts`. Landscape targets use 1280×720; Shorts uses
 720×1280. All target variants receive H.264/yuv420p, a 30-second cap, a poster
 frame, and automated final-file checks. The Shorts profile also turns timed
-captions into three-word focus chunks, highlights the current word, and keeps
-the overlay inside YouTube's visual-guide safe region. CWS and X retain the quieter
-static caption style. `targetOptions.<id>` is available for a channel-specific
-framing or caption override.
+captions into three-word outline focus chunks, highlights the current word, and
+keeps the overlay inside YouTube's visual-guide safe region. CWS and X retain
+the quieter static panel style. `targetOptions.<id>` is available for a
+channel-specific story, framing, caption, or short video disclaimer override.
+
+A responsive product can replay one `run` function for every target. A desktop
+surface that does not reflow cleanly at 720×1280 needs a focused Shorts override:
+remove secondary panels, enlarge the one action/result pair, and use a
+target-specific `run` (plus capture-only fixture CSS when needed). Do not scale
+the full desktop story into a vertical canvas or treat a center crop as mobile
+composition.
 
 The default policy is exception-only: `needs-fix` actions belong to the agent,
 which edits the config and reruns `automation.retryScenes[]` with an incremented
@@ -197,6 +238,7 @@ targetOptions: {
     captionOptions: {
       position: 'bottom-left',
       mode: 'focus',
+      appearance: 'outline',
       wordsPerChunk: 3,
       wordMs: 360,
       activeColor: '#facc15',
@@ -206,7 +248,9 @@ targetOptions: {
 }
 ```
 
-Set `mode: 'static'` to disable the treatment for a target. The resolved style
+`position` is intentionally limited to `bottom-left` and `bottom`. Set
+`mode: 'static'` to disable focus sequencing; `appearance` independently
+selects the `panel` or `outline` surface. The resolved style
 is also written to `storyboard.json` and `captions.json`; the latter includes a
 trim-relative `timeline[]` with rendered chunks, active-word indexes, and frame
 boundaries for downstream agents. When authored beats are too close for the
@@ -231,7 +275,9 @@ await demo.select('#language', 'ko', {
 });
 ```
 
-Use either timed captions, the helper API, or both:
+Legacy/custom clips can use timed captions, the helper API, or both. Autonomous
+channel targets must include timed `captions[]`: that authored schedule is the
+handoff and retry contract, while helper calls remain immediate runtime callouts.
 
 ```js
 demo: {
@@ -264,7 +310,9 @@ demo: {
 
 Focus sequencing applies to timed `captions[]`. Direct `demo.caption()` and
 `demo.step()` calls remain immediate full-phrase callouts so their existing
-control-flow timing does not change.
+control-flow timing does not change. Shotkit marks its caption and select
+overlays as non-translatable so a product localization feature cannot rewrite
+authored campaign copy.
 
 Framing options are intentionally small:
 
@@ -281,8 +329,12 @@ Storyboard lint runs by default and logs warnings instead of failing the run.
 The same warnings are written to `storyboard.json` with `code`, `severity`,
 `message`, and `fix`, so an agent can revise `shotkit.config.js` on the next
 pass. Current checks cover missing mp4, first caption after 3 seconds, odd video
-dimensions, long captions, missing safety/restore beat, crop/zoom edge risk, and
-clips outside the 20-40 second target.
+dimensions, long captions, missing safety/restore beat, unsupported/offscreen
+caption placement, crop/zoom edge risk, and clips outside the 20-40 second
+target. During the real recording, Shotkit also measures every scheduled
+caption frame's bounding box, overflow, line count, computed outline stroke,
+presence, and timing drift. A mismatch becomes structured lint and prevents
+`publish-ready`.
 Autonomous channel targets require lint to remain enabled; setting
 `storyboardLint:false` makes their automation status `needs-fix`.
 

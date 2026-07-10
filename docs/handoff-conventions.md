@@ -71,21 +71,30 @@ One demo story can declare `targets: ['cws-youtube', 'x', 'youtube-shorts']`.
 Each expanded target records its profile in `storyboard.json` and receives
 mechanical defaults for viewport, H.264/yuv420p, duration cap, caption position,
 and thumbnail. `youtube-shorts` resolves timed story captions to the built-in
-`focus` style: compact word chunks, current-word emphasis, and a bottom safe
-offset. The style is deterministic for silent demos and requires no transcript
+`focus` + `outline` style: compact word chunks, current-word emphasis, and a
+bottom safe offset. The style is deterministic for silent demos and requires no transcript
 engine. CWS and X use `static` unless the config overrides `captionOptions`.
 
 `storyboard.demos[].captionStyle` and `captions.demos[].style` preserve the
-resolved `mode`, `position`, timing, chunk size, active color, and safe offset
+resolved `mode`, `appearance`, `position`, timing, chunk size, active color, and safe offset
 for downstream agents. `captions.demos[].timeline[]` is the reproducible
 trim-relative render plan: each frame includes its start/end, rendered chunk,
 source phrase, words, and active-word index.
+
+When `config.calibration` is declared, `storyboard.demos[].calibration` records
+the applied profile hash, layout preset, and protected regions. The tracked
+calibration JSON remains the editable source; the storyboard is run evidence.
+Protected-region collisions become structured warnings, and a dashboard profile
+is considered verified only when its current hash has produced a real
+`publish-ready` recapture.
 
 `handoff.automation.targets[]` validates:
 
 - final MP4 presence and unchanged integrity;
 - ffprobe codec, pixel format, actual dimensions, and actual duration;
 - poster-frame presence and nonblank PNG pixel statistics;
+- measured caption presence, viewport bounds, overflow, line count, outline
+  stroke, and schedule drift from the real recorded page;
 - storyboard lint being enabled for every publish target;
 - structured storyboard warnings, including early result and restore beats;
 - configured targets that were skipped or produced no output.

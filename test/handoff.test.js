@@ -57,7 +57,7 @@ describe('handoff contract', () => {
       audience: 'sns',
       recommendedNextTool: 'screen-studio',
       viewport: { width: 1280, height: 720 },
-      captionStyle: { mode: 'static', position: 'bottom-left' },
+      captionStyle: { mode: 'static', appearance: 'panel', position: 'bottom-left' },
       beats: [
         { at: 0.5, atMs: 500, text: 'Translate in place' },
         { at: 8, atMs: 8000, text: 'Restore original text' },
@@ -120,7 +120,11 @@ describe('handoff contract', () => {
     expect(docs.manifest.handoff.adapterHints.map((item) => item.id)).toContain('screen-studio');
     expect(docs.storyboard.kind).toBe(HANDOFF_KINDS.storyboard);
     expect(docs.captions.kind).toBe(HANDOFF_KINDS.captions);
-    expect(docs.captions.demos[0].style).toEqual({ mode: 'static', position: 'bottom-left' });
+    expect(docs.captions.demos[0].style).toEqual({
+      mode: 'static',
+      appearance: 'panel',
+      position: 'bottom-left',
+    });
     expect(docs.captions.demos[0].timeline).toEqual([{
       at: 1,
       atMs: 1000,

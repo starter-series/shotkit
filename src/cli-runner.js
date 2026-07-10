@@ -3,6 +3,7 @@ const path = require('path');
 
 const { parseArgs, resolveConfigPath, USAGE } = require('./cli');
 const { capture: defaultCapture } = require('./capture');
+const { startCalibrator: defaultStartCalibrator } = require('./calibrator-server');
 
 function writeJson(stream, payload) {
   stream.write(`${JSON.stringify(payload)}\n`);
@@ -17,6 +18,7 @@ async function runCli(argv, io = {}, deps = {}) {
   const stderr = io.stderr || process.stderr;
   const processCwd = io.processCwd || (() => process.cwd());
   const capture = deps.capture || defaultCapture;
+  const startCalibrator = deps.startCalibrator || defaultStartCalibrator;
   const loadConfig = deps.loadConfig || ((configPath) => require(configPath));
 
   const opts = parseArgs(argv);
@@ -42,6 +44,18 @@ async function runCli(argv, io = {}, deps = {}) {
 
   try {
     const config = loadConfig(configPath);
+    if (opts.calibrate) {
+      const calibrator = await startCalibrator({
+        cwd,
+        config,
+        configPath,
+        port: opts.port == null ? 0 : opts.port,
+        open: opts.open,
+      });
+      if (opts.json) writeJson(stdout, { ok: true, status: 'calibrating', url: calibrator.url });
+      else stdout.write(`[shotkit] calibrator: ${calibrator.url}\n`);
+      return 0;
+    }
     const log = opts.json ? (m) => stderr.write(`[shotkit] ${m}\n`) : undefined;
     const { produced, outDir, manifest = null, status = 'not-requested' } = await capture(config, { ...opts, cwd, log });
     if (opts.json) writeJson(stdout, { ok: true, status, outDir, manifest, produced });

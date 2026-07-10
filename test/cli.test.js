@@ -8,7 +8,10 @@ const BIN = path.resolve(__dirname, '..', 'bin', 'shotkit.js');
 
 describe('parseArgs', () => {
   test('defaults', () => {
-    expect(parseArgs([])).toMatchObject({ scenes: [], targets: [], errors: [], json: false, noVideo: false, help: false, path: null });
+    expect(parseArgs([])).toMatchObject({
+      scenes: [], targets: [], errors: [], json: false, noVideo: false,
+      calibrate: false, port: null, open: true, help: false, path: null,
+    });
   });
 
   test('positional path + flags', () => {
@@ -35,6 +38,15 @@ describe('parseArgs', () => {
     expect(parseArgs(['--attempt', '0']).errors).toEqual(['--attempt requires a positive integer']);
   });
 
+  test('--calibrate accepts local server controls', () => {
+    expect(parseArgs(['--calibrate', '--port', '4312', '--no-open'])).toMatchObject({
+      calibrate: true,
+      port: 4312,
+      open: false,
+    });
+    expect(parseArgs(['--port=65536']).errors).toEqual(['--port requires an integer between 0 and 65535']);
+  });
+
   test('usage errors are explicit for missing values and unknown options', () => {
     expect(parseArgs(['--scene']).errors).toEqual(['--scene requires a scene name']);
     expect(parseArgs(['--scene=']).errors).toEqual(['--scene requires a scene name']);
@@ -43,6 +55,7 @@ describe('parseArgs', () => {
     expect(parseArgs(['--target']).errors).toEqual(['--target requires a channel target']);
     expect(parseArgs(['--target=']).errors).toEqual(['--target requires a channel target']);
     expect(parseArgs(['--attempt=oops']).errors).toEqual(['--attempt requires a positive integer']);
+    expect(parseArgs(['--port=oops']).errors).toEqual(['--port requires an integer between 0 and 65535']);
     expect(parseArgs(['--wat']).errors).toEqual(['unknown option: --wat']);
   });
 
@@ -64,6 +77,7 @@ describe('parseArgs', () => {
 
   test('USAGE documents the agent contract', () => {
     expect(USAGE).toContain('--json');
+    expect(USAGE).toContain('--calibrate');
     expect(USAGE).toContain('Exit codes');
   });
 });

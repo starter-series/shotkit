@@ -6,6 +6,7 @@ describe('npm package boundary', () => {
     expect(pkg.files).toEqual([
       'src',
       'bin',
+      'calibrator',
       'skills/capture',
       'docs/handoff-conventions.md',
       'schemas',
@@ -39,6 +40,7 @@ describe('npm package boundary', () => {
       'LOCALHOST_MATCHES',
       'PRESETS',
       'analyzeDemoStoryboard',
+      'applyCalibrationProfiles',
       'assetRecord',
       'buildFfmpegArgs',
       'buildHandoffDocs',
@@ -46,6 +48,7 @@ describe('npm package boundary', () => {
       'buildPublishPlan',
       'buildThumbnailArgs',
       'buildVideoFilter',
+      'calibrationProfileHash',
       'capture',
       'closeContext',
       'compositeCaption',
@@ -64,6 +67,7 @@ describe('npm package boundary', () => {
       'installDemoCaptionOverlay',
       'launchWithExtension',
       'lintDemoStoryboard',
+      'loadCalibration',
       'moveDemoPointer',
       'normalizeDelayMs',
       'normalizeDemoCaptions',
@@ -81,6 +85,8 @@ describe('npm package boundary', () => {
       'setDemoCaption',
       'splitSections',
       'stageExtension',
+      'startCalibrator',
+      'updateCalibrationProfile',
       'writeHandoffDocs',
     ]);
   });
