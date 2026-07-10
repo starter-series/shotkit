@@ -21,7 +21,7 @@ function storyboard(warnings = []) {
 }
 
 describe('autonomous publish plan', () => {
-  test('marks a fully probed variant publish-ready without human review', () => {
+  test('marks a fully probed variant technically publish-ready for user review', () => {
     const plan = buildPublishPlan({
       storyboard: storyboard(),
       run: {},

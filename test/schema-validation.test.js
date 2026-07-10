@@ -119,6 +119,27 @@ describe('handoff docs conform to the published JSON schemas', () => {
     expect(validate(document)).toBe(true);
   });
 
+  it('validates the user approval document contract', () => {
+    const validate = ajv.compile(loadSchema('approval.schema.json'));
+    const document = {
+      $schema: 'urn:starter-series:shotkit:schema:approval:v1',
+      version: 1,
+      kind: 'shotkit.approval',
+      decisions: {
+        launch: {
+          'youtube-shorts': {
+            status: 'changes-requested',
+            assetDigest: 'a'.repeat(64),
+            profileHash: 'profile-v1',
+            decidedAt: '2026-07-10T00:00:00.000Z',
+            note: 'Move the result above the caption lane.',
+          },
+        },
+      },
+    };
+    expect(validate(document)).toBe(true);
+  });
+
   it('keeps additive manifest fields compatible with the original v1 shape', () => {
     const legacy = JSON.parse(JSON.stringify(docs.manifest));
     delete legacy.category;

@@ -20,6 +20,7 @@ class FakePage extends EventEmitter {
     super();
     this.captions = [];
     this.captionCalls = [];
+    this.captionSample = null;
     this.clicks = [];
     this.waits = [];
     this.inits = [];
@@ -43,6 +44,7 @@ class FakePage extends EventEmitter {
     if (arg && Object.prototype.hasOwnProperty.call(arg, 'captionText')) {
       this.captions.push(arg.captionText);
       this.captionCalls.push({ text: arg.captionText, options: arg.captionOptions });
+      return this.captionSample;
     }
     if (arg && Object.prototype.hasOwnProperty.call(arg, 'pointerPoint')) {
       this.pointerMoves.push({ point: arg.pointerPoint, options: arg.pointerOptions });
@@ -322,6 +324,24 @@ describe('createDemoController', () => {
 
     expect(page.inits).toEqual([{ position: 'bottom' }]);
     expect(page.captions).toEqual(['Open the course page']);
+  });
+
+  test('records the browser render timestamp instead of host round-trip completion', async () => {
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date('2026-07-10T00:00:00.000Z'));
+    const page = new FakePage();
+    page.captionSample = {
+      renderedAt: Date.now() + 125,
+      rect: { left: 10, top: 20, right: 110, bottom: 60, width: 100, height: 40 },
+    };
+    const demo = createDemoController({ page });
+
+    await demo.caption('Rendered in the page');
+    const report = demo.captionMetrics();
+    demo.stop();
+
+    expect(report.samples[0]).toMatchObject({ actualAtMs: 125 });
+    expect(report.samples[0]).not.toHaveProperty('renderedAt');
   });
 
   test('step, click, and wait keep config walkthroughs compact', async () => {

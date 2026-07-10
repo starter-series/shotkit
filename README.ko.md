@@ -2,10 +2,11 @@
 
 # shotkit
 
-**브라우저 익스텐션용 게시 가능 자산을 자동 제작하는 파이프라인.**
+**최종 사용자 승인 게이트가 있는 브라우저 익스텐션 출시 자산 자동화.**
 
 스토리와 채널만 정하면 에이전트가 촬영·편집·검증·재시도를 수행하고,
-사람에게는 최종 파일 또는 자동화 소진 후 blocker만 전달합니다.
+사용자는 최종 파일을 검수해 승인하거나 수정 요청합니다. 기술적 판단은
+자동화가 소진되어 blocker가 생겼을 때만 사용자에게 요청합니다.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Node ≥ 22](https://img.shields.io/badge/node-%E2%89%A522-brightgreen.svg)](.nvmrc)
@@ -20,7 +21,7 @@
 
 ## 상태와 범위 (Status & Scope)
 
-- **현재 구현된 것** — Playwright로 *실제 출하 빌드*를 실행하고 하나의 story를 `cws-youtube`, `x`, `youtube-shorts` variant로 확장합니다. target별 viewport/H.264/trim/caption/thumbnail을 자동 적용하고, 최종 MP4를 ffprobe로 검사하며, thumbnail 픽셀의 blank-frame 여부까지 확인해 `publish-ready`, `needs-fix`, `blocked`를 산출합니다. manifest에는 에이전트가 실행할 retry action과 source evidence가 함께 남습니다.
+- **현재 구현된 것** — Playwright로 *실제 출하 빌드*를 실행하고 하나의 story를 `cws-youtube`, `x`, `youtube-shorts` variant로 확장합니다. target별 viewport/H.264/trim/caption/thumbnail을 자동 적용하고, 최종 MP4를 ffprobe로 검사하며, thumbnail 픽셀의 blank-frame 여부까지 확인해 기술 상태 `machineStatus`(`publish-ready`, `needs-fix`, `blocked`)를 산출합니다. 별도의 해시 기반 승인 게이트가 전달 상태 `awaiting-approval`, `changes-requested`, `approved`를 관리합니다. manifest에는 에이전트가 실행할 retry action, source evidence와 사용자 승인 상태가 함께 남습니다.
 - **스토리 렌더러** — 데모 config는 단일 `demo` 또는 여러 `demos: []`, timed `captions`, click highlight, 녹화 가능한 native select 변경, cursor pacing, 정적 zoom/crop, thumbnail frame, storyboard lint, 작은 `demo` helper(`caption`, `step`, `wait`, `click`, `select`)를 쓸 수 있습니다. 에이전트가 기능 체크리스트를 20~40초짜리 before → action → result → safety/restore 캠페인 컷으로 바꾸기 쉬운 정도까지만 제공합니다.
 - **설계 의도** — *엔진 1개, 표면 여러 개 — 단, 도구 성격에 맞는 표면.* shotkit은 무겁고 파일을 산출하는 빌드 도구라 표면이 CLI(+`--json`)·skill·CI입니다 — MCP가 아니라(하지 않기로 한 것 참고). 캡처는 **결정적**(로그인 불필요 픽스처, freeze된 데이터)이고, 실행이 **실제 빌드본 smoke test를 겸함** — 스크린샷이 나온다 = 그 기능이 출하 코드에서 렌더됨. 모든 샷에 면책 밴드를 합성해 **상표 안전**.
 - **하지 않기로 한 것** — shotkit 내부 MCP 서버, repo별 story/action 의도 제거, 범용 timeline editor, 호스티드 데모 플랫폼. 반복 가능한 채널 작업은 자동화하고 수동 편집기는 명시적으로 요청한 fallback일 때만 노출합니다.
@@ -67,7 +68,7 @@ shotkit --no-build              # 이미 빌드된 번들 사용
 shotkit ../my-extension --json  # 다른 체크아웃 대상 실행; 결과 JSON을 stdout에
 ```
 
-산출물은 `outDir`(기본 `store-assets/`): `<scene>.png`, `<promoTile>.png`, `<demo>.webm`, 선택적 `<demo>.mp4`, 선택적 `<demo>-thumbnail.png`, `description.md`, 그리고 기본값으로 `storyboard.json`, `captions.json`, `shotkit-manifest.json`, `schemas/*.schema.json`입니다(`handoff: false`면 handoff pack을 끕니다).
+산출물은 `outDir`(기본 `store-assets/`): `<scene>.png`, `<promoTile>.png`, `<demo>.webm`, 선택적 `<demo>.mp4`, 선택적 `<demo>-thumbnail.png`, `description.md`, 그리고 기본값으로 `storyboard.json`, `captions.json`, `shotkit-manifest.json`, `schemas/*.schema.json`입니다(`handoff: false`면 handoff pack을 끕니다). 첫 검수 결정 시 `shotkit-approval.json`이 생성됩니다.
 
 ### 구도 Calibrator
 
@@ -80,20 +81,24 @@ JSON만 기록합니다. 현재 profile로 실제 story를 재촬영해 `publish
 나오고 profile hash까지 일치할 때만 Verified가 됩니다.
 
 이는 상시 수동 검수나 범용 timeline/layer editor가 아니라 예외 구도용
-calibration surface입니다. 에이전트도 같은 JSON과 제어면을 사용하므로 사용자가
-매번 영상을 검토할 필요는 없습니다.
+calibration surface입니다. 에이전트가 이 제어면에서 구도를 수정하고 기술 QA를
+통과시키면, 사용자는 같은 대시보드에서 최종 영상만 확인해 Approve 또는
+Request changes를 선택합니다.
 
 ### Handoff Pack
 
 handoff pack은 에이전트가 target별 최종 파일을 검증하고 자동 수정·재촬영하는
 내부 machine boundary입니다. 사람이 JSON을 읽거나 영상을 편집하도록 넘기는
-단계가 아닙니다.
+단계가 아닙니다. 사용자는 수정 과정이 아니라 렌더링된 최종 후보를 검수합니다.
 
 - `storyboard.json` — demo 이름, audience, viewport, trim/framing hint, beats,
   구조화된 storyboard lint warning, 추천 next tool.
 - `captions.json` — demo별 caption timing/text.
 - `shotkit-manifest.json` — entrypoint. asset inventory/integrity, 실행·freshness
-  metadata, 로컬 schema path와 `handoff.automation`의 target 검사/retry action.
+  metadata, 로컬 schema path, `handoff.automation`의 target 검사/retry action,
+  `handoff.approval`의 최종 게시 게이트.
+- `shotkit-approval.json` — 첫 결정 후 생성되며 Approve 또는 Request changes를
+  정확한 미디어 SHA-256과 calibration profile hash에 결합합니다.
 - `schemas/*.schema.json` — 설치된 npm 패키지 없이도 검증할 수 있도록
   모든 pack에 함께 복사되는 계약.
 
@@ -130,7 +135,9 @@ Shotkit은 이를 target별 이름으로 확장하고 가로형은 1280×720, Sh
 720×1280로 촬영합니다. H.264/yuv420p, 30초 cap, poster frame과 최종 파일
 검사를 자동 적용합니다. `needs-fix`는 사용자 검토 요청이 아니라 에이전트가
 config를 수정하고 `automation.retryScenes[]`를 다시 실행하라는 뜻입니다.
-기본 3회가 소진된 뒤에만 `blocked`로 사용자 입력을 요청합니다.
+기본 3회가 소진된 뒤에만 `blocked`로 기술 입력을 요청합니다. 기술 QA가 끝나면
+사용자는 최종 후보를 반드시 검수합니다. Request changes의 메모는 다음 에이전트
+수정 작업이 되고, Approve는 검수한 정확한 파일 해시에만 게시를 허용합니다.
 
 ### CWS 자산과 SNS 데모 클립
 
@@ -243,12 +250,14 @@ result → safety/restore, 짧은 캡션, 느린 cursor/click/typing, X용 mp4�
 ### 에이전트 계약 (`--json`)
 
 `shotkit [path] --json`은 stdout에 **정확히 하나의 JSON 객체**를 출력합니다
-(진행 로그는 stderr로 이동): `{ "ok": true, "status": "publish-ready", "outDir": …, "manifest": …, "produced": [절대경로…] }`.
+(진행 로그는 stderr로 이동): `{ "ok": true, "status": "awaiting-approval", "machineStatus": "publish-ready", "outDir": …, "manifest": …, "produced": [절대경로…] }`.
 종료 코드: `0` 정상 · `1` 런타임 실패 · `2` 사용법 오류/설정 없음입니다.
-`ok:true`는 실행 완료, `status:publish-ready`는 story lint, H.264/yuv420p,
+`ok:true`는 실행 완료, `machineStatus:publish-ready`는 story lint, H.264/yuv420p,
 실제 해상도·길이, thumbnail, nonblank-frame, integrity와 target profile 검사를
-통과했다는 뜻입니다. 외부 업로드 완료를 뜻하지는 않으며 권한 있는 connector나
-외부 쓰기 승인은 별도로 필요합니다. 실패
+통과했다는 뜻입니다. 사용자가 영상을 검수하기 전 전달 `status`는
+`awaiting-approval`이며, 정확한 파일 해시를 승인해야 `approved`가 됩니다.
+재촬영이나 profile 변경은 이전 승인을 무효화합니다. 권한 있는 connector도
+`handoff.approval.publishable`이 true일 때만 게시할 수 있습니다. 실패
 payload도 stdout의 단일 JSON 객체(`{"ok":false,"error":…}`)를 사용합니다. 에이전트 연결은 [`AGENTS.md`](AGENTS.md) 실행 블록
 (Claude Code·Codex·Cursor·Gemini CLI 등이 읽음)과 [`skills/capture/`](skills/capture/SKILL.md)
 skill(Agent Skills 표준 — 호환 도구의 skills 디렉터리에 폴더째 복사)을 참고하십시오.

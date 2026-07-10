@@ -108,6 +108,7 @@ describe('handoff contract', () => {
           manifest: 'schemas/shotkit-manifest.schema.json',
           storyboard: 'schemas/storyboard.schema.json',
           captions: 'schemas/captions.schema.json',
+          approval: 'schemas/approval.schema.json',
         },
         storyboards: 'storyboard.json',
         captions: 'captions.json',
@@ -168,6 +169,7 @@ describe('handoff contract', () => {
       'schemas/shotkit-manifest.schema.json',
       'schemas/storyboard.schema.json',
       'schemas/captions.schema.json',
+      'schemas/approval.schema.json',
     ]);
     for (const filePath of paths) expect(fs.existsSync(filePath)).toBe(true);
     const manifest = JSON.parse(fs.readFileSync(path.join(outDir, 'shotkit-manifest.json'), 'utf8'));
@@ -178,12 +180,14 @@ describe('handoff contract', () => {
       'handoff-schema',
       'handoff-schema',
       'handoff-schema',
+      'handoff-schema',
     ]);
     expect(manifest.handoff.summary).toEqual({
-      assetCount: 6,
+      assetCount: 7,
       demoCount: 0,
       readyAdapterCount: 0,
       publishReadyTargetCount: 0,
+      approvedTargetCount: 0,
     });
     const storyboard = manifest.assets.find((asset) => asset.role === 'storyboard-contract');
     expect(storyboard.bytes).toBeGreaterThan(0);
@@ -460,5 +464,12 @@ describe('handoff contract', () => {
     });
     expect(manifest.handoff.adapterHints).toEqual([]);
     expect(manifest.handoff.summary.publishReadyTargetCount).toBe(1);
+    expect(manifest.handoff.approval).toMatchObject({
+      status: 'awaiting-approval',
+      userActionRequired: true,
+      publishable: false,
+      targets: [{ target: 'x', status: 'awaiting-approval' }],
+    });
+    expect(manifest.handoff.summary.approvedTargetCount).toBe(0);
   });
 });

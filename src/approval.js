@@ -1,0 +1,201 @@
+const fs = require('fs');
+const path = require('path');
+
+const { writeJson } = require('./handoff-files');
+
+const APPROVAL_VERSION = 1;
+const APPROVAL_KIND = 'shotkit.approval';
+const APPROVAL_SCHEMA_ID = 'urn:starter-series:shotkit:schema:approval:v1';
+const APPROVAL_FILE = 'shotkit-approval.json';
+const DECISION_STATUSES = new Set(['approved', 'changes-requested']);
+const UNSAFE_KEYS = new Set(['__proto__', 'prototype', 'constructor']);
+
+function emptyApprovalDocument() {
+  return {
+    $schema: APPROVAL_SCHEMA_ID,
+    version: APPROVAL_VERSION,
+    kind: APPROVAL_KIND,
+    decisions: {},
+  };
+}
+
+function isObject(value) {
+  return value != null && typeof value === 'object' && !Array.isArray(value);
+}
+
+function nonEmptyString(value, name) {
+  if (typeof value !== 'string' || !value.trim()) throw new Error(`shotkit: ${name} must be a non-empty string`);
+  return value.trim();
+}
+
+function approvalKey(value, name) {
+  const key = nonEmptyString(value, name);
+  if (UNSAFE_KEYS.has(key)) throw new Error(`shotkit: ${name} uses a reserved key`);
+  return key;
+}
+
+function normalizeDecision(decision, name = 'approval decision') {
+  if (!isObject(decision)) throw new Error(`shotkit: ${name} must be an object`);
+  if (!DECISION_STATUSES.has(decision.status)) {
+    throw new Error(`shotkit: ${name}.status must be "approved" or "changes-requested"`);
+  }
+  const assetDigest = nonEmptyString(decision.assetDigest, `${name}.assetDigest`);
+  if (!/^[a-f0-9]{64}$/i.test(assetDigest)) throw new Error(`shotkit: ${name}.assetDigest must be a SHA-256 digest`);
+  const decidedAt = nonEmptyString(decision.decidedAt, `${name}.decidedAt`);
+  if (Number.isNaN(Date.parse(decidedAt))) throw new Error(`shotkit: ${name}.decidedAt must be an ISO date-time`);
+  const note = decision.note == null ? '' : String(decision.note).trim();
+  if (decision.status === 'changes-requested' && !note) {
+    throw new Error(`shotkit: ${name}.note is required when changes are requested`);
+  }
+  if (note.length > 2000) throw new Error(`shotkit: ${name}.note must be at most 2000 characters`);
+  return {
+    status: decision.status,
+    assetDigest: assetDigest.toLowerCase(),
+    ...(decision.profileHash ? { profileHash: nonEmptyString(decision.profileHash, `${name}.profileHash`) } : {}),
+    decidedAt,
+    ...(note ? { note } : {}),
+  };
+}
+
+function normalizeApprovalDocument(document) {
+  if (!isObject(document)) throw new Error('shotkit: approval document must be an object');
+  if (document.$schema !== APPROVAL_SCHEMA_ID) throw new Error(`shotkit: approval $schema must be ${APPROVAL_SCHEMA_ID}`);
+  if (document.version !== APPROVAL_VERSION) throw new Error(`shotkit: approval version must be ${APPROVAL_VERSION}`);
+  if (document.kind !== APPROVAL_KIND) throw new Error(`shotkit: approval kind must be ${APPROVAL_KIND}`);
+  if (!isObject(document.decisions)) throw new Error('shotkit: approval decisions must be an object');
+  const decisions = {};
+  for (const [story, targets] of Object.entries(document.decisions)) {
+    const normalizedStory = approvalKey(story, 'approval story key');
+    if (!isObject(targets)) throw new Error(`shotkit: approval decisions.${story} must be an object`);
+    decisions[normalizedStory] = {};
+    for (const [target, decision] of Object.entries(targets)) {
+      const normalizedTarget = approvalKey(target, `approval decisions.${story} target key`);
+      decisions[normalizedStory][normalizedTarget] = normalizeDecision(
+        decision,
+        `approval decisions.${story}.${target}`,
+      );
+    }
+  }
+  return { $schema: APPROVAL_SCHEMA_ID, version: APPROVAL_VERSION, kind: APPROVAL_KIND, decisions };
+}
+
+function approvalPath(outDir) {
+  return path.join(path.resolve(outDir), APPROVAL_FILE);
+}
+
+function loadApproval(outDir) {
+  const filePath = approvalPath(outDir);
+  if (!fs.existsSync(filePath)) return { path: filePath, document: emptyApprovalDocument() };
+  try {
+    return { path: filePath, document: normalizeApprovalDocument(JSON.parse(fs.readFileSync(filePath, 'utf8'))) };
+  } catch (error) {
+    throw new Error(`shotkit: could not load approval file: ${error.message}`, { cause: error });
+  }
+}
+
+function updateApprovalDecision(outDir, story, target, decision) {
+  story = approvalKey(story, 'approval story');
+  target = approvalKey(target, 'approval target');
+  const loaded = loadApproval(outDir);
+  const normalized = normalizeDecision({ ...decision, decidedAt: decision.decidedAt || new Date().toISOString() });
+  if (!Object.prototype.hasOwnProperty.call(loaded.document.decisions, story)) {
+    loaded.document.decisions[story] = {};
+  }
+  loaded.document.decisions[story][target] = normalized;
+  writeJson(loaded.path, loaded.document);
+  return { ...loaded, decision: normalized };
+}
+
+function decisionFor(document, story, target) {
+  return document.decisions && document.decisions[story] ? document.decisions[story][target] || null : null;
+}
+
+function targetAssetDigest(manifest, target) {
+  const asset = target.deliverable && (manifest.assets || []).find((item) => item.id === target.deliverable.id);
+  return asset && asset.integrity && asset.integrity.algorithm === 'sha256' ? asset.integrity.digest : null;
+}
+
+function approvalGate(manifest, document = emptyApprovalDocument(), options = {}) {
+  const normalized = normalizeApprovalDocument(document);
+  const automation = manifest.handoff && manifest.handoff.automation;
+  const technicalTargets = automation && Array.isArray(automation.targets) ? automation.targets : [];
+  const targets = technicalTargets.map((target) => {
+    const context = typeof options.targetContext === 'function' ? options.targetContext(target) || {} : {};
+    const assetDigest = targetAssetDigest(manifest, target);
+    const profileHash = Object.prototype.hasOwnProperty.call(context, 'profileHash')
+      ? context.profileHash
+      : target.profileHash || null;
+    const decision = decisionFor(normalized, target.story, target.target);
+    const current = !!(decision && assetDigest
+      && decision.assetDigest === assetDigest
+      && (decision.profileHash || null) === profileHash);
+    let status = 'not-ready';
+    if (target.status === 'publish-ready' && context.ready !== false && assetDigest) {
+      status = current ? decision.status : 'awaiting-approval';
+    }
+    return {
+      target: target.target,
+      demo: target.demo,
+      story: target.story,
+      status,
+      assetDigest,
+      ...(profileHash ? { profileHash } : {}),
+      stale: !!decision && !current,
+      ...(current ? {
+        decision: {
+          status: decision.status,
+          decidedAt: decision.decidedAt,
+          ...(decision.note ? { note: decision.note } : {}),
+        },
+      } : {}),
+    };
+  });
+  let status = 'not-requested';
+  if (technicalTargets.length) {
+    if (!automation || automation.status !== 'publish-ready') status = 'not-ready';
+    else if (targets.some((target) => target.status === 'not-ready')) status = 'not-ready';
+    else if (targets.some((target) => target.status === 'changes-requested')) status = 'changes-requested';
+    else if (targets.every((target) => target.status === 'approved')) status = 'approved';
+    else status = 'awaiting-approval';
+  }
+  return {
+    required: technicalTargets.length > 0,
+    status,
+    file: APPROVAL_FILE,
+    userActionRequired: status === 'awaiting-approval',
+    publishable: status === 'approved',
+    targets,
+  };
+}
+
+function syncManifestApproval(manifest, document = emptyApprovalDocument(), options = {}) {
+  if (!manifest.handoff) manifest.handoff = {};
+  manifest.handoff.approval = approvalGate(manifest, document, options);
+  if (manifest.handoff.summary) {
+    manifest.handoff.summary.approvedTargetCount = manifest.handoff.approval.targets
+      .filter((target) => target.status === 'approved').length;
+  }
+  return manifest.handoff.approval;
+}
+
+function deliveryStatus(manifest) {
+  const automation = manifest.handoff && manifest.handoff.automation;
+  if (!automation || automation.status !== 'publish-ready') return automation ? automation.status : 'not-requested';
+  return manifest.handoff.approval ? manifest.handoff.approval.status : 'awaiting-approval';
+}
+
+module.exports = {
+  APPROVAL_FILE,
+  APPROVAL_KIND,
+  APPROVAL_SCHEMA_ID,
+  APPROVAL_VERSION,
+  approvalGate,
+  approvalPath,
+  deliveryStatus,
+  emptyApprovalDocument,
+  loadApproval,
+  normalizeApprovalDocument,
+  normalizeDecision,
+  syncManifestApproval,
+  updateApprovalDecision,
+};

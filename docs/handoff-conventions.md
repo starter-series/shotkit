@@ -3,8 +3,9 @@
 shotkit is the autonomous launch asset pipeline for browser extensions. It
 turns a reusable product story into channel variants, validates the final files,
 and gives agents machine-readable fixes until the requested targets are
-publish-ready. The handoff pack is an internal machine boundary, not a request
-for a user to inspect JSON or edit media.
+technically publish-ready. The handoff pack is an internal machine boundary, not a request
+for a user to inspect JSON or edit media. The user reviews the final rendered
+candidate and records Approve or Request changes; agents own the repair loop.
 
 ## Files
 
@@ -17,16 +18,23 @@ Every successful run writes these files unless `handoff: false` is set:
 - `schemas/shotkit-manifest.schema.json` — local manifest validation contract.
 - `schemas/storyboard.schema.json` — local storyboard validation contract.
 - `schemas/captions.schema.json` — local captions validation contract.
+- `schemas/approval.schema.json` — user decision validation contract.
+
+The first review decision also writes `shotkit-approval.json`. It is separate
+from generated evidence and binds the decision to the exact deliverable digest.
 
 Schema references are included in each file as `$schema` URNs, and the package
 ships matching schema files under `schemas/`. Each output pack also carries its
 own copies; resolve `handoff.schemaFiles` relative to the directory containing
 `shotkit-manifest.json`. The URN is an identity key, not a network fetch
-requirement. shotkit validates the finalized three-document pack with these
-same schemas before publishing the manifest.
+requirement. shotkit validates the finalized core handoff documents with these
+same schemas before writing the manifest and validates approval decisions when
+they are read or written.
 
-The CLI's `ok:true` means the requested stages completed. Its separate `status`
-is `publish-ready`, `needs-fix`, `blocked`, or `not-requested`.
+The CLI's `ok:true` means the requested stages completed. `machineStatus` is
+`publish-ready`, `needs-fix`, `blocked`, or `not-requested`. Delivery `status`
+also applies the approval gate and can be `awaiting-approval`,
+`changes-requested`, or `approved`.
 
 ## Manifest Roles
 
@@ -62,8 +70,9 @@ be recaptured.
 
 `handoff.review` remains an additive v1 compatibility summary. Autonomous
 callers use `handoff.automation` instead; `needs-fix` never means "ask the user
-to review." `handoff.summary` reports asset, demo, adapter, and publish-ready
-target counts.
+to review." `handoff.approval` is the distinct final-media decision gate.
+`handoff.summary` reports asset, demo, adapter, technically publish-ready, and
+approved target counts.
 
 ## Autonomous Publishing
 
@@ -102,15 +111,25 @@ is considered verified only when its current hash has produced a real
 Failures become `automation.actions[]` with `owner:"agent"`, an explicit `fix`,
 and a target/scene rerun instruction. Agents increment `--attempt`, apply every
 fix, and rerun `automation.retryScenes[]`. The default maximum is three. Only
-the exhausted `blocked` state sets `userActionRequired:true`.
+the exhausted `blocked` state sets technical
+`automation.userActionRequired:true`.
 
-`publish-ready` means these automated checks passed. External publication has
-not happened yet; `targets[].upload` identifies the connector and notes that an
-authorized external write is required.
+Machine `publish-ready` means these automated checks passed. It does not mean
+the user approved the media. `handoff.approval.targets[]` compares the current
+deliverable SHA-256 and calibration profile hash with `shotkit-approval.json`:
+
+- `awaiting-approval` — show the final candidate to the user.
+- `changes-requested` — the agent owns the note, edit, and recapture.
+- `approved` — only this exact digest passed user review.
+
+Any recapture or profile change makes a prior decision stale. External
+publication has not happened yet; `targets[].upload` identifies the connector,
+and an authorized external write may proceed only when
+`handoff.approval.publishable` is true.
 
 Adapter `readiness` is tool-specific. `ready` means the required, unmodified
 asset roles and storyboard content are present for that recommendation; it does
-not mean the connector is installed or the assets were visually approved.
+not mean the connector is installed or the user approved the assets.
 
 ## Manual Fallback
 
@@ -136,9 +155,13 @@ Autonomous flow:
 1. Read the CLI `status` and manifest path.
 2. On `needs-fix`, execute every agent-owned action and rerun only the listed
    scenes with the next `--attempt`.
-3. On `publish-ready`, use each target's deliverable and upload connector.
-4. On `blocked`, report the exhausted blocker and attempted fixes.
-5. Keep repo fixtures and the story/action script as the repeatable source.
+3. On `blocked`, report the exhausted technical blocker and attempted fixes.
+4. On `awaiting-approval`, present each final candidate in the Calibrator and
+   wait for the user's Approve or Request changes decision.
+5. On `changes-requested`, apply the decision note, recapture, and return the
+   new digest for review.
+6. On `approved`, let an authorized connector publish only the approved digest.
+7. Keep repo fixtures and the story/action script as the repeatable source.
 
 Fallback tool notes:
 
@@ -204,6 +227,8 @@ The handoff contract is versioned independently from the npm package:
 - Top-level `version: 1` means handoff contract v1.
 - Top-level `kind` identifies the document type.
 - `$schema` points at the matching schema URN.
+- Approval decisions use `kind: "shotkit.approval"` and are tied to an asset
+  digest, not a mutable filename.
 - New fields may be added in v1. Existing fields should keep their meaning.
 
 Downstream tools should ignore unknown fields and key off `kind`, `version`, and

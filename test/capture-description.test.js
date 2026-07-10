@@ -111,6 +111,7 @@ test('description-only scene does not run build, prepareExtension, or Chromium',
     'shotkit-manifest.schema.json',
     'storyboard.schema.json',
     'captions.schema.json',
+    'approval.schema.json',
   ]);
   expect(prepareExtension).not.toHaveBeenCalled();
   expect(launchWithExtension).not.toHaveBeenCalled();

@@ -2,8 +2,8 @@
  * shotkit — handoff contract exports.
  *
  * These files are the autonomous machine boundary: captured evidence,
- * captions, integrity, target QA, and agent-owned fix/retry actions. Users see
- * final publish-ready assets or an exhausted blocker, not routine review work.
+ * captions, integrity, target QA, agent-owned fix/retry actions, and the final
+ * user approval gate. Users review media, not manifests or repair mechanics.
  */
 
 const fs = require('fs');
@@ -13,6 +13,12 @@ const { normalizeDemoCaptions, parseTimeToMs } = require('./demo-time');
 const { buildCaptionFrames, buildCaptionTimeline, captionStyle } = require('./demo-caption-focus');
 const { buildHandoffRecommendations } = require('./integrations');
 const { buildPublishPlan } = require('./publish');
+const {
+  APPROVAL_SCHEMA_ID,
+  emptyApprovalDocument,
+  loadApproval,
+  syncManifestApproval,
+} = require('./approval');
 const { isValidHandoffDocs, validateHandoffDocs } = require('./handoff-validator');
 const {
   copyHandoffSchemas,
@@ -34,11 +40,13 @@ const HANDOFF_SCHEMA_IDS = Object.freeze({
   manifest: 'urn:starter-series:shotkit:schema:shotkit-manifest:v1',
   storyboard: 'urn:starter-series:shotkit:schema:storyboard:v1',
   captions: 'urn:starter-series:shotkit:schema:captions:v1',
+  approval: APPROVAL_SCHEMA_ID,
 });
 const HANDOFF_SCHEMA_FILES = Object.freeze({
   manifest: 'schemas/shotkit-manifest.schema.json',
   storyboard: 'schemas/storyboard.schema.json',
   captions: 'schemas/captions.schema.json',
+  approval: 'schemas/approval.schema.json',
 });
 
 function readProjectInfo(cwd) {
@@ -240,7 +248,7 @@ function handoffReview(storyboardLint, run = {}, assets = []) {
   };
 }
 
-function refreshManifestHandoff(manifest, storyboard, config) {
+function refreshManifestHandoff(manifest, storyboard, config, approvalDocument = emptyApprovalDocument()) {
   const automation = buildPublishPlan({
     assets: manifest.assets,
     storyboard,
@@ -254,12 +262,14 @@ function refreshManifestHandoff(manifest, storyboard, config) {
   });
   manifest.handoff.adapterHints = adapterHints;
   manifest.handoff.automation = automation;
+  syncManifestApproval(manifest, approvalDocument);
   manifest.handoff.review = handoffReview(storyboard.storyboardLint, manifest.run, manifest.assets);
   manifest.handoff.summary = {
     assetCount: manifest.assets.length,
     demoCount: storyboard.demos.length,
     readyAdapterCount: adapterHints.filter((hint) => hint.readiness === 'ready').length,
     publishReadyTargetCount: automation.targets.filter((target) => target.status === 'publish-ready').length,
+    approvedTargetCount: manifest.handoff.approval.targets.filter((target) => target.status === 'approved').length,
   };
 }
 
@@ -328,11 +338,13 @@ function buildHandoffDocs({ cwd, outDir, config, assets, demoConfigs, demoViewpo
       recommendedFlow: [
         'read handoff.automation and apply every agent-owned action',
         'retry listed scenes until every requested target is publish-ready',
-        'upload final deliverables through an authorized connector',
+        'present technically ready media to the user for final approval',
+        'upload only the exact deliverable digest the user approved',
         'keep repo fixtures and storyboard as the repeatable source of truth',
       ],
       adapterHints: [],
       automation: null,
+      approval: null,
       review: handoffReview(storyboard.storyboardLint, runInfo),
       summary: {
         assetCount: currentAssets.length,
@@ -442,7 +454,7 @@ function writeHandoffDocs({ cwd, outDir, config, assets, demoConfigs, demoViewpo
   // Partial runs can inherit an older inventory. Prune entries whose files no
   // longer exist, then recompute recommendations from the actual final bundle.
   docs.manifest.assets = hydrateManifestAssets(docs.manifest.assets, outDir, manifestPath);
-  refreshManifestHandoff(docs.manifest, docs.storyboard, config);
+  refreshManifestHandoff(docs.manifest, docs.storyboard, config, loadApproval(outDir).document);
   validateHandoffDocs(docs);
   validateFinalPack(docs, outDir, manifestPath);
   writeJson(manifestPath, docs.manifest);

@@ -10,7 +10,7 @@
 const fs = require('fs');
 const path = require('path');
 
-const USAGE = `shotkit — autonomously build publish-ready launch assets from a browser extension
+const USAGE = `shotkit — autonomously build and verify launch assets, then gate final user approval
 
 Usage: shotkit [path] [options]
 
@@ -30,7 +30,9 @@ Options:
   --port <n>        calibrator port (default: choose an available local port)
   --no-open         start the calibrator without opening a browser window
   --json            machine-readable mode: stdout gets one JSON object
-                    {ok, status, outDir, manifest, produced[]}; logs go to stderr
+                    {ok, status, machineStatus, outDir, manifest, produced[]};
+                    logs go to stderr. machineStatus is technical QA; status
+                    also enforces the user's final approval decision.
   --no-video        skip the demo screencast
   --mp4             also convert the demo to H.264 mp4 (needs ffmpeg on PATH
                     or SHOTKIT_FFMPEG; SNS uploaders want mp4, not webm)

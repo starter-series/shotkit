@@ -29,6 +29,7 @@ const requiredFiles = [
   "schemas/storyboard.schema.json",
   "schemas/captions.schema.json",
   "schemas/calibration.schema.json",
+  "schemas/approval.schema.json",
 ];
 
 for (const relpath of requiredFiles) {

@@ -9,7 +9,13 @@ const {
   loadCalibration,
   updateCalibrationProfile,
 } = require('./calibration');
+const {
+  loadApproval,
+  syncManifestApproval,
+  updateApprovalDecision,
+} = require('./approval');
 const { normalizeDemoConfigs } = require('./demo');
+const { writeJson } = require('./handoff-files');
 
 const STATIC_DIR = path.join(__dirname, '..', 'calibrator');
 const MAX_BODY_BYTES = 256 * 1024;
@@ -122,6 +128,50 @@ function profileFor(document, story, target) {
     : {};
 }
 
+function applyCalibrationHashes(manifest, calibrationDocument) {
+  const targets = manifest.handoff && manifest.handoff.automation
+    ? manifest.handoff.automation.targets || []
+    : [];
+  for (const target of targets) {
+    const profile = profileFor(calibrationDocument, target.story, target.target);
+    if (!target.profileHash && profile.verification) {
+      const profileHash = calibrationProfileHash(profile);
+      if (profile.verification.status === 'publish-ready' && profile.verification.profileHash === profileHash) {
+        target.profileHash = profileHash;
+      }
+    }
+  }
+}
+
+function calibrationApprovalOptions(calibrationDocument) {
+  return {
+    targetContext(target) {
+      const profile = profileFor(calibrationDocument, target.story, target.target);
+      const saved = hasProfile(calibrationDocument, target.story, target.target);
+      const profileHash = saved ? calibrationProfileHash(profile) : null;
+      const verified = !!(saved && profile.verification
+        && profile.verification.status === 'publish-ready'
+        && profile.verification.profileHash === profileHash
+        && (!target.profileHash || target.profileHash === profileHash));
+      return { ready: verified, profileHash };
+    },
+  };
+}
+
+function syncApprovalManifest(outDir, approvalDocument, calibrationDocument) {
+  const manifestPath = path.join(outDir, 'shotkit-manifest.json');
+  const manifest = readJson(manifestPath);
+  if (!manifest || !manifest.handoff || !manifest.handoff.automation) return null;
+  if (calibrationDocument) applyCalibrationHashes(manifest, calibrationDocument);
+  const gate = syncManifestApproval(
+    manifest,
+    approvalDocument,
+    calibrationDocument ? calibrationApprovalOptions(calibrationDocument) : {},
+  );
+  writeJson(manifestPath, manifest);
+  return gate;
+}
+
 function hasProfile(document, story, target) {
   return !!(document.profiles && document.profiles[story]
     && Object.prototype.hasOwnProperty.call(document.profiles[story], target));
@@ -131,15 +181,23 @@ function createStateReader({ cwd, config }) {
   const outDir = path.resolve(cwd, config.outDir || 'store-assets');
   return function state(selected = {}) {
     const calibration = loadCalibration(config, cwd);
+    const approval = loadApproval(outDir);
     const demos = applyCalibrationProfiles(normalizeDemoConfigs(config), calibration.document)
       .filter((demo) => demo.target);
     const manifest = readJson(path.join(outDir, 'shotkit-manifest.json'), {});
+    applyCalibrationHashes(manifest, calibration.document);
     const storyboard = readJson(path.join(outDir, 'storyboard.json'), {});
     const captions = readJson(path.join(outDir, 'captions.json'), {});
     const assets = manifest.assets || [];
     const automationTargets = manifest.handoff && manifest.handoff.automation
       ? manifest.handoff.automation.targets || []
       : [];
+    const approvalGate = syncManifestApproval(
+      manifest,
+      approval.document,
+      calibrationApprovalOptions(calibration.document),
+    );
+    const approvalByKey = new Map((approvalGate.targets || []).map((item) => [`${item.story}::${item.target}`, item]));
     const storyboardByName = new Map((storyboard.demos || []).map((demo) => [demo.name, demo]));
     const captionByName = new Map((captions.demos || []).map((demo) => [demo.name, demo]));
     const lintByName = new Map((storyboard.storyboardLint || []).map((item) => [item.name, item.warnings || []]));
@@ -156,6 +214,11 @@ function createStateReader({ cwd, config }) {
       const directVideo = path.join(outDir, `${demo.name}.mp4`);
       const directThumbnail = path.join(outDir, `${demo.name}-thumbnail.png`);
       const publish = automationTargets.find((item) => item.demo === demo.name && item.target === demo.target);
+      const approvalTarget = approvalByKey.get(`${story}::${demo.target}`) || {
+        status: 'not-ready',
+        assetDigest: null,
+        stale: false,
+      };
       const profile = profileFor(calibration.document, story, demo.target);
       const savedProfile = hasProfile(calibration.document, story, demo.target);
       const profileHash = savedProfile ? calibrationProfileHash(profile) : null;
@@ -164,13 +227,19 @@ function createStateReader({ cwd, config }) {
         && profile.verification.status === 'publish-ready'
         && profile.verification.profileHash === profileHash);
       const publishStatus = publish ? publish.status : 'not-requested';
+      const reviewable = publishStatus === 'publish-ready' && verified && !!approvalTarget.assetDigest;
+      const reviewStatus = reviewable ? approvalTarget.status : 'not-ready';
+      const status = publishStatus === 'publish-ready'
+        ? reviewable ? reviewStatus : 'needs-fix'
+        : publishStatus;
       const videoName = mp4 && mp4.outPath ? path.basename(mp4.outPath) : path.basename(directVideo);
       const thumbnailName = thumbnail && thumbnail.outPath ? path.basename(thumbnail.outPath) : path.basename(directThumbnail);
       return {
         story,
         target: demo.target,
         name: demo.name,
-        status: savedProfile && publishStatus === 'publish-ready' && !verified ? 'needs-fix' : publishStatus,
+        status,
+        machineStatus: publishStatus,
         viewport,
         safeArea: safeArea(demo.target, viewport),
         videoUrl: fs.existsSync(path.join(outDir, videoName)) ? `/media/${encodeURIComponent(videoName)}` : null,
@@ -183,6 +252,14 @@ function createStateReader({ cwd, config }) {
         hasProfile: savedProfile,
         profileHash,
         verified,
+        reviewable,
+        publishable: reviewable && reviewStatus === 'approved',
+        review: {
+          status: reviewStatus,
+          stale: !!approvalTarget.stale,
+          ...(approvalTarget.decision ? { decision: approvalTarget.decision } : {}),
+        },
+        assetDigest: approvalTarget.assetDigest,
       };
     });
     const active = targets.find((item) => item.story === selected.story && item.target === selected.target) || targets[0] || null;
@@ -191,6 +268,7 @@ function createStateReader({ cwd, config }) {
       calibrationPath: calibration.path ? path.relative(cwd, calibration.path) : null,
       targets,
       selected: active ? { story: active.story, target: active.target } : null,
+      approvalStatus: approvalGate.status,
     };
   };
 }
@@ -245,6 +323,7 @@ async function startCalibrator({ cwd, config, configPath, port = 0, open = true 
   const state = createStateReader({ cwd, config });
   let recapturing = false;
   const outDir = path.resolve(cwd, config.outDir || 'store-assets');
+  syncApprovalManifest(outDir, loadApproval(outDir).document, loadCalibration(config, cwd).document);
   const server = http.createServer(async (req, res) => {
     try {
       const url = new URL(req.url || '/', 'http://127.0.0.1');
@@ -259,6 +338,7 @@ async function startCalibrator({ cwd, config, configPath, port = 0, open = true 
           return;
         }
         const updated = updateCalibrationProfile(config, cwd, body.story, body.target, body.profile);
+        syncApprovalManifest(outDir, loadApproval(outDir).document, updated.document);
         json(res, 200, {
           ok: true,
           profile: profileFor(updated.document, body.story, body.target),
@@ -289,7 +369,7 @@ async function startCalibrator({ cwd, config, configPath, port = 0, open = true 
             target: body.target,
             attempt: Math.max(1, currentAttempt + 1),
           });
-          if (result.status === 'publish-ready') {
+          if (result.machineStatus === 'publish-ready') {
             const calibration = loadCalibration(config, cwd);
             const profile = profileFor(calibration.document, body.story, body.target);
             const profileHash = calibrationProfileHash(profile);
@@ -297,7 +377,7 @@ async function startCalibrator({ cwd, config, configPath, port = 0, open = true 
               ...profile,
               verification: {
                 profileHash,
-                status: result.status,
+                status: result.machineStatus,
                 verifiedAt: new Date().toISOString(),
               },
             });
@@ -313,6 +393,41 @@ async function startCalibrator({ cwd, config, configPath, port = 0, open = true 
         } finally {
           recapturing = false;
         }
+        return;
+      }
+      if (req.method === 'POST' && url.pathname === '/api/review') {
+        const body = await requestBody(req);
+        if (!['approved', 'changes-requested'].includes(body.status)) {
+          json(res, 400, { ok: false, error: 'review status must be approved or changes-requested' });
+          return;
+        }
+        if (body.status === 'changes-requested' && (typeof body.note !== 'string' || !body.note.trim())) {
+          json(res, 400, { ok: false, error: 'review feedback is required when changes are requested' });
+          return;
+        }
+        const current = state({ story: body.story, target: body.target });
+        const selected = current.targets.find((item) => item.story === body.story && item.target === body.target);
+        if (!selected) {
+          json(res, 404, { ok: false, error: 'configured story/target was not found' });
+          return;
+        }
+        if (!selected.reviewable) {
+          json(res, 409, { ok: false, error: 'target must pass machine QA and recapture verification before user review' });
+          return;
+        }
+        const updated = updateApprovalDecision(outDir, body.story, body.target, {
+          status: body.status,
+          assetDigest: selected.assetDigest,
+          ...(selected.profileHash ? { profileHash: selected.profileHash } : {}),
+          note: body.note,
+        });
+        syncApprovalManifest(outDir, updated.document, loadCalibration(config, cwd).document);
+        const refreshed = state({ story: body.story, target: body.target });
+        json(res, 200, {
+          ok: true,
+          review: refreshed.targets.find((item) => item.story === body.story && item.target === body.target).review,
+          approvalStatus: refreshed.approvalStatus,
+        });
         return;
       }
       if (req.method === 'GET' && url.pathname.startsWith('/media/')) {

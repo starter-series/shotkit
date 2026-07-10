@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:starter-series:shotkit:schema:approval:v1",
+  "title": "shotkit user approval decisions",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["$schema", "version", "kind", "decisions"],
+  "properties": {
+    "$schema": { "const": "urn:starter-series:shotkit:schema:approval:v1" },
+    "version": { "const": 1 },
+    "kind": { "const": "shotkit.approval" },
+    "decisions": {
+      "type": "object",
+      "propertyNames": {
+        "pattern": "^(?!(?:__proto__|prototype|constructor)$).*\\S.*$"
+      },
+      "additionalProperties": {
+        "type": "object",
+        "propertyNames": {
+          "pattern": "^(?!(?:__proto__|prototype|constructor)$).*\\S.*$"
+        },
+        "additionalProperties": { "$ref": "#/$defs/decision" }
+      }
+    }
+  },
+  "$defs": {
+    "decision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "assetDigest", "decidedAt"],
+      "properties": {
+        "status": { "enum": ["approved", "changes-requested"] },
+        "assetDigest": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "profileHash": { "type": "string", "minLength": 1 },
+        "decidedAt": { "type": "string", "format": "date-time" },
+        "note": { "type": "string", "minLength": 1, "maxLength": 2000 }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "status": { "const": "changes-requested" } } },
+          "then": { "required": ["note"] }
+        }
+      ]
+    }
+  }
+}

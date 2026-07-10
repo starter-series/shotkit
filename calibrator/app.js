@@ -14,6 +14,8 @@ import { createRegionEditor } from './regions.js';
     operationState: $('operationState'),
     recaptureButton: $('recaptureButton'),
     saveButton: $('saveButton'),
+    requestChangesButton: $('requestChangesButton'),
+    approveButton: $('approveButton'),
     targetCount: $('targetCount'),
     targetList: $('targetList'),
     layoutCount: $('layoutCount'),
@@ -35,6 +37,8 @@ import { createRegionEditor } from './regions.js';
     profileName: $('profileName'),
     profileState: $('profileState'),
     profileForm: $('profileForm'),
+    reviewState: $('reviewState'),
+    reviewNote: $('reviewNote'),
     bottomOffsetRange: $('bottomOffsetRange'),
     bottomOffsetNumber: $('bottomOffsetNumber'),
     zoomRange: $('zoomRange'),
@@ -85,6 +89,10 @@ import { createRegionEditor } from './regions.js';
     state.busy = busy;
     elements.saveButton.disabled = busy || !state.target || !state.dirty;
     elements.recaptureButton.disabled = busy || !state.target;
+    const reviewable = !!(state.target && state.target.reviewable);
+    const reviewStatus = state.target && state.target.review ? state.target.review.status : 'not-ready';
+    elements.requestChangesButton.disabled = busy || !reviewable || reviewStatus === 'changes-requested';
+    elements.approveButton.disabled = busy || !reviewable || reviewStatus === 'approved';
     elements.profileForm.toggleAttribute('inert', busy);
     if (label) setOperation(label);
   }
@@ -115,8 +123,33 @@ import { createRegionEditor } from './regions.js';
 
   function renderTargetStatus() {
     const status = state.target.status;
-    elements.targetStatus.textContent = status.replaceAll('-', ' ');
-    elements.statusDot.className = `status-dot ${status === 'publish-ready' ? 'is-ready' : status === 'not-requested' ? 'is-neutral' : 'is-warning'}`;
+    const labels = {
+      approved: 'Approved',
+      'awaiting-approval': 'Ready for review',
+      'changes-requested': 'Changes requested',
+      'needs-fix': 'Needs fix',
+      blocked: 'Blocked',
+      'not-requested': 'Not requested',
+    };
+    elements.targetStatus.textContent = labels[status] || status.replaceAll('-', ' ');
+    const tone = status === 'approved' ? 'is-ready'
+      : status === 'not-requested' ? 'is-neutral'
+        : status === 'changes-requested' || status === 'blocked' ? 'is-error'
+          : 'is-warning';
+    elements.statusDot.className = `status-dot ${tone}`;
+  }
+
+  function renderReview() {
+    const review = state.target.review || { status: 'not-ready' };
+    const labels = {
+      approved: 'Approved',
+      'awaiting-approval': 'Awaiting decision',
+      'changes-requested': 'Changes requested',
+      'not-ready': 'Not ready',
+    };
+    elements.reviewState.textContent = labels[review.status] || review.status;
+    elements.reviewState.className = `review-state ${review.status === 'approved' ? 'is-approved' : review.status === 'changes-requested' ? 'is-changes' : review.status === 'awaiting-approval' ? 'is-awaiting' : ''}`;
+    elements.reviewNote.value = review.decision && review.decision.note ? review.decision.note : '';
   }
 
   async function api(url, options = {}) {
@@ -162,6 +195,8 @@ import { createRegionEditor } from './regions.js';
     elements.previewVideo.hidden = true;
     elements.recaptureButton.disabled = true;
     elements.saveButton.disabled = true;
+    elements.requestChangesButton.disabled = true;
+    elements.approveButton.disabled = true;
   }
 
   function selectTarget(target, { force = false } = {}) {
@@ -261,6 +296,7 @@ import { createRegionEditor } from './regions.js';
     elements.viewportLabel.textContent = `${target.viewport.width} x ${target.viewport.height}`;
     elements.profileName.textContent = `${target.story} / ${target.target}`;
     renderTargetStatus();
+    renderReview();
     setProfileState();
     syncControls();
     preview.applyGeometry();
@@ -269,6 +305,7 @@ import { createRegionEditor } from './regions.js';
     preview.renderBeats();
     elements.saveButton.disabled = true;
     elements.recaptureButton.disabled = false;
+    setBusy(state.busy);
   }
 
   function profilePayload() {
@@ -292,9 +329,13 @@ import { createRegionEditor } from './regions.js';
       state.target.hasProfile = true;
       state.target.verified = false;
       state.target.status = 'needs-fix';
+      state.target.reviewable = false;
+      state.target.publishable = false;
+      state.target.review = { status: 'not-ready', stale: true };
       state.dirty = false;
       setProfileState();
       renderTargetStatus();
+      renderReview();
       renderTargets();
       setOperation('Saved');
     } catch (error) {
@@ -323,9 +364,40 @@ import { createRegionEditor } from './regions.js';
       setOperation(result.status === 'publish-ready' ? 'Verified' : result.status || 'Finished');
       elements.previewVideo.dataset.source = '';
       await loadState(selectedKey);
+      setOperation(result.machineStatus === 'publish-ready' ? 'Ready for review' : result.status || 'Finished');
     } catch (error) {
       showNotice('Recapture failed', error.message);
       setOperation('Recapture failed');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function submitReview(status) {
+    if (!state.target || !state.target.reviewable) return;
+    const note = elements.reviewNote.value.trim();
+    if (status === 'changes-requested' && !note) {
+      showNotice('Feedback is required', 'Tell the agent what should change before requesting another pass.');
+      elements.reviewNote.focus();
+      return;
+    }
+    const selectedKey = state.selectedKey;
+    setBusy(true, status === 'approved' ? 'Approving capture' : 'Sending feedback');
+    try {
+      await api('/api/review', {
+        method: 'POST',
+        body: JSON.stringify({
+          story: state.target.story,
+          target: state.target.target,
+          status,
+          ...(note ? { note } : {}),
+        }),
+      });
+      await loadState(selectedKey);
+      setOperation(status === 'approved' ? 'Approved by user' : 'Changes requested');
+    } catch (error) {
+      showNotice('Review decision was not saved', error.message);
+      setOperation('Review failed');
     } finally {
       setBusy(false);
     }
@@ -348,6 +420,8 @@ import { createRegionEditor } from './regions.js';
   function bindEvents() {
     elements.saveButton.addEventListener('click', saveProfile);
     elements.recaptureButton.addEventListener('click', recapture);
+    elements.requestChangesButton.addEventListener('click', () => submitReview('changes-requested'));
+    elements.approveButton.addEventListener('click', () => submitReview('approved'));
     elements.noticeClose.addEventListener('click', () => { elements.notice.hidden = true; });
     elements.warningSummary.addEventListener('click', () => $('warningsSection').scrollIntoView({ behavior: 'smooth', block: 'start' }));
     preview.bind();

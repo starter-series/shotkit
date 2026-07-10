@@ -85,7 +85,8 @@
           "properties": {
             "manifest": { "type": "string" },
             "storyboard": { "type": "string" },
-            "captions": { "type": "string" }
+            "captions": { "type": "string" },
+            "approval": { "const": "urn:starter-series:shotkit:schema:approval:v1" }
           }
         },
         "schemaFiles": {
@@ -94,7 +95,8 @@
           "properties": {
             "manifest": { "const": "schemas/shotkit-manifest.schema.json" },
             "storyboard": { "const": "schemas/storyboard.schema.json" },
-            "captions": { "const": "schemas/captions.schema.json" }
+            "captions": { "const": "schemas/captions.schema.json" },
+            "approval": { "const": "schemas/approval.schema.json" }
           }
         },
         "storyboards": { "const": "storyboard.json" },
@@ -108,6 +110,7 @@
           "items": { "$ref": "#/$defs/adapterHint" }
         },
         "automation": { "$ref": "#/$defs/automation" },
+        "approval": { "$ref": "#/$defs/approvalGate" },
         "review": {
           "type": "object",
           "required": ["status", "warningCount", "warnings", "incomplete"],
@@ -131,7 +134,8 @@
             "assetCount": { "type": "integer", "minimum": 0 },
             "demoCount": { "type": "integer", "minimum": 0 },
             "readyAdapterCount": { "type": "integer", "minimum": 0 },
-            "publishReadyTargetCount": { "type": "integer", "minimum": 0 }
+            "publishReadyTargetCount": { "type": "integer", "minimum": 0 },
+            "approvedTargetCount": { "type": "integer", "minimum": 0 }
           }
         }
       }
@@ -220,6 +224,7 @@
       "properties": {
         "name": { "type": "string" },
         "story": { "type": "string" },
+        "profileHash": { "type": "string", "minLength": 1 },
         "target": { "type": "string" }
       }
     },
@@ -331,6 +336,46 @@
         "code": { "type": "string" },
         "status": { "enum": ["pass", "fail"] },
         "message": { "type": "string" }
+      }
+    },
+    "approvalGate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["required", "status", "file", "userActionRequired", "publishable", "targets"],
+      "properties": {
+        "required": { "type": "boolean" },
+        "status": { "enum": ["not-requested", "not-ready", "awaiting-approval", "changes-requested", "approved"] },
+        "file": { "const": "shotkit-approval.json" },
+        "userActionRequired": { "type": "boolean" },
+        "publishable": { "type": "boolean" },
+        "targets": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/approvalTarget" }
+        }
+      }
+    },
+    "approvalTarget": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["target", "demo", "story", "status", "assetDigest", "stale"],
+      "properties": {
+        "target": { "type": "string" },
+        "demo": { "type": "string" },
+        "story": { "type": "string" },
+        "status": { "enum": ["not-ready", "awaiting-approval", "changes-requested", "approved"] },
+        "assetDigest": { "type": ["string", "null"], "pattern": "^[a-f0-9]{64}$" },
+        "profileHash": { "type": "string", "minLength": 1 },
+        "stale": { "type": "boolean" },
+        "decision": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status", "decidedAt"],
+          "properties": {
+            "status": { "enum": ["approved", "changes-requested"] },
+            "decidedAt": { "type": "string", "format": "date-time" },
+            "note": { "type": "string", "minLength": 1, "maxLength": 2000 }
+          }
+        }
       }
     },
     "agentAction": {

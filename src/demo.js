@@ -341,6 +341,7 @@ function demoCaptionInitScript(options = {}) {
     return {
       text: String(text),
       sourceText: String(nextOptions.fullText || text),
+      renderedAt: Date.now(),
       mode: root.dataset.mode,
       appearance: root.dataset.appearance,
       rect: {
@@ -405,8 +406,7 @@ async function ensureDemoCaptionOverlay(page, options = {}) {
   await page.evaluate(demoCaptionInitScript, options);
 }
 
-async function setDemoCaption(page, text, options = {}) {
-  await ensureDemoCaptionOverlay(page, options);
+async function renderDemoCaption(page, text, options = {}) {
   return page.evaluate(
     ({ captionText, captionOptions }) => {
       return window.__shotkitDemoCaption.show(captionText, captionOptions);
@@ -416,6 +416,11 @@ async function setDemoCaption(page, text, options = {}) {
       captionOptions: options,
     },
   );
+}
+
+async function setDemoCaption(page, text, options = {}) {
+  await ensureDemoCaptionOverlay(page, options);
+  return renderDemoCaption(page, text, options);
 }
 
 async function hideDemoCaption(page) {
@@ -488,6 +493,7 @@ function createDemoController({ page, captions = [], captionOptions = {} }) {
   let activeText = '';
   let activeOptions = {};
   let activeExpectedAtMs = null;
+  let overlayReady = false;
   let stopped = false;
 
   async function render(text, options = {}, expectedAtMs = null) {
@@ -499,17 +505,25 @@ function createDemoController({ page, captions = [], captionOptions = {} }) {
     captionStyle(nextOptions);
     try {
       if (activeText) {
-        const sample = await setDemoCaption(page, activeText, nextOptions);
+        if (!overlayReady) {
+          await ensureDemoCaptionOverlay(page, nextOptions);
+          overlayReady = true;
+        }
+        const sample = await renderDemoCaption(page, activeText, nextOptions);
         if (sample) {
+          const { renderedAt, ...metrics } = sample;
           captionSamples.push({
-            ...sample,
+            ...metrics,
             expectedAtMs,
-            actualAtMs: Date.now() - startedAt,
+            actualAtMs: Number.isFinite(renderedAt)
+              ? Math.max(0, Math.round(renderedAt - startedAt))
+              : Date.now() - startedAt,
           });
         }
       }
       else await hideDemoCaption(page);
     } catch (_e) {
+      overlayReady = false;
       // Navigations can briefly destroy the execution context. The next helper
       // call or DOMContentLoaded replay will render the latest caption.
     }
@@ -517,6 +531,7 @@ function createDemoController({ page, captions = [], captionOptions = {} }) {
 
   const replay = () => {
     if (!activeText || stopped) return;
+    overlayReady = false;
     setTimeout(() => render(activeText, activeOptions, activeExpectedAtMs), 0);
   };
   page.on('domcontentloaded', replay);

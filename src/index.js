@@ -3,8 +3,8 @@
  *
  * shotkit turns a BUILT browser extension (or any HTML) into automatically
  * validated channel assets. Playwright captures reusable stories; channel
- * profiles, final-file QA, and agent-owned retry actions drive them to
- * publish-ready through the CLI, capture(), and agent-readable skills.
+ * profiles, final-file QA, and agent-owned retry actions drive them to a
+ * technically verified candidate; an explicit user decision gates publication.
  *
  * Config authors typically use `capture` indirectly (via the CLI) and import
  * the helpers below inside their `shotkit.config.js` to set up scenes:

@@ -33,6 +33,14 @@
             <svg class="icon" aria-hidden="true"><use href="#icon-save"></use></svg>
             <span class="button-label">Save</span>
           </button>
+          <button class="button button-review" id="requestChangesButton" type="button" title="Request changes" disabled>
+            <svg class="icon" aria-hidden="true"><use href="#icon-message"></use></svg>
+            <span class="button-label">Request changes</span>
+          </button>
+          <button class="button button-success" id="approveButton" type="button" title="Approve this capture" disabled>
+            <svg class="icon" aria-hidden="true"><use href="#icon-check"></use></svg>
+            <span class="button-label">Approve</span>
+          </button>
         </div>
       </header>
 
@@ -111,6 +119,15 @@
           </header>
 
           <form id="profileForm">
+            <section class="inspector-section review-section">
+              <div class="review-heading">
+                <h3>Final review</h3>
+                <span class="review-state" id="reviewState">Not ready</span>
+              </div>
+              <label class="field-label" for="reviewNote">Feedback</label>
+              <textarea id="reviewNote" maxlength="2000" rows="3" placeholder="What should the agent change?"></textarea>
+            </section>
+
             <fieldset class="inspector-section">
               <legend>Caption</legend>
 
@@ -234,6 +251,12 @@
       <symbol id="icon-alert" viewBox="0 0 24 24">
         <path d="m21.73 18-8-14a2 2 0 0 0-3.46 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"></path>
         <path d="M12 9v4M12 17h.01"></path>
+      </symbol>
+      <symbol id="icon-message" viewBox="0 0 24 24">
+        <path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4Z"></path>
+      </symbol>
+      <symbol id="icon-check" viewBox="0 0 24 24">
+        <path d="m5 12 4 4L19 6"></path>
       </symbol>
     </svg>
 

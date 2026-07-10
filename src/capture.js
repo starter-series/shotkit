@@ -40,6 +40,7 @@ const { postProcessDemo, probeVideo } = require('./video');
 const { analyzeDemoStoryboard, createDemoController, installDemoCaptionOverlay, normalizeDemoConfigs } = require('./demo');
 const { analyzeDemoCaptionMetrics } = require('./demo-caption-qa');
 const { applyCalibrationProfiles, loadCalibration } = require('./calibration');
+const { deliveryStatus } = require('./approval');
 const { assetRecord, writeHandoffDocs } = require('./handoff');
 const { analyzePng } = require('./image-qa');
 
@@ -121,7 +122,7 @@ function usageError(message) {
  * @param {boolean} [opts.freeze]    passed to config hooks as flags.freeze
  * @param {string}  [opts.cwd]       project root for build / outDir / listing sources
  * @param {(msg:string)=>void} [opts.log]
- * @returns {Promise<{produced: string[], outDir: string, manifest: string|null, status:string}>}
+ * @returns {Promise<{produced: string[], outDir: string, manifest: string|null, status:string, machineStatus:string}>}
  */
 async function capture(config, opts = {}) {
   const cwd = opts.cwd || process.cwd();
@@ -139,6 +140,7 @@ async function capture(config, opts = {}) {
   const produced = [];
   let manifest = null;
   let status = 'not-requested';
+  let machineStatus = 'not-requested';
   const assets = [];
   const calibration = loadCalibration(config, cwd);
   const demoConfigs = applyCalibrationProfiles(normalizeDemoConfigs(config), calibration.document);
@@ -546,15 +548,16 @@ async function capture(config, opts = {}) {
       produced.push(...handoffPaths);
       manifest = path.join(outDir, 'shotkit-manifest.json');
       const handoff = JSON.parse(fs.readFileSync(manifest, 'utf8'));
-      status = handoff.handoff && handoff.handoff.automation
+      machineStatus = handoff.handoff && handoff.handoff.automation
         ? handoff.handoff.automation.status
         : 'not-requested';
-      log(`automation: ${status}`);
+      status = deliveryStatus(handoff);
+      log(`automation: ${machineStatus}; delivery: ${status}`);
       for (const out of handoffPaths) log(`✓ ${path.basename(out)}`);
     }
 
     log(`done — ${produced.length} asset(s) in ${path.relative(cwd, outDir) || '.'}/`);
-    return { produced, outDir, manifest, status };
+    return { produced, outDir, manifest, status, machineStatus };
   } finally {
     await cleanupTempResources();
   }

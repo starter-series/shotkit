@@ -7,6 +7,11 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 ## [Unreleased]
 
 ### Added
+- An explicit final user approval gate in the Calibrator. Approve and Request
+  changes decisions are stored in `shotkit-approval.json`, bound to the exact
+  deliverable SHA-256 and calibration profile hash, and exposed through the
+  manifest's schema-backed `handoff.approval` contract. Recapture or profile
+  changes automatically invalidate stale decisions.
 - A local exception-only composition Calibrator (`shotkit --calibrate`) backed
   by tracked `shotkit.calibration.json`: declared layout presets, bounded
   framing, caption lane/appearance controls, up to three protected regions,
@@ -35,7 +40,7 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 - Exception-only `handoff.automation`: `publish-ready`, `needs-fix`, and
   exhausted `blocked` states, agent-owned fix/rerun actions, `--target`, and
   bounded `--attempt` retries.
-- Every handoff pack now bundles its three JSON Schemas, exposes their
+- Every handoff pack now bundles its four JSON Schemas, exposes their
   manifest-relative paths, and records byte size plus SHA-256 integrity for
   each delivered file except the self-referential manifest.
 - The manifest now carries additive v1 metadata for the agent-ready launch
@@ -47,10 +52,13 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 - The handoff manifest `tool` field now emits `shotkit`, matching the package
   and CLI identity.
 - `--json` success results now return the absolute `manifest` entrypoint.
-- Public messaging now leads with the autonomous publish-ready launch asset
-  pipeline; Playwright remains the implementation mechanism.
-- Target workflows no longer route routine work to human review or manual
-  editors. Manual adapter hints require `automation.manualFallback:true`.
+- Public messaging now leads with the autonomous launch asset pipeline and its
+  explicit final user approval gate; Playwright remains the implementation
+  mechanism.
+- Target workflows no longer route technical diagnosis or routine repair to
+  humans. Agents own those retries; users review the technically verified final
+  media and make the publication-gating decision. Manual adapter hints require
+  `automation.manualFallback:true`.
 
 ### Fixed
 - Caption and native-select overlays are isolated from host-page translation,

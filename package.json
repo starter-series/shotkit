@@ -1,7 +1,7 @@
 {
   "name": "shotkit",
   "version": "1.3.0",
-  "description": "Autonomously capture, validate, and retry publish-ready CWS, X, and YouTube launch assets from browser extensions.",
+  "description": "Autonomously capture, validate, and retry CWS, X, and YouTube launch assets, then gate final user approval.",
   "main": "src/index.js",
   "exports": {
     ".": "./src/index.js",
@@ -67,6 +67,7 @@
   "jest": {
     "collectCoverageFrom": [
       "src/channels.js",
+      "src/approval.js",
       "src/calibration.js",
       "src/calibrator-server.js",
       "src/presets.js",

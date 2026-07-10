@@ -1,10 +1,10 @@
 ---
 name: capture
-description: Autonomously produce publish-ready browser-extension launch assets with shotkit. Use for CWS/YouTube promo video, X video, YouTube Shorts, store screenshots, listing/privacy evidence, or channel variants. Infer mechanical channel settings, capture, validate, fix, and retry without asking the user to review media; escalate only after automated attempts are exhausted.
+description: Autonomously produce browser-extension launch assets with shotkit, then present the technically verified final media for explicit user approval. Use for CWS/YouTube promo video, X video, YouTube Shorts, store screenshots, listing/privacy evidence, or channel variants. Infer mechanical channel settings, capture, validate, fix, and retry without interrupting the user; bind Approve or Request changes to the exact final file digest.
 allowed-tools: Bash(shotkit*), Bash(node bin/shotkit.js*), Bash(npm run capture:store*), Bash(npm exec -- playwright install chromium), Read, Edit, Write
 ---
 
-# Produce publish-ready launch assets with shotkit
+# Produce and approve launch assets with shotkit
 
 shotkit drives the repo's **built** extension with Playwright and writes assets
 into the config's `outDir` (default `store-assets/`). A successful run doubles
@@ -56,7 +56,8 @@ rendered from the shipped code. By default, it also writes a handoff pack:
    its authored presets, bounded framing/caption controls, and three protected
    regions. Save the profile, trigger the real recapture, and continue only
    from its resulting `publish-ready` or structured `needs-fix` state. Do not
-   turn this into a user media-review step.
+   ask the user to diagnose composition or operate the controls. Once technical
+   QA passes, use the same dashboard for the user's final media decision.
 
    Before npm publication, run the source checkout with
    `node bin/shotkit.js --json --attempt 1`, or use a project wrapper such as
@@ -69,18 +70,24 @@ rendered from the shipped code. By default, it also writes a handoff pack:
    demo — needs ffmpeg on PATH or `SHOTKIT_FFMPEG`), `--no-build` (reuse an
    existing build).
 5. **Read the result** — stdout is exactly one JSON object:
-   `{ "ok": true, "status": "publish-ready", "outDir": "...", "manifest": "/abs/path/shotkit-manifest.json", "produced": [...] }`.
+   `{ "ok": true, "status": "awaiting-approval", "machineStatus": "publish-ready", "outDir": "...", "manifest": "/abs/path/shotkit-manifest.json", "produced": [...] }`.
    Progress logs go to stderr in `--json` mode.
-   Read `handoff.automation`, not the legacy human-oriented review summary.
-6. **Fix and retry without user interruption**:
-   - `publish-ready`: stop. Report final target files and upload authorization
-     needed; do not ask the user to watch or edit them.
+   Read `handoff.automation` for technical repair work and `handoff.approval`
+   for the user decision. Do not use the legacy compatibility review summary.
+6. **Fix, review, and publish through the gate**:
    - `needs-fix`: apply every `automation.actions[]` item whose owner is
      `agent`, edit the config, then rerun `automation.retryScenes[]` with
      `--attempt 2`. Repeat through `automation.maxAttempts`.
    - `blocked`: automated attempts are exhausted. Report only the concrete
-     blocker and attempted fixes. This is the first point at which user input is
-     appropriate.
+     technical blocker and attempted fixes; ask for technical input.
+   - `awaiting-approval`: technical QA passed. Open the Calibrator and present
+     the rendered candidate to the user. Do not approve on the user's behalf.
+   - `changes-requested`: read the digest-bound decision note, implement it as
+     the next agent-owned edit, recapture, and return the new candidate for
+     another decision.
+   - `approved`: the exact recorded digest passed user review. An authorized
+     uploader may publish that digest; any recapture or profile edit invalidates
+     the decision.
    - `not-requested`: legacy capture mode; no channel target was configured.
 7. **On runtime failure** — exit code `2` = usage/no config found, `1` = runtime
    failure; stdout still carries the single JSON payload
@@ -138,10 +145,11 @@ rendered from the shipped code. By default, it also writes a handoff pack:
 - Target workflows default to `automation.manualFallback:false`; manual editor
   recommendations are omitted. Never suggest iMovie, Screen Studio, Canva, or
   manual recapture unless the user explicitly requests a manual fallback.
-- `publish-ready` means the final file passed shotkit's automated story, codec,
+- Machine `publish-ready` means the final file passed shotkit's automated story, codec,
   pixel-format, actual-dimension, actual-duration, thumbnail, nonblank-frame,
-  integrity, and channel-profile checks. External upload still requires the
-  user's authorization or an authorized connector.
+  integrity, and channel-profile checks. It is not user approval. Publication
+  additionally requires `handoff.approval.publishable:true` and an authorized
+  connector.
 - Validate a received pack through `handoff.schemaFiles`; schema paths are
   relative to the manifest directory. On partial runs, compare each asset's
   `runId` with `manifest.run.id` and inspect `state` before assuming it was

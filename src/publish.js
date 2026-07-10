@@ -136,6 +136,7 @@ function targetPublishPlan({ demo, lint, assets, skipped }) {
     delivery: profile.delivery,
     demo: demo.name,
     story: demo.story || demo.name,
+    ...(demo.calibration && demo.calibration.profileHash ? { profileHash: demo.calibration.profileHash } : {}),
     status: actions.length ? 'needs-fix' : 'publish-ready',
     deliverable: assetRef(mp4),
     thumbnail: assetRef(thumbnail),

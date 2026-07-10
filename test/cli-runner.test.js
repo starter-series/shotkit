@@ -28,7 +28,8 @@ describe('runCli', () => {
       return {
         outDir: path.join(cwd, 'store-assets'),
         manifest: path.join(cwd, 'store-assets', 'shotkit-manifest.json'),
-        status: 'publish-ready',
+        status: 'awaiting-approval',
+        machineStatus: 'publish-ready',
         produced: [path.join(cwd, 'store-assets', 'a.png')],
       };
     });
@@ -45,7 +46,8 @@ describe('runCli', () => {
     expect(code).toBe(0);
     expect(JSON.parse(stdout.read())).toEqual({
       ok: true,
-      status: 'publish-ready',
+      status: 'awaiting-approval',
+      machineStatus: 'publish-ready',
       outDir: path.join(cwd, 'store-assets'),
       manifest: path.join(cwd, 'store-assets', 'shotkit-manifest.json'),
       produced: [path.join(cwd, 'store-assets', 'a.png')],

@@ -1,6 +1,6 @@
 # shotkit
 
-An autonomous publish-ready launch asset pipeline for browser extensions.
+An autonomous launch asset pipeline with explicit final user approval for browser extensions.
 Playwright drives the shipped product; channel profiles, automated QA, the `shotkit` CLI, programmatic
 `capture()`, and `skills/capture/` Claude Code skill expose the same engine.
 Vanilla JS, CommonJS, no build step.
@@ -24,8 +24,11 @@ video included); the local default is headed. Exit codes: `0` ok · `1` runtime
 failure · `2` usage / no config. In `--json` mode progress logs go to stderr;
 stdout is exactly one JSON object. Useful flags: `--scene <name>`,
 `--target <id>`, `--attempt <n>`, `--mp4`, `--no-video`, `--no-build`.
-Success JSON carries `status`: `publish-ready`, `needs-fix`, `blocked`, or
-`not-requested`. Agents own `needs-fix` actions and retry without user review.
+Success JSON carries a technical `machineStatus` plus delivery `status`:
+`approved`, `awaiting-approval`, `changes-requested`, `needs-fix`, `blocked`, or
+`not-requested`. Agents own `needs-fix` actions and retry without interrupting
+the user; after technical QA passes, the user reviews the final media and
+chooses Approve or Request changes.
 Every run also writes `storyboard.json`, `captions.json`, and
 `shotkit-manifest.json` unless `handoff:false` is set in config.
 
@@ -43,6 +46,7 @@ src/
   demo-caption-qa.js → measured caption/protected-region composition QA
   demo-select.js → recordable native-select mirror and real value-change action
   calibration.js / calibrator-server.js → tracked profiles + local dashboard API
+  approval.js    → digest-bound user approval decisions + publication gate
   channels.js    → autonomous CWS/YouTube, X, and Shorts target profiles
   promo.js       → renderPromoTile (HTML template → image)
   describe.js    → extractListing / renderDescriptionDoc (STORE_LISTING.md → copy)
@@ -88,12 +92,18 @@ test/            → unit tests for the pure/safe modules (no browser)
   Add Whisper-style alignment only as an optional future audio adapter; silent
   product demos already have deterministic caption timing.
 - **Handoff JSON is the machine boundary**: target workflows use
-  `handoff.automation` to fix and retry until `publish-ready`; users do not read
-  manifests or review media. Use `assets[].role` and bundled schemas instead of
-  filename guessing.
+  `handoff.automation` to fix and retry until technical `publish-ready`; users
+  do not read manifests or repair media. They review the resulting media in the
+  Calibrator and make the final Approve / Request changes decision. Use
+  `assets[].role` and bundled schemas instead of filename guessing.
 - **Exception-only automation**: every `needs-fix` action is owned by the agent.
   Escalate only after `automation.maxAttempts` yields `blocked`. Manual editor
   hints are disabled unless `automation.manualFallback:true` is explicit.
+- **User approval is the publication gate**: never treat machine
+  `publish-ready` as permission to publish. `shotkit-approval.json` binds each
+  decision to the exact deliverable SHA-256 and calibration profile hash; any
+  recapture or profile edit makes the old decision stale. Only an `approved`
+  current digest is publishable. Agents must not approve on the user's behalf.
 - **Storyboard lint is structured for agents**: runtime logs are human strings,
   but `storyboard.json` carries `code`, `severity`, `message`, and `fix` so the
   next config edit can be mechanical.
@@ -157,5 +167,7 @@ actual bounds, overflow, line-count, stroke, presence, and timing checks.
 Prefer one story with `targets:['cws-youtube','x','youtube-shorts']`; shotkit
 replays the action script with target-specific framing. Read
 `handoff.automation`, apply agent-owned fixes, and rerun only
-`automation.retryScenes[]`. Do not propose iMovie, manual recapture, or media
-review unless the user explicitly requests fallback editing.
+`automation.retryScenes[]`. Once technical QA passes, open the final candidate
+in the Calibrator for the user's approval. Treat Request changes feedback as
+the next agent-owned edit and recapture. Do not propose iMovie or manual
+recapture unless the user explicitly requests fallback editing.
