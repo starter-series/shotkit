@@ -43,8 +43,8 @@ async function runCli(argv, io = {}, deps = {}) {
   try {
     const config = loadConfig(configPath);
     const log = opts.json ? (m) => stderr.write(`[shotkit] ${m}\n`) : undefined;
-    const { produced, outDir } = await capture(config, { ...opts, cwd, log });
-    if (opts.json) writeJson(stdout, { ok: true, outDir, produced });
+    const { produced, outDir, manifest = null } = await capture(config, { ...opts, cwd, log });
+    if (opts.json) writeJson(stdout, { ok: true, outDir, manifest, produced });
     return 0;
   } catch (err) {
     const msg = err && err.message ? err.message : String(err);

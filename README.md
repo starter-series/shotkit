@@ -2,9 +2,10 @@
 
 # shotkit
 
-**Capture browser-extension store assets and demo handoff packs — with Playwright.**
+**Agent-ready launch asset capture and handoff for browser extensions.**
 
-Screenshots · promo images · demo clips · storyboard · handoff manifest. One command.
+Build the shipped extension. Produce CWS/SNS source assets. Hand off a versioned,
+self-contained evidence pack.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Node ≥ 22](https://img.shields.io/badge/node-%E2%89%A522-brightgreen.svg)](.nvmrc)
@@ -15,13 +16,13 @@ Screenshots · promo images · demo clips · storyboard · handoff manifest. One
 
 ---
 
-> **Part of [Starter Series](https://github.com/starter-series)** — reusable tooling, not just clone-templates. `shotkit` is the unscoped package identity for this capture engine; public npm install is a release gate, not assumed by the repo README.
+> **Part of [Starter Series](https://github.com/starter-series)** — reusable tooling, not just clone-templates. `shotkit` is the unscoped package identity for this launch asset pipeline; public npm install is a release gate, not assumed by the repo README.
 
 ---
 
 ## Status & Scope
 
-- **Currently implemented** — A Playwright capture **engine** (build → launch the *built* extension via `launchPersistentContext(--load-extension)` → drive scenes → screenshot → caption/disclaimer band → promo tile from HTML → demo `webm` with DOM caption overlays → listing copy from `STORE_LISTING.md` or `product.manifest.json` → optional `privacy-disclosure.md` worksheet → `storyboard.json` / `captions.json` / `shotkit-manifest.json` handoff pack), a **CLI** (`shotkit`) with an **agent contract** (`--json` machine output, optional `path` argument, `0/1/2` exit codes), **size presets** for both audiences (CWS `1280×800`/`440×280`, SNS `1200×675`/`1280×720`/`1200×630`/`1080×1080`), a **path-traversal-safe** localhost fixture server, a programmatic API (`capture()`), a **Claude Code plugin + skill** ([`skills/capture/`](skills/capture/SKILL.md); `/plugin install shotkit@starter-series`), an **AGENTS.md run-block** so any shell-having coding agent can invoke it, and **demo post-processing** for SNS (`webm → H.264 mp4` with `+faststart`, frame-accurate **trim**, static crop/zoom framing, thumbnails — needs an ffmpeg on PATH or `SHOTKIT_FFMPEG`; GitHub ubuntu runners ship one).
+- **Currently implemented** — An agent-ready launch asset **pipeline** whose capture engine builds and launches the *shipped* extension via Playwright, drives repo-owned scenes, and emits CWS screenshots/promo tiles, SNS demo clips, listing/privacy copy, plus a schema-backed evidence pack (`shotkit-manifest.json`, storyboard, captions, bundled schemas, structured review state, adapter hints, and per-file SHA-256). Its **CLI agent contract** provides `--json`, an optional repo `path`, explicit `0/1/2` exit codes, and the manifest entrypoint. The same engine is available through `capture()`, the Claude Code plugin + skill ([`skills/capture/`](skills/capture/SKILL.md); `/plugin install shotkit@starter-series`), and an AGENTS.md run-block. SNS post-processing covers H.264 mp4, trim, static crop/zoom, and thumbnails with a real ffmpeg.
 - **Story renderer** — Demo configs can use one `demo` or several `demos: []` entries, timed `captions`, pointer-highlighted clicks, paced cursor movement, static zoom/crop framing, thumbnail frames, storyboard lint, and a small `demo` helper (`caption`, `step`, `wait`, `click`) so an agent can turn a feature checklist into 20-40 second before → action → result stories without pulling in a general video editor.
 - **Design intent** — *One engine, many surfaces — matched to the tool's nature.* shotkit is a heavy, file-producing build tool, so its surfaces are CLI (+`--json`), skill, and CI — not MCP (see Non-goals). Captures are **deterministic** (login-free fixtures, frozen data) and the run **doubles as a real-bundle smoke test** — a screenshot only appears if that feature rendered from the shipped code. **Trademark-safe** by construction: a disclaimer band is composited onto every shot.
 - **Non-goals** — An **MCP server** inside shotkit (dropped by design: agents with a shell get a better contract from `--json` + the skill). Removing the per-repo **scene config** (which screens are *your* money shots is irreducible intent — it lives in your `shotkit.config.js`). A general-purpose video editor or hosted demo platform. shotkit creates source evidence and a handoff pack; Screen Studio, Canva, Supademo, or future MCP connectors can do polish later.
@@ -72,7 +73,7 @@ shotkit --no-build              # use an already-built bundle
 shotkit ../my-extension --json  # run against another checkout; JSON result on stdout
 ```
 
-Outputs land in `outDir` (default `store-assets/`): `<scene>.png`, `<promoTile>.png`, `<demo>.webm`, optional `<demo>.mp4`, optional `<demo>-thumbnail.png`, `description.md`, optional `privacy-disclosure.md`, and, by default, `storyboard.json`, `captions.json`, and `shotkit-manifest.json` (`handoff: false` disables the handoff files).
+Outputs land in `outDir` (default `store-assets/`): `<scene>.png`, `<promoTile>.png`, `<demo>.webm`, optional `<demo>.mp4`, optional `<demo>-thumbnail.png`, `description.md`, optional `privacy-disclosure.md`, and, by default, `storyboard.json`, `captions.json`, `shotkit-manifest.json`, plus the three schemas under `schemas/` (`handoff: false` disables the handoff pack).
 
 ### Handoff Pack
 
@@ -83,8 +84,11 @@ the clips mean.
 - `storyboard.json` — demo names, audience, viewport, trim/framing hints, beats,
   structured storyboard lint warnings, and suggested next tool.
 - `captions.json` — portable caption timings and text per demo.
-- `shotkit-manifest.json` — asset list, output paths, roles, project info, and
-  recommended handoff flow plus `adapterHints` for likely next tools.
+- `shotkit-manifest.json` — the entrypoint: asset inventory and integrity,
+  run/freshness metadata, review summary, bundled schema paths, and
+  `adapterHints` for likely next tools.
+- `schemas/*.schema.json` — local validation contracts, copied into every pack
+  so a downstream agent does not need the installed npm package.
 
 This makes external polish easier: an agent or MCP connector can read the
 manifest, open the mp4/webm + thumbnail + captions in Screen Studio, Canva,
@@ -98,8 +102,10 @@ design handoff, `higgsfield` appears for AI-video campaign variants, and
 captured assets are not enough by themselves. shotkit suggests the next tool;
 the agent's own MCP/tool environment performs the connection.
 
-The convention is versioned and schema-backed. `$schema` values are URN
-identifiers; load the actual schema files from the installed package. See
+The convention is versioned and schema-backed. `$schema` values are stable URN
+identifiers; `handoff.schemaFiles` resolves them to files inside the output pack.
+Every delivered file except the self-referential manifest carries byte size and
+SHA-256 integrity metadata. See
 [`docs/handoff-conventions.md`](docs/handoff-conventions.md) and the packaged
 schemas under [`schemas/`](schemas/).
 
@@ -241,11 +247,15 @@ move cursor/click/typing actions slowly, and use mp4 for X.
 logs move to stderr):
 
 ```json
-{ "ok": true, "outDir": "/abs/store-assets", "produced": ["/abs/store-assets/01-popup.png"] }
+{ "ok": true, "outDir": "/abs/store-assets", "manifest": "/abs/store-assets/shotkit-manifest.json", "produced": ["/abs/store-assets/01-popup.png"] }
 ```
 
 Exit codes: `0` ok · `1` runtime failure · `2` usage / no config found. Failure
 payloads also use the single stdout JSON object (`{"ok":false,"error":…}`).
+`ok:true` means the requested stages completed and the files were written. It
+does not certify channel completeness, visual approval, legal compliance, or
+availability of a downstream connector; read `handoff.review` and
+`handoff.adapterHints[]` from the returned manifest for those next decisions.
 Drop-in agent wiring: the run-block in
 [`AGENTS.md`](AGENTS.md) (read by Claude Code, Codex, Cursor, Gemini CLI, …) and
 the [`skills/capture/`](skills/capture/SKILL.md) skill (Agent Skills format —

@@ -18,4 +18,13 @@ describe('packaged handoff schemas', () => {
     expect(readSchema('storyboard.schema.json').properties.kind.const).toBe('shotkit.storyboard');
     expect(readSchema('captions.schema.json').properties.kind.const).toBe('shotkit.captions');
   });
+
+  test('v1 keeps its constants and adds the agent-ready category compatibly', () => {
+    expect(readSchema('shotkit-manifest.schema.json').properties.positioning.const)
+      .toBe('capture-and-handoff-kit');
+    expect(readSchema('shotkit-manifest.schema.json').properties.category.const)
+      .toBe('agent-ready-launch-asset-pipeline');
+    expect(readSchema('storyboard.schema.json').properties.purpose.const)
+      .toBe('browser-extension-demo-starter-pack');
+  });
 });

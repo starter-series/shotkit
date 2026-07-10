@@ -1,10 +1,10 @@
 ---
 name: capture
-description: Capture Chrome Web Store + social promo assets (screenshots, promo tiles, demo screencast, listing copy, privacy disclosure worksheet) from a built browser extension using shotkit. Use when asked to generate store screenshots, CWS assets, promo/OG images, listing/privacy handoff, or a demo video for a repo that has a shotkit.config.js (or store.config.js).
+description: Build, inspect, iterate, and hand off an agent-ready browser-extension launch asset pack with shotkit. Use for CWS screenshots, promo/OG images, social demos, listing/privacy evidence, storyboard review, or downstream editor handoff in a repo with shotkit.config.js (or store.config.js).
 allowed-tools: Bash(shotkit*), Bash(node bin/shotkit.js*), Bash(npm run capture:store*), Bash(npm exec -- playwright install chromium), Read
 ---
 
-# Capture store/social assets with shotkit
+# Build and hand off launch assets with shotkit
 
 shotkit drives the repo's **built** extension with Playwright and writes assets
 into the config's `outDir` (default `store-assets/`). A successful run doubles
@@ -34,11 +34,11 @@ rendered from the shipped code. By default, it also writes a handoff pack:
    demo — needs ffmpeg on PATH or `SHOTKIT_FFMPEG`), `--no-build` (reuse an
    existing build).
 3. **Read the result** — stdout is exactly one JSON object:
-   `{ "ok": true, "outDir": "...", "produced": ["/abs/path/01-….png", …] }`.
+   `{ "ok": true, "outDir": "...", "manifest": "/abs/path/shotkit-manifest.json", "produced": ["/abs/path/01-….png", …] }`.
    Progress logs go to stderr in `--json` mode.
-   For follow-up editing, read `shotkit-manifest.json` first; it lists the
-   mp4/webm, thumbnail, captions, storyboard, schema ids, recommended handoff
-   flow, and `handoff.adapterHints[]` for likely next tools/connectors.
+   Read the returned `manifest` path first. It lists the mp4/webm, thumbnail,
+   captions, storyboard, bundled schema paths, integrity metadata, review
+   warnings, run freshness, and `handoff.adapterHints[]` for likely next tools.
 4. **On failure** — exit code `2` = usage/no config found, `1` = runtime
    failure; stdout still carries the single JSON payload
    `{ "ok": false, "error": … }`. Common causes: build failure, Chromium not
@@ -82,3 +82,11 @@ rendered from the shipped code. By default, it also writes a handoff pack:
   `handoff.adapterHints[]`. Prefer `readiness:"ready"` hints first; treat
   `needs-input` as a prompt to ask for missing avatar/audio/brand inputs; treat
   `needs-assets` as a prompt to rerun shotkit with mp4/thumbnail/captions.
+- Treat CLI `ok:true` as execution success only. Report
+  `handoff.review.status`, warning and incomplete counts, produced roles,
+  whether the run is full or partial, and the first asset-ready adapter. Do not
+  describe the pack as launch-approved without a separate visual/policy review.
+- Validate a received pack through `handoff.schemaFiles`; schema paths are
+  relative to the manifest directory. On partial runs, compare each asset's
+  `runId` with `manifest.run.id` and inspect `state` before assuming it was
+  refreshed.

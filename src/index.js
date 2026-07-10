@@ -1,10 +1,10 @@
 /*
  * shotkit — public API.
  *
- * shotkit drives a BUILT browser extension (or any HTML) with Playwright and
- * captures store/social assets: screenshots, promo images, and captioned demo
- * screencasts. One engine, used via the CLI (`shotkit`), programmatically
- * (`capture()`), or through agent-readable docs/skills.
+ * shotkit turns a BUILT browser extension (or any HTML) into source launch
+ * assets plus a schema-backed handoff pack for agents and downstream editors.
+ * Playwright is the capture engine; the product boundary is exposed through
+ * the CLI (`shotkit`), `capture()`, and agent-readable docs/skills.
  *
  * Config authors typically use `capture` indirectly (via the CLI) and import
  * the helpers below inside their `shotkit.config.js` to set up scenes:

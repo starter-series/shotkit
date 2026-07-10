@@ -1,7 +1,8 @@
 # shotkit
 
-A Playwright capture engine for store/social assets, used via the `shotkit` CLI,
-`capture()` programmatically, or the `skills/capture/` Claude Code skill.
+An agent-ready launch asset capture and handoff pipeline for browser extensions.
+Playwright drives the shipped product; the `shotkit` CLI, programmatic
+`capture()`, and `skills/capture/` Claude Code skill expose the same engine.
 Vanilla JS, CommonJS, no build step.
 
 ## Run this tool (for agents)

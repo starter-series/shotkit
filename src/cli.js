@@ -10,7 +10,7 @@
 const fs = require('fs');
 const path = require('path');
 
-const USAGE = `shotkit — capture store/social assets from a built extension
+const USAGE = `shotkit — build an agent-ready launch asset pack from a browser extension
 
 Usage: shotkit [path] [options]
 
@@ -24,7 +24,7 @@ Options:
                     "description", or "privacy";
                     repeatable, or comma-separated. When given, nothing else runs.
   --json            machine-readable mode: stdout gets one JSON object
-                    {ok, outDir, produced[]}; progress logs move to stderr
+                    {ok, outDir, manifest, produced[]}; progress logs move to stderr
   --no-video        skip the demo screencast
   --mp4             also convert the demo to H.264 mp4 (needs ffmpeg on PATH
                     or SHOTKIT_FFMPEG; SNS uploaders want mp4, not webm)
@@ -33,8 +33,8 @@ Options:
   --freeze          pass flags.freeze to config hooks
   -h, --help        show this help
 
-Handoff: successful runs also write storyboard.json, captions.json, and
-shotkit-manifest.json unless the config sets handoff:false.
+Handoff: successful runs also write a self-contained schema-backed pack with
+shotkit-manifest.json as its entrypoint unless the config sets handoff:false.
 
 Exit codes: 0 ok · 1 runtime failure · 2 usage / no config found
 `;

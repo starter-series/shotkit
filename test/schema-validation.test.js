@@ -100,4 +100,24 @@ describe('handoff docs conform to the published JSON schemas', () => {
     expect(tc.captions).toHaveLength(1);
     expect(tc.captions[0].atMs).toBe(2000);
   });
+
+  it('keeps additive manifest fields compatible with the original v1 shape', () => {
+    const legacy = JSON.parse(JSON.stringify(docs.manifest));
+    delete legacy.category;
+    delete legacy.run;
+    delete legacy.handoff.entrypoint;
+    delete legacy.handoff.schemaFiles;
+    delete legacy.handoff.review;
+    delete legacy.handoff.summary;
+    for (const asset of legacy.assets) {
+      delete asset.runId;
+      delete asset.capturedAt;
+      delete asset.state;
+      delete asset.bytes;
+      delete asset.integrity;
+    }
+    const schema = loadSchema('shotkit-manifest.schema.json');
+    const validate = ajv.getSchema(schema.$id) || ajv.compile(schema);
+    expect(validate(legacy)).toBe(true);
+  });
 });

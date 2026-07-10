@@ -77,7 +77,7 @@ const DEFAULT_TARGETS = Object.freeze([
 function roleMap(assets = []) {
   const map = new Map();
   for (const asset of assets) {
-    if (!asset || !asset.role) continue;
+    if (!asset || !asset.role || asset.state === 'modified') continue;
     if (!map.has(asset.role)) map.set(asset.role, []);
     map.get(asset.role).push(asset);
   }
@@ -108,8 +108,11 @@ function targetAllowed(target, targetConfig) {
   return targetConfig.include.size === 0 || targetConfig.include.has(target.id);
 }
 
-function readinessFor(target, byRole) {
+function readinessFor(target, byRole, context = {}) {
   const missingRoles = target.requiredRoles.filter((role) => !byRole.has(role));
+  if (target.requiredRoles.includes('storyboard-contract') && context.storyboardDemoCount === 0) {
+    missingRoles.push('storyboard-content');
+  }
   if (missingRoles.length) return { readiness: 'needs-assets', confidence: 'low', missingRoles };
   if (target.extraInputs && target.extraInputs.length) {
     return { readiness: 'needs-input', confidence: 'medium', missingRoles: [] };
@@ -121,14 +124,14 @@ function readinessFor(target, byRole) {
   return { readiness: 'ready', confidence: hasClip ? 'high' : 'medium', missingRoles: [] };
 }
 
-function buildHandoffRecommendations({ assets = [], config = {} } = {}) {
+function buildHandoffRecommendations({ assets = [], config = {}, context = {} } = {}) {
   const byRole = roleMap(assets);
   const targetConfig = normalizeTargetConfig(config);
   const recommendations = [];
 
   for (const target of DEFAULT_TARGETS) {
     if (!targetAllowed(target, targetConfig)) continue;
-    const { readiness, confidence, missingRoles } = readinessFor(target, byRole);
+    const { readiness, confidence, missingRoles } = readinessFor(target, byRole, context);
     const useRoles = [...target.requiredRoles, ...(target.optionalRoles || [])];
     recommendations.push({
       id: target.id,

@@ -25,7 +25,11 @@ describe('runCli', () => {
     const stderr = streamBuffer();
     const capture = jest.fn(async (_config, opts) => {
       opts.log('capturing');
-      return { outDir: path.join(cwd, 'store-assets'), produced: [path.join(cwd, 'store-assets', 'a.png')] };
+      return {
+        outDir: path.join(cwd, 'store-assets'),
+        manifest: path.join(cwd, 'store-assets', 'shotkit-manifest.json'),
+        produced: [path.join(cwd, 'store-assets', 'a.png')],
+      };
     });
 
     const code = await runCli(['--json'], {
@@ -41,6 +45,7 @@ describe('runCli', () => {
     expect(JSON.parse(stdout.read())).toEqual({
       ok: true,
       outDir: path.join(cwd, 'store-assets'),
+      manifest: path.join(cwd, 'store-assets', 'shotkit-manifest.json'),
       produced: [path.join(cwd, 'store-assets', 'a.png')],
     });
     expect(stderr.read()).toContain('[shotkit] capturing');

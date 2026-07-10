@@ -2,9 +2,10 @@
 
 # shotkit
 
-**빌드된 브라우저 익스텐션에서 스토어 자산과 데모 handoff pack을 캡처 — Playwright 기반.**
+**브라우저 익스텐션을 위한 에이전트 친화적 출시 자산 캡처·handoff 파이프라인.**
 
-스크린샷 · 프로모 이미지 · 데모 클립 · storyboard · handoff manifest. 한 커맨드.
+실제 출하 빌드를 실행해 CWS/SNS 원본 자산과 버전·스키마가 있는
+자기완결형 evidence pack을 만듭니다.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Node ≥ 22](https://img.shields.io/badge/node-%E2%89%A522-brightgreen.svg)](.nvmrc)
@@ -15,11 +16,11 @@
 
 ---
 
-> **[Starter Series](https://github.com/starter-series)** — 클론 템플릿이 아니라 재사용 가능한 도구. `shotkit`은 이 캡처 엔진의 unscoped 패키지 이름입니다. 공개 npm 설치는 릴리스 게이트이며, README가 현재 게시 상태를 가정하지 않습니다.
+> **[Starter Series](https://github.com/starter-series)** — 클론 템플릿이 아니라 재사용 가능한 도구. `shotkit`은 이 출시 자산 파이프라인의 unscoped 패키지 이름입니다. 공개 npm 설치는 릴리스 게이트이며, README가 현재 게시 상태를 가정하지 않습니다.
 
 ## 상태와 범위 (Status & Scope)
 
-- **현재 구현된 것** — Playwright 캡처 **엔진**(빌드 → `--load-extension`으로 *빌드된* 익스텐션 로드 → scene 구동 → 스크린샷 → 캡션/면책 밴드 → HTML 프로모 타일 → DOM 캡션 오버레이가 들어간 데모 `webm` → `STORE_LISTING.md`에서 문안 추출 → `storyboard.json` / `captions.json` / `shotkit-manifest.json` handoff pack), **에이전트 계약**을 갖춘 **CLI**(`shotkit` — `--json` 머신 출력, 선택적 `path` 인자, `0/1/2` 종료 코드), 양쪽 용도 **사이즈 프리셋**(CWS `1280×800`/`440×280`, SNS `1200×675`/`1280×720`/`1200×630`/`1080×1080`), **path-traversal 안전** 로컬 픽스처 서버, 프로그램 API(`capture()`), **Claude Code skill**([`skills/capture/`](skills/capture/SKILL.md)), 셸을 가진 어떤 코딩 에이전트든 호출법을 읽을 수 있는 **AGENTS.md 실행 블록**.
+- **현재 구현된 것** — Playwright로 *실제 출하 빌드*를 실행하는 캡처 엔진과, 그 결과를 에이전트가 이어받을 수 있게 묶는 출시 자산 **파이프라인**입니다. CWS 스크린샷/프로모 타일, SNS 데모 클립, listing/privacy 문안과 함께 `shotkit-manifest.json`, storyboard, captions, 로컬 schema, 구조화된 review 상태, adapter hint, 파일별 SHA-256을 산출합니다. CLI의 `--json` 계약은 선택적 repo `path`, `0/1/2` 종료 코드, manifest entrypoint를 반환하며, 같은 엔진을 `capture()`, Claude Code skill, AGENTS.md 실행 블록에서도 사용합니다.
 - **스토리 렌더러** — 데모 config는 단일 `demo` 또는 여러 `demos: []`, timed `captions`, click highlight, cursor pacing, 정적 zoom/crop, thumbnail frame, storyboard lint, 작은 `demo` helper(`caption`, `step`, `wait`, `click`)를 쓸 수 있습니다. 에이전트가 기능 체크리스트를 20~40초짜리 before → action → result → safety/restore 캠페인 컷으로 바꾸기 쉬운 정도까지만 제공합니다.
 - **설계 의도** — *엔진 1개, 표면 여러 개 — 단, 도구 성격에 맞는 표면.* shotkit은 무겁고 파일을 산출하는 빌드 도구라 표면이 CLI(+`--json`)·skill·CI입니다 — MCP가 아니라(하지 않기로 한 것 참고). 캡처는 **결정적**(로그인 불필요 픽스처, freeze된 데이터)이고, 실행이 **실제 빌드본 smoke test를 겸함** — 스크린샷이 나온다 = 그 기능이 출하 코드에서 렌더됨. 모든 샷에 면책 밴드를 합성해 **상표 안전**.
 - **하지 않기로 한 것** — shotkit 내부 **MCP 서버**(셸이 있는 에이전트에는 `--json` + skill이 더 나은 계약). repo별 **scene 설정** 제거(어떤 화면이 *당신의* money shot인지는 환원 불가한 의도 — `shotkit.config.js`에 둠). 범용 동영상 편집기나 호스티드 데모 플랫폼. shotkit은 source evidence와 handoff pack을 만들고, Screen Studio/Canva/Supademo/향후 MCP connector가 polish를 이어받게 합니다.
@@ -63,7 +64,7 @@ shotkit --no-build              # 이미 빌드된 번들 사용
 shotkit ../my-extension --json  # 다른 체크아웃 대상 실행; 결과 JSON을 stdout에
 ```
 
-산출물은 `outDir`(기본 `store-assets/`): `<scene>.png`, `<promoTile>.png`, `<demo>.webm`, 선택적 `<demo>.mp4`, 선택적 `<demo>-thumbnail.png`, `description.md`, 그리고 기본값으로 `storyboard.json`, `captions.json`, `shotkit-manifest.json`입니다(`handoff: false`면 handoff 파일을 끕니다).
+산출물은 `outDir`(기본 `store-assets/`): `<scene>.png`, `<promoTile>.png`, `<demo>.webm`, 선택적 `<demo>.mp4`, 선택적 `<demo>-thumbnail.png`, `description.md`, 그리고 기본값으로 `storyboard.json`, `captions.json`, `shotkit-manifest.json`, `schemas/*.schema.json`입니다(`handoff: false`면 handoff pack을 끕니다).
 
 ### Handoff Pack
 
@@ -74,8 +75,10 @@ layer입니다. 실제 빌드된 확장을 캡처하고, source clip과 “이 �
 - `storyboard.json` — demo 이름, audience, viewport, trim/framing hint, beats,
   구조화된 storyboard lint warning, 추천 next tool.
 - `captions.json` — demo별 caption timing/text.
-- `shotkit-manifest.json` — asset 목록, output path, role, project info,
-  추천 handoff flow와 다음 도구 후보 `adapterHints`.
+- `shotkit-manifest.json` — entrypoint. asset inventory/integrity, 실행·freshness
+  metadata, review 요약, 로컬 schema path, 다음 도구 후보 `adapterHints`.
+- `schemas/*.schema.json` — 설치된 npm 패키지 없이도 검증할 수 있도록
+  모든 pack에 함께 복사되는 계약.
 
 이렇게 하면 에이전트나 MCP connector가 manifest를 읽고 mp4/webm,
 thumbnail, captions를 Screen Studio, Canva, Supademo 또는 다른 편집 도구로
@@ -88,8 +91,10 @@ manifest는 downstream 연결 후보도 제안합니다. 예를 들어 thumbnail
 추가 입력이 필요한 경우 `needs-input`으로 표시됩니다. shotkit은 다음 도구를
 제안하고, 실제 연결은 에이전트의 MCP/tool 환경이 수행합니다.
 
-handoff 규약은 버전과 schema를 갖습니다. `$schema` 값은 URN 식별자이고,
-실제 schema 파일은 설치된 패키지의 `schemas/`에서 읽으면 됩니다.
+handoff 규약은 버전과 schema를 갖습니다. `$schema` 값은 안정적인 URN
+식별자이고, `handoff.schemaFiles`가 output pack 안의 실제 schema로 연결합니다.
+자기 자신을 참조하는 manifest를 제외한 실파일에는 byte 크기와 SHA-256이
+기록됩니다.
 [`docs/handoff-conventions.md`](docs/handoff-conventions.md)와
 [`schemas/`](schemas/)를 보세요.
 
@@ -200,9 +205,12 @@ result → safety/restore, 짧은 캡션, 느린 cursor/click/typing, X용 mp4�
 ### 에이전트 계약 (`--json`)
 
 `shotkit [path] --json`은 stdout에 **정확히 하나의 JSON 객체**를 출력합니다
-(진행 로그는 stderr로 이동): `{ "ok": true, "outDir": …, "produced": [절대경로…] }`.
+(진행 로그는 stderr로 이동): `{ "ok": true, "outDir": …, "manifest": …, "produced": [절대경로…] }`.
 종료 코드: `0` 정상 · `1` 런타임 실패 · `2` 사용법 오류/설정 없음입니다.
-실패 payload도 stdout의 단일 JSON 객체(`{"ok":false,"error":…}`)를 사용합니다. 에이전트 연결은 [`AGENTS.md`](AGENTS.md) 실행 블록
+`ok:true`는 요청 단계가 끝나고 파일이 기록됐다는 뜻이며, 채널 완성도·시각
+승인·법률 준수·외부 connector 가용성을 인증하지는 않습니다. 반환된 manifest의
+`handoff.review`와 `handoff.adapterHints[]`에서 다음 판단을 이어갑니다. 실패
+payload도 stdout의 단일 JSON 객체(`{"ok":false,"error":…}`)를 사용합니다. 에이전트 연결은 [`AGENTS.md`](AGENTS.md) 실행 블록
 (Claude Code·Codex·Cursor·Gemini CLI 등이 읽음)과 [`skills/capture/`](skills/capture/SKILL.md)
 skill(Agent Skills 표준 — 호환 도구의 skills 디렉터리에 폴더째 복사)을 참고하십시오.
 

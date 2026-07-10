@@ -26,13 +26,52 @@
     "project": { "$ref": "#/$defs/project" },
     "outDir": { "type": "string" },
     "flags": { "type": "object", "additionalProperties": true },
+    "run": {
+      "type": "object",
+      "required": [
+        "id",
+        "mode",
+        "requestedScenes",
+        "video",
+        "noBuild",
+        "mp4",
+        "configuredDemos",
+        "selectedDemos",
+        "capturedDemos",
+        "skippedDemos"
+      ],
+      "properties": {
+        "id": { "type": "string", "format": "uuid" },
+        "mode": { "enum": ["full", "partial"] },
+        "requestedScenes": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "video": { "type": "boolean" },
+        "noBuild": { "type": "boolean" },
+        "mp4": { "type": "boolean" },
+        "configuredDemos": { "$ref": "#/$defs/names" },
+        "selectedDemos": { "$ref": "#/$defs/names" },
+        "capturedDemos": { "$ref": "#/$defs/names" },
+        "skippedDemos": { "$ref": "#/$defs/names" }
+      }
+    },
     "positioning": { "const": "capture-and-handoff-kit" },
+    "category": { "const": "agent-ready-launch-asset-pipeline" },
     "handoff": {
       "type": "object",
       "additionalProperties": true,
-      "required": ["contractVersion", "schemas", "storyboards", "captions", "recommendedFlow", "adapterHints"],
+      "required": [
+        "contractVersion",
+        "schemas",
+        "storyboards",
+        "captions",
+        "recommendedFlow",
+        "adapterHints"
+      ],
       "properties": {
         "contractVersion": { "const": 1 },
+        "entrypoint": { "const": "shotkit-manifest.json" },
         "schemas": {
           "type": "object",
           "required": ["manifest", "storyboard", "captions"],
@@ -40,6 +79,15 @@
             "manifest": { "type": "string" },
             "storyboard": { "type": "string" },
             "captions": { "type": "string" }
+          }
+        },
+        "schemaFiles": {
+          "type": "object",
+          "required": ["manifest", "storyboard", "captions"],
+          "properties": {
+            "manifest": { "const": "schemas/shotkit-manifest.schema.json" },
+            "storyboard": { "const": "schemas/storyboard.schema.json" },
+            "captions": { "const": "schemas/captions.schema.json" }
           }
         },
         "storyboards": { "const": "storyboard.json" },
@@ -51,6 +99,31 @@
         "adapterHints": {
           "type": "array",
           "items": { "$ref": "#/$defs/adapterHint" }
+        },
+        "review": {
+          "type": "object",
+          "required": ["status", "warningCount", "warnings", "incomplete"],
+          "properties": {
+            "status": { "enum": ["ready", "needs-review", "incomplete"] },
+            "warningCount": { "type": "integer", "minimum": 0 },
+            "warnings": {
+              "type": "array",
+              "items": { "$ref": "#/$defs/reviewWarning" }
+            },
+            "incomplete": {
+              "type": "array",
+              "items": { "$ref": "#/$defs/incompleteItem" }
+            }
+          }
+        },
+        "summary": {
+          "type": "object",
+          "required": ["assetCount", "demoCount", "readyAdapterCount"],
+          "properties": {
+            "assetCount": { "type": "integer", "minimum": 0 },
+            "demoCount": { "type": "integer", "minimum": 0 },
+            "readyAdapterCount": { "type": "integer", "minimum": 0 }
+          }
         }
       }
     },
@@ -61,6 +134,10 @@
     "config": { "type": "object", "additionalProperties": true }
   },
   "$defs": {
+    "names": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
     "project": {
       "type": "object",
       "additionalProperties": true,
@@ -84,6 +161,33 @@
         "outPath": { "type": "string" },
         "width": { "type": "integer", "minimum": 1 },
         "height": { "type": "integer", "minimum": 1 },
+        "runId": { "type": "string" },
+        "capturedAt": { "type": "string", "format": "date-time" },
+        "state": { "enum": ["produced", "retained", "modified"] },
+        "bytes": { "type": "integer", "minimum": 0 },
+        "integrity": {
+          "type": "object",
+          "required": ["algorithm", "digest"],
+          "properties": {
+            "algorithm": { "const": "sha256" },
+            "digest": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+          }
+        },
+        "observed": {
+          "type": "object",
+          "required": ["bytes", "integrity"],
+          "properties": {
+            "bytes": { "type": "integer", "minimum": 0 },
+            "integrity": {
+              "type": "object",
+              "required": ["algorithm", "digest"],
+              "properties": {
+                "algorithm": { "const": "sha256" },
+                "digest": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+              }
+            }
+          }
+        },
         "source": {
           "type": "object",
           "additionalProperties": true,
@@ -93,6 +197,29 @@
             "name": { "type": "string" }
           }
         }
+      }
+    },
+    "incompleteItem": {
+      "type": "object",
+      "required": ["code", "reason", "fix"],
+      "properties": {
+        "code": { "enum": ["demo-skipped", "asset-integrity-mismatch"] },
+        "demo": { "type": "string" },
+        "asset": { "type": "string" },
+        "reason": { "enum": ["video-disabled", "not-captured", "retained-file-changed"] },
+        "fix": { "type": "string" }
+      }
+    },
+    "reviewWarning": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["demo", "code", "severity", "message", "fix"],
+      "properties": {
+        "demo": { "type": "string" },
+        "code": { "type": "string" },
+        "severity": { "enum": ["warning"] },
+        "message": { "type": "string" },
+        "fix": { "type": "string" }
       }
     },
     "adapterHint": {

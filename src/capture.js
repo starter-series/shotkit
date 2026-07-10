@@ -117,7 +117,7 @@ function usageError(message) {
  * @param {boolean} [opts.freeze]    passed to config hooks as flags.freeze
  * @param {string}  [opts.cwd]       project root for build / outDir / listing sources
  * @param {(msg:string)=>void} [opts.log]
- * @returns {Promise<{produced: string[], outDir: string}>}
+ * @returns {Promise<{produced: string[], outDir: string, manifest: string|null}>}
  */
 async function capture(config, opts = {}) {
   const cwd = opts.cwd || process.cwd();
@@ -130,6 +130,7 @@ async function capture(config, opts = {}) {
   const defaultViewport = resolveSize(config.viewport, DEFAULT_VIEWPORT);
   const bandHeight = config.bandHeight || DEFAULT_BAND_HEIGHT;
   const produced = [];
+  let manifest = null;
   const assets = [];
   const demoConfigs = normalizeDemoConfigs(config);
   const capturedDemoConfigs = [];
@@ -473,13 +474,26 @@ async function capture(config, opts = {}) {
         // Scene-filtered or --no-video runs only re-capture a subset; merge into
         // the existing handoff contract rather than clobbering a prior full run.
         partial: only.size > 0 || !!opts.noVideo,
+        run: {
+          requestedScenes: [...only],
+          video: !opts.noVideo,
+          noBuild: !!opts.noBuild,
+          mp4: !!opts.mp4,
+          configuredDemos: demoConfigs.map((demoConfig) => demoConfig.name),
+          selectedDemos: demoConfigs.filter((demoConfig) => wants(demoConfig.name)).map((demoConfig) => demoConfig.name),
+          capturedDemos: capturedDemoConfigs.map((demoConfig) => demoConfig.name),
+          skippedDemos: demoConfigs
+            .filter((demoConfig) => wants(demoConfig.name) && !capturedDemoConfigs.includes(demoConfig))
+            .map((demoConfig) => demoConfig.name),
+        },
       });
       produced.push(...handoffPaths);
+      manifest = path.join(outDir, 'shotkit-manifest.json');
       for (const out of handoffPaths) log(`✓ ${path.basename(out)}`);
     }
 
     log(`done — ${produced.length} asset(s) in ${path.relative(cwd, outDir) || '.'}/`);
-    return { produced, outDir };
+    return { produced, outDir, manifest };
   } finally {
     await cleanupTempResources();
   }

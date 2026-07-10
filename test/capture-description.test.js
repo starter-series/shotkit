@@ -73,6 +73,7 @@ test('capture writes listing and privacy worksheet from product manifest', async
 
   expect(result.produced).toContain(descriptionPath);
   expect(result.produced).toContain(privacyPath);
+  expect(result.manifest).toBe(manifestPath);
   expect(fs.readFileSync(descriptionPath, 'utf8')).toContain('Demo Extension');
   expect(fs.readFileSync(privacyPath, 'utf8')).toContain('Privacy disclosure worksheet');
 
@@ -107,6 +108,9 @@ test('description-only scene does not run build, prepareExtension, or Chromium',
     'storyboard.json',
     'captions.json',
     'shotkit-manifest.json',
+    'shotkit-manifest.schema.json',
+    'storyboard.schema.json',
+    'captions.schema.json',
   ]);
   expect(prepareExtension).not.toHaveBeenCalled();
   expect(launchWithExtension).not.toHaveBeenCalled();

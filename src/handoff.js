@@ -1,15 +1,26 @@
 /*
  * shotkit — handoff contract exports.
  *
- * These JSON files are the "starter pack" layer: not a video editor, but a
- * clean bundle of captured assets, captions, story intent, and next-tool hints
- * that Screen Studio / Canva / Supademo / future MCP adapters can consume.
+ * These files are the agent-ready product boundary: a self-contained bundle of
+ * captured evidence, captions, story intent, integrity, review state, and
+ * next-tool hints for editors or future MCP adapters.
  */
 
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 const { normalizeDemoCaptions, parseTimeToMs } = require('./demo-time');
 const { buildHandoffRecommendations } = require('./integrations');
+const { isValidHandoffDocs, validateHandoffDocs } = require('./handoff-validator');
+const {
+  copyHandoffSchemas,
+  hydrateManifestAssets,
+  mergeByKey,
+  namesMatch,
+  readJsonIfExists,
+  validateFinalPack,
+  writeJson,
+} = require('./handoff-files');
 
 const HANDOFF_VERSION = 1;
 const HANDOFF_KINDS = Object.freeze({
@@ -21,6 +32,11 @@ const HANDOFF_SCHEMA_IDS = Object.freeze({
   manifest: 'urn:starter-series:shotkit:schema:shotkit-manifest:v1',
   storyboard: 'urn:starter-series:shotkit:schema:storyboard:v1',
   captions: 'urn:starter-series:shotkit:schema:captions:v1',
+});
+const HANDOFF_SCHEMA_FILES = Object.freeze({
+  manifest: 'schemas/shotkit-manifest.schema.json',
+  storyboard: 'schemas/storyboard.schema.json',
+  captions: 'schemas/captions.schema.json',
 });
 
 function readProjectInfo(cwd) {
@@ -157,10 +173,68 @@ function storyboardLintSummary(warnings) {
   }));
 }
 
-function buildHandoffDocs({ cwd, outDir, config, assets, demoConfigs, demoViewports, demoWarnings, flags }) {
+function handoffReview(storyboardLint, run = {}, assets = []) {
+  const warnings = (storyboardLint || []).flatMap((summary) => (
+    (summary.warnings || []).map((warning) => ({ demo: summary.name, ...warning }))
+  ));
+  const incomplete = (run.skippedDemos || []).map((name) => ({
+    code: 'demo-skipped',
+    demo: name,
+    reason: run.video ? 'not-captured' : 'video-disabled',
+    fix: run.video ? `capture the ${name} demo` : 'rerun without --no-video',
+  }));
+  for (const asset of assets.filter((item) => item.state === 'modified')) {
+    incomplete.push({
+      code: 'asset-integrity-mismatch',
+      asset: asset.id,
+      reason: 'retained-file-changed',
+      fix: `rerun the source for ${asset.id}`,
+    });
+  }
+  return {
+    status: incomplete.length ? 'incomplete' : warnings.length ? 'needs-review' : 'ready',
+    warningCount: warnings.length,
+    warnings,
+    incomplete,
+  };
+}
+
+function refreshManifestHandoff(manifest, storyboard, config) {
+  const adapterHints = buildHandoffRecommendations({
+    assets: manifest.assets,
+    config,
+    context: { storyboardDemoCount: storyboard.demos.length },
+  });
+  manifest.handoff.adapterHints = adapterHints;
+  manifest.handoff.review = handoffReview(storyboard.storyboardLint, manifest.run, manifest.assets);
+  manifest.handoff.summary = {
+    assetCount: manifest.assets.length,
+    demoCount: storyboard.demos.length,
+    readyAdapterCount: adapterHints.filter((hint) => hint.readiness === 'ready').length,
+  };
+}
+
+function buildHandoffDocs({ cwd, outDir, config, assets, demoConfigs, demoViewports, demoWarnings, flags, run = {} }) {
   const generatedAt = new Date().toISOString();
   const project = readProjectInfo(cwd);
-  const adapterHints = buildHandoffRecommendations({ assets, config });
+  const runInfo = {
+    id: crypto.randomUUID(),
+    mode: run.mode || 'full',
+    requestedScenes: run.requestedScenes || [],
+    video: run.video !== false,
+    noBuild: !!run.noBuild,
+    mp4: !!run.mp4,
+    configuredDemos: run.configuredDemos || [],
+    selectedDemos: run.selectedDemos || [],
+    capturedDemos: run.capturedDemos || [],
+    skippedDemos: run.skippedDemos || [],
+  };
+  const currentAssets = assets.map((asset) => ({
+    ...asset,
+    runId: runInfo.id,
+    capturedAt: generatedAt,
+    state: 'produced',
+  }));
   const storyboard = {
     $schema: HANDOFF_SCHEMA_IDS.storyboard,
     kind: HANDOFF_KINDS.storyboard,
@@ -188,10 +262,14 @@ function buildHandoffDocs({ cwd, outDir, config, assets, demoConfigs, demoViewpo
     project,
     outDir: rel(cwd, outDir),
     flags,
+    run: runInfo,
     positioning: 'capture-and-handoff-kit',
+    category: 'agent-ready-launch-asset-pipeline',
     handoff: {
       contractVersion: HANDOFF_VERSION,
+      entrypoint: 'shotkit-manifest.json',
       schemas: HANDOFF_SCHEMA_IDS,
+      schemaFiles: HANDOFF_SCHEMA_FILES,
       storyboards: 'storyboard.json',
       captions: 'captions.json',
       recommendedFlow: [
@@ -199,42 +277,47 @@ function buildHandoffDocs({ cwd, outDir, config, assets, demoConfigs, demoViewpo
         'polish in Screen Studio, Canva, Supademo, or another editor',
         'keep repo fixtures and storyboard as the repeatable source of truth',
       ],
-      adapterHints,
+      adapterHints: [],
+      review: handoffReview(storyboard.storyboardLint, runInfo),
+      summary: {
+        assetCount: currentAssets.length,
+        demoCount: storyboard.demos.length,
+        readyAdapterCount: 0,
+      },
     },
-    assets,
+    assets: currentAssets,
     config: {
       disclaimer: config.disclaimer || null,
       description: config.description || null,
     },
   };
+  refreshManifestHandoff(manifest, storyboard, config);
   return { storyboard, captions, manifest };
 }
 
-function writeJson(filePath, data) {
-  fs.writeFileSync(filePath, `${JSON.stringify(data, null, 2)}\n`);
+function compatiblePreviousPack(previous, current) {
+  const { manifest, storyboard, captions } = previous;
+  if (!manifest || !storyboard || !captions) return false;
+  if (!isValidHandoffDocs(previous)) return false;
+  if (manifest.kind !== HANDOFF_KINDS.manifest || manifest.version !== HANDOFF_VERSION) return false;
+  if (storyboard.kind !== HANDOFF_KINDS.storyboard || storyboard.version !== HANDOFF_VERSION) return false;
+  if (captions.kind !== HANDOFF_KINDS.captions || captions.version !== HANDOFF_VERSION) return false;
+  if (!Array.isArray(manifest.assets) || !Array.isArray(storyboard.demos)
+    || !Array.isArray(storyboard.storyboardLint) || !Array.isArray(captions.demos)) return false;
+  if (!namesMatch(storyboard.demos, captions.demos)) return false;
+  const previousProject = manifest.project && manifest.project.name;
+  const currentProject = current.manifest.project && current.manifest.project.name;
+  return !previousProject || !currentProject || previousProject === currentProject;
 }
 
-function readJsonIfExists(filePath) {
-  try {
-    return fs.existsSync(filePath) ? JSON.parse(fs.readFileSync(filePath, 'utf8')) : null;
-  } catch (_e) {
-    return null;
-  }
-}
-
-// Union by key, with the current run's entries winning — preserves prior
-// entries this run did not touch, so a partial re-run does not clobber them.
-function mergeByKey(prev, next, keyOf) {
-  if (!Array.isArray(prev) || !prev.length) return next;
-  const nextKeys = new Set(next.map(keyOf));
-  const kept = prev.filter((item) => item && !nextKeys.has(keyOf(item)));
-  return [...kept, ...next];
-}
-
-function writeHandoffDocs({ cwd, outDir, config, assets, demoConfigs, demoViewports, demoWarnings, flags, partial = false }) {
+function writeHandoffDocs({ cwd, outDir, config, assets, demoConfigs, demoViewports, demoWarnings, flags, partial = false, run = {} }) {
   const storyboardPath = path.join(outDir, 'storyboard.json');
   const captionsPath = path.join(outDir, 'captions.json');
   const manifestPath = path.join(outDir, 'shotkit-manifest.json');
+  const refreshedAssetKeys = new Set(assets.map((asset) => (
+    (asset.source && asset.source.name) || asset.name
+  )));
+  const schemaPaths = copyHandoffSchemas(outDir, HANDOFF_SCHEMA_FILES);
   const contractAssets = [
     assetRecord({
       cwd, outDir, filePath: storyboardPath,
@@ -251,6 +334,15 @@ function writeHandoffDocs({ cwd, outDir, config, assets, demoConfigs, demoViewpo
       name: 'shotkit-manifest', type: 'json', role: 'handoff-manifest',
       source: { kind: 'handoff' },
     }),
+    ...schemaPaths.map((filePath) => assetRecord({
+      cwd,
+      outDir,
+      filePath,
+      name: path.basename(filePath, path.extname(filePath)),
+      type: 'json',
+      role: 'handoff-schema',
+      source: { kind: 'handoff-schema' },
+    })),
   ];
   const docs = buildHandoffDocs({
     cwd,
@@ -261,6 +353,7 @@ function writeHandoffDocs({ cwd, outDir, config, assets, demoConfigs, demoViewpo
     demoViewports,
     demoWarnings,
     flags,
+    run: { ...run, mode: partial ? 'partial' : 'full' },
   });
   // A partial run (scene filter or --no-video) only re-captures a subset, so
   // merge into the existing contract instead of overwriting a prior full run's
@@ -269,21 +362,35 @@ function writeHandoffDocs({ cwd, outDir, config, assets, demoConfigs, demoViewpo
     const prevStoryboard = readJsonIfExists(storyboardPath);
     const prevCaptions = readJsonIfExists(captionsPath);
     const prevManifest = readJsonIfExists(manifestPath);
-    if (prevStoryboard) {
+    const previous = { manifest: prevManifest, storyboard: prevStoryboard, captions: prevCaptions };
+    if (compatiblePreviousPack(previous, docs)) {
       docs.storyboard.demos = mergeByKey(prevStoryboard.demos, docs.storyboard.demos, (d) => d.name);
       docs.storyboard.storyboardLint = mergeByKey(prevStoryboard.storyboardLint, docs.storyboard.storyboardLint, (l) => l.name);
-    }
-    if (prevCaptions) {
       docs.captions.demos = mergeByKey(prevCaptions.demos, docs.captions.demos, (d) => d.name);
-    }
-    if (prevManifest) {
-      docs.manifest.assets = mergeByKey(prevManifest.assets, docs.manifest.assets, (a) => a.id);
+      const previousRunId = prevManifest.run && prevManifest.run.id
+        ? prevManifest.run.id
+        : `legacy:${prevManifest.generatedAt}`;
+      const previousAssets = (prevManifest.assets || [])
+        .filter((asset) => !refreshedAssetKeys.has((asset.source && asset.source.name) || asset.name))
+        .map((asset) => ({
+          ...asset,
+          runId: asset.runId || previousRunId,
+          capturedAt: asset.capturedAt || prevManifest.generatedAt,
+          state: 'retained',
+        }));
+      docs.manifest.assets = mergeByKey(previousAssets, docs.manifest.assets, (a) => a.id);
     }
   }
   writeJson(storyboardPath, docs.storyboard);
   writeJson(captionsPath, docs.captions);
+  // Partial runs can inherit an older inventory. Prune entries whose files no
+  // longer exist, then recompute recommendations from the actual final bundle.
+  docs.manifest.assets = hydrateManifestAssets(docs.manifest.assets, outDir, manifestPath);
+  refreshManifestHandoff(docs.manifest, docs.storyboard, config);
+  validateHandoffDocs(docs);
+  validateFinalPack(docs, outDir, manifestPath);
   writeJson(manifestPath, docs.manifest);
-  return [storyboardPath, captionsPath, manifestPath];
+  return [storyboardPath, captionsPath, manifestPath, ...schemaPaths];
 }
 
 module.exports = {

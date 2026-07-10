@@ -6,10 +6,21 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+### Added
+- Every handoff pack now bundles its three JSON Schemas, exposes their
+  manifest-relative paths, and records byte size plus SHA-256 integrity for
+  each delivered file except the self-referential manifest.
+- The manifest now carries additive v1 metadata for the agent-ready launch
+  asset category, current run selection, per-asset provenance/state, a
+  manifest-level review summary, and the number of asset-ready adapters.
+
 ### Changed
 - Package identity is now the unscoped npm product noun `shotkit`.
 - The handoff manifest `tool` field now emits `shotkit`, matching the package
   and CLI identity.
+- `--json` success results now return the absolute `manifest` entrypoint.
+- Public messaging now leads with the agent-ready launch asset capture and
+  handoff pipeline; Playwright remains the implementation mechanism.
 
 ### Fixed
 - `step(text, fn, options)` now honors flat caption display options (e.g.
@@ -20,6 +31,17 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
   `mp4Requested`.
 - A thumbnail-only demo (no mp4/crop/zoom/trim) no longer re-muxes and
   overwrites the source `.webm`; the thumbnail is taken from the original clip.
+- Partial handoff runs prune missing outputs, replace every retained format for
+  a refreshed logical source, mark untouched assets as `retained`, and flag
+  changed retained evidence as `modified` instead of recommending it.
+- A fresh `--no-video` run with configured demos now reports an `incomplete`
+  review and does not claim storyboard-only adapter readiness.
+- Final handoff publication validates all three documents with the packaged
+  AJV schemas, rejects duplicate asset IDs/paths, and writes JSON through atomic
+  temporary-file renames. Malformed or foreign prior packs are no longer merged
+  into a partial run.
+- New manifest fields remain additive under contract v1; the original v1
+  `positioning` and storyboard `purpose` constants stay unchanged.
 
 ## 1.3.0 - 2026-06-18 (source-staged)
 
