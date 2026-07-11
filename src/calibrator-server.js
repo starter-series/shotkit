@@ -377,20 +377,29 @@ async function recaptureTarget({ cwd, config, configPath, outDir, story, target,
     configPath,
     story,
     target,
+    noBuild: true,
     attempt: nextAttempt(outDir),
   });
   updateProfileVerification(config, cwd, story, target, result.machineStatus, snapshot);
   return result;
 }
 
-function runRecapture({ cwd, configPath, story, target, targets, attempt }) {
+function recaptureCliArgs({ cwd, configPath, story, target, targets, attempt, noBuild = false }) {
   const cliPath = path.join(__dirname, '..', 'bin', 'shotkit.js');
   const targetList = targets || [target];
-  const args = [cliPath, cwd, '--json', '--scene', story, '--target', targetList.join(','), '--mp4', '--no-build', '--attempt', String(attempt)];
+  const args = [cliPath, cwd, '--json', '--scene', story, '--target', targetList.join(','), '--mp4'];
+  if (noBuild) args.push('--no-build');
+  args.push('--attempt', String(attempt));
   const defaultConfigNames = new Set(['shotkit.config.js', 'store.config.js']);
   if (!defaultConfigNames.has(path.basename(configPath))) {
     args.push('--config', path.relative(cwd, configPath));
   }
+  return args;
+}
+
+function runRecapture(options) {
+  const { cwd } = options;
+  const args = recaptureCliArgs(options);
   return new Promise((resolve, reject) => {
     execFile(process.execPath, args, {
       cwd,
@@ -730,6 +739,7 @@ async function startCalibrator({
 module.exports = {
   createCampaignStateReader,
   createStateReader,
+  recaptureCliArgs,
   safeCampaignStaticPath,
   safeStaticPath,
   startCalibrator,

@@ -109,7 +109,7 @@ async function recaptureCampaign({ cwd, config, configPath, outDir, story, targe
     target,
     captureProfileSnapshot(config, cwd, story, target),
   ]));
-  const result = await runner({ cwd, configPath, story, targets, attempt });
+  const result = await runner({ cwd, configPath, story, targets, attempt, noBuild: false });
   const manifest = readJson(path.join(outDir, 'shotkit-manifest.json'), {});
   const automationTargets = manifest.handoff && manifest.handoff.automation
     ? manifest.handoff.automation.targets || []

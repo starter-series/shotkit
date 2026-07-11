@@ -3,7 +3,12 @@ const http = require('http');
 const os = require('os');
 const path = require('path');
 
-const { safeCampaignStaticPath, safeStaticPath, startCalibrator } = require('../src/calibrator-server');
+const {
+  recaptureCliArgs,
+  safeCampaignStaticPath,
+  safeStaticPath,
+  startCalibrator,
+} = require('../src/calibrator-server');
 
 const DIGEST = 'a'.repeat(64);
 
@@ -91,6 +96,28 @@ function multiTargetFixture() {
 }
 
 describe('calibrator server', () => {
+  test('builds campaign captures while keeping calibrator recaptures build-free', () => {
+    const base = {
+      cwd: '/tmp/project',
+      configPath: '/tmp/project/shotkit.config.js',
+      story: 'demo',
+      target: 'youtube-shorts',
+      attempt: 2,
+    };
+    const campaignArgs = recaptureCliArgs({
+      ...base,
+      targets: ['youtube-shorts', 'x'],
+      noBuild: false,
+    });
+    const calibratorArgs = recaptureCliArgs({ ...base, noBuild: true });
+
+    expect(campaignArgs).not.toContain('--no-build');
+    expect(campaignArgs).toEqual(expect.arrayContaining([
+      '--target', 'youtube-shorts,x', '--attempt', '2',
+    ]));
+    expect(calibratorArgs).toContain('--no-build');
+  });
+
   test('confines static paths and rejects malformed encodings', () => {
     const staticRoot = path.dirname(safeStaticPath('/'));
     const traversal = safeStaticPath('/%2e%2e/%2e%2e/package.json');
@@ -199,6 +226,7 @@ describe('calibrator server', () => {
         cwd,
         story: 'demo',
         targets: ['youtube-shorts'],
+        noBuild: false,
         attempt: 2,
       }));
       expect(fs.existsSync(path.join(cwd, 'shotkit.calibration.json'))).toBe(false);
