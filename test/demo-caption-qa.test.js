@@ -78,4 +78,39 @@ describe('runtime caption QA', () => {
       expect.objectContaining({ code: 'caption-protected-region-overlap' }),
     ]));
   });
+
+  test('turns deterministic typography failures into agent-owned fixes', () => {
+    const warnings = analyzeDemoCaptionMetrics({
+      typography: {
+        enabled: true,
+        deterministic: true,
+        locale: 'ja-JP',
+        minLineBalance: 0.4,
+        missingGlyphs: [{ character: '訳', codePoint: 'U+8A33' }],
+      },
+      expectedFrames: [{ atMs: 500, text: '翻訳します' }],
+      samples: [sample({
+        text: '翻訳します',
+        sourceText: '翻訳します',
+        fontConfigured: false,
+        fontLoaded: false,
+        fontErrors: ['decode failed'],
+        fitStatus: 'overflow',
+        fontSize: 24,
+        minFontSize: 24,
+        maxLines: 2,
+        lineCount: 2,
+        lineWidths: [400, 100],
+        lineBalance: 0.25,
+      })],
+    });
+
+    expect(warnings).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: 'caption-missing-glyph' }),
+      expect.objectContaining({ code: 'caption-font-load-failed' }),
+      expect.objectContaining({ code: 'caption-typography-not-applied' }),
+      expect.objectContaining({ code: 'caption-type-fit-failed' }),
+      expect.objectContaining({ code: 'caption-unbalanced-lines' }),
+    ]));
+  });
 });

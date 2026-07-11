@@ -44,6 +44,11 @@ rendered from the shipped code. By default, it also writes a handoff pack:
    If a desktop UI does not reflow at 720×1280, give Shorts a focused `run`
    override and fixture layout that removes secondary panels and enlarges the
    action/result. Never squeeze the complete desktop story into the vertical frame.
+   For every localized campaign variant, declare `captionOptions.typography`
+   with the exact locale and project-local licensed font files. Prefer a font
+   family designed for that script; include fallback faces until glyph QA is
+   complete. Do not rely on the operator machine's system fonts for a
+   publishable multilingual asset.
 4. **Run attempt 1** (from the repo, or pass its path):
 
    ```bash
@@ -127,6 +132,15 @@ rendered from the shipped code. By default, it also writes a handoff pack:
   The resolved style is recorded in both caption and storyboard handoff docs;
   `captions.json` also carries the trim-relative rendered `timeline[]`. Treat a
   `dense-focus-caption` lint as an agent-owned timing fix, never drop words.
+- Locale typography is a harness contract, not a prompt-only suggestion. Set
+  `typography.locale`, `family`, `minFontSize`, `maxFontSize`, `maxLines`, and
+  one or more `fonts[].from` paths. Shotkit preserves authored separators,
+  verifies glyph coverage, embeds and waits for those fonts, then records the
+  resolved size and line balance. Fix `caption-locale-missing`,
+  `caption-font-not-embedded`, `caption-missing-glyph`,
+  `caption-font-load-failed`, `caption-typography-not-applied`,
+  `caption-type-fit-failed`, and `caption-unbalanced-lines` before presenting
+  the candidate.
 - Runtime caption QA measures the actual DOM frames for bounds, overflow, line
   count, outline stroke, missing frames, and timing drift. Treat every resulting
   storyboard warning as an agent-owned config fix and rerun the target.

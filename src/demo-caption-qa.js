@@ -53,6 +53,31 @@ function analyzeDemoCaptionMetrics(report = {}, { viewport, protectedRegions = [
     warned.add(code);
     warnings.push(warning(code, message, fix, details));
   };
+  const typography = report.typography && report.typography.enabled ? report.typography : null;
+  if (typography) {
+    if (typography.locale === 'und') {
+      warnOnce(
+        'caption-locale-missing',
+        'caption typography does not declare a locale',
+        'set captionOptions.typography.locale to the authored caption language',
+      );
+    }
+    if (!typography.deterministic) {
+      warnOnce(
+        'caption-font-not-embedded',
+        'caption typography relies on environment-specific system fonts',
+        'configure one or more project-local captionOptions.typography.fonts',
+      );
+    }
+    if (Array.isArray(typography.missingGlyphs) && typography.missingGlyphs.length) {
+      warnOnce(
+        'caption-missing-glyph',
+        `configured caption fonts miss ${typography.missingGlyphs.length} authored character(s)`,
+        'add a locale-appropriate fallback font that covers every listed code point',
+        { missingGlyphs: typography.missingGlyphs },
+      );
+    }
+  }
 
   for (const sample of samples) {
     const sampleViewport = viewportFor(sample, viewport);
@@ -76,6 +101,43 @@ function analyzeDemoCaptionMetrics(report = {}, { viewport, protectedRegions = [
         `caption "${sample.sourceText || sample.text}" overflows its rendered box`,
         'shorten the caption or use smaller authored chunks',
         { overflowX: !!sample.overflowX, overflowY: !!sample.overflowY },
+      );
+    }
+    if (typography && sample.fontLoaded === false) {
+      warnOnce(
+        'caption-font-load-failed',
+        `caption font failed to load for "${sample.sourceText || sample.text}"`,
+        'verify the configured font file and rerun the target',
+        { errors: sample.fontErrors || [] },
+      );
+    }
+    if (typography && (sample.fontConfigured === false || sample.fitStatus === 'not-requested')) {
+      warnOnce(
+        'caption-typography-not-applied',
+        `configured caption typography was not applied to "${sample.sourceText || sample.text}"`,
+        'preserve the prepared caption options across pointer, select, and navigation helpers, then rerun the target',
+      );
+    }
+    if (typography && sample.fitStatus === 'overflow') {
+      warnOnce(
+        'caption-type-fit-failed',
+        `caption "${sample.sourceText || sample.text}" does not fit at the configured minimum size`,
+        'shorten the authored chunk, widen its template lane, or lower typography.minFontSize',
+        {
+          fontSize: sample.fontSize,
+          minFontSize: sample.minFontSize,
+          lineCount: sample.lineCount,
+          maxLines: sample.maxLines,
+        },
+      );
+    }
+    if (typography && sample.lineCount > 1 && Number.isFinite(sample.lineBalance)
+      && sample.lineBalance < typography.minLineBalance) {
+      warnOnce(
+        'caption-unbalanced-lines',
+        `caption "${sample.sourceText || sample.text}" has an unbalanced final line`,
+        'split the caption at a semantic boundary or adjust the template caption width',
+        { lineWidths: sample.lineWidths, lineBalance: sample.lineBalance, minimum: typography.minLineBalance },
       );
     }
     if (sample.lineCount > 2) {

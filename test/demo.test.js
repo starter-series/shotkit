@@ -26,6 +26,7 @@ class FakePage extends EventEmitter {
     this.inits = [];
     this.pointerMoves = [];
     this.pointerPulses = 0;
+    this.pointerInstalled = false;
     this.selectFocuses = [];
     this.selectReads = [];
     this.selects = [];
@@ -40,7 +41,11 @@ class FakePage extends EventEmitter {
   }
 
   async evaluate(fn, arg) {
-    if (fn.name === 'demoCaptionInitScript') this.inits.push(arg);
+    if (fn.name === 'hasDemoPointerOverlay') return this.pointerInstalled;
+    if (fn.name === 'demoCaptionInitScript') {
+      this.inits.push(arg);
+      this.pointerInstalled = true;
+    }
     if (arg && Object.prototype.hasOwnProperty.call(arg, 'captionText')) {
       this.captions.push(arg.captionText);
       this.captionCalls.push({ text: arg.captionText, options: arg.captionOptions });
@@ -119,6 +124,17 @@ describe('demo time parsing', () => {
       { atMs: 500, text: 'A' },
       { atMs: 4000, text: 'B' },
     ]);
+  });
+
+  test('preserves language-neutral storyboard roles', () => {
+    expect(normalizeDemoCaptions([
+      { at: 1, text: '元の文章に戻せます', role: 'restore' },
+    ])).toEqual([
+      { atMs: 1000, text: '元の文章に戻せます', role: 'restore' },
+    ]);
+    expect(() => normalizeDemoCaptions([
+      { at: 1, text: 'Unknown', role: 'surprise' },
+    ])).toThrow(/caption.*role/);
   });
 });
 
@@ -246,6 +262,19 @@ describe('lintDemoStoryboard', () => {
     }, { viewport: { width: 1280, height: 720 }, mp4Requested: true })).toEqual([]);
   });
 
+  test('accepts a non-English restore beat through its semantic role', () => {
+    const warnings = analyzeDemoStoryboard({
+      name: 'demo-ja',
+      mp4: true,
+      trim: { duration: 25 },
+      captions: [
+        { at: 0.5, text: 'レッスンを翻訳します', role: 'result' },
+        { at: 10, text: '元の文章に戻せます', role: 'restore' },
+      ],
+    }, { viewport: { width: 720, height: 1280 }, mp4Requested: true });
+    expect(warnings.map((warning) => warning.code)).not.toContain('missing-safety-restore');
+  });
+
   test('asks agents to space focus-caption beats before publishing', () => {
     const warnings = analyzeDemoStoryboard({
       name: 'demo',
@@ -326,6 +355,31 @@ describe('createDemoController', () => {
     expect(page.captions).toEqual(['Open the course page']);
   });
 
+  test('keeps authored typography separate from embedded browser font data', async () => {
+    const page = new FakePage();
+    const captionOptions = {
+      mode: 'focus',
+      typography: {
+        locale: 'ko-KR',
+        fonts: [{ family: 'Campaign Sans', from: 'fonts/caption.woff2' }],
+      },
+    };
+    const runtimeCaptionOptions = {
+      ...captionOptions,
+      typography: {
+        enabled: true,
+        locale: 'ko-KR',
+        direction: 'ltr',
+        fontFaces: [{ family: 'Campaign Sans', source: 'data:font/woff2;base64,AA==' }],
+      },
+    };
+    const demo = createDemoController({ page, captionOptions, runtimeCaptionOptions });
+    await demo.caption('한국어 자막');
+    demo.stop();
+
+    expect(page.captionCalls[0].options.typography).toEqual(runtimeCaptionOptions.typography);
+  });
+
   test('records the browser render timestamp instead of host round-trip completion', async () => {
     jest.useFakeTimers();
     jest.setSystemTime(new Date('2026-07-10T00:00:00.000Z'));
@@ -355,6 +409,7 @@ describe('createDemoController', () => {
     demo.stop();
 
     expect(page.captions).toEqual(['Translate visible text']);
+    expect(page.inits).toHaveLength(1);
     expect(action).toHaveBeenCalledTimes(1);
     expect(page.clicks).toEqual([{ selector: '.slider', options: {} }]);
     expect(page.waits).toEqual([DEFAULT_STEP_HOLD_MS, DEFAULT_CLICK_HOLD_MS, 250]);

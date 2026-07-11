@@ -3,6 +3,13 @@ const DEFAULT_FOCUS_WORD_MS = 360;
 const DEFAULT_FOCUS_ACTIVE_COLOR = '#facc15';
 const MIN_FOCUS_FRAME_MS = 120;
 const CAPTION_POSITIONS = new Set(['bottom-left', 'bottom']);
+const {
+  captionWords,
+  chunkCaptionSegments,
+  composeCaptionSegments,
+  segmentCaptionText,
+} = require('./caption-language');
+const { normalizeTypographyOptions, typographyStyle } = require('./caption-typography');
 
 function captionOptionObject(options) {
   if (options == null) return {};
@@ -18,6 +25,7 @@ function captionOptionObject(options) {
   if (options.appearance != null && options.appearance !== 'panel' && options.appearance !== 'outline') {
     throw new Error('shotkit: demo captionOptions.appearance must be "panel" or "outline"');
   }
+  normalizeTypographyOptions(options);
   return options;
 }
 
@@ -78,77 +86,80 @@ function captionStyle(options = {}) {
     style.wordMs = focus.wordMs;
     style.activeColor = focus.activeColor;
   }
+  const typography = typographyStyle(options);
+  if (typography) {
+    style.locale = typography.locale;
+    style.direction = typography.direction;
+    style.typography = typography;
+  }
   return style;
 }
 
-function splitCaptionWords(text) {
-  const value = String(text).trim();
-  if (!value) return [];
-  if (/\s/u.test(value) || typeof Intl === 'undefined' || typeof Intl.Segmenter !== 'function') {
-    return value.split(/\s+/u).filter(Boolean);
-  }
-
-  const words = [];
-  let prefix = '';
-  for (const part of new Intl.Segmenter(undefined, { granularity: 'word' }).segment(value)) {
-    if (part.isWordLike) {
-      words.push(`${prefix}${part.segment}`);
-      prefix = '';
-    } else if (words.length) {
-      words[words.length - 1] += part.segment;
-    } else {
-      prefix += part.segment;
-    }
-  }
-  if (prefix) words.push(prefix);
-  return words.length ? words : [value];
+function splitCaptionWords(text, locale = 'und') {
+  return captionWords(text, locale);
 }
 
-function focusFrame(caption, atMs, focusWords, activeWordIndex, condensed = false) {
+function focusFrame(caption, atMs, focusSegments, activeWordIndex, typography, condensed = false) {
+  const focusWords = focusSegments.map((segment) => segment.text);
   return {
     atMs,
-    text: focusWords.join(' '),
+    text: composeCaptionSegments(focusSegments),
     sourceAtMs: caption.atMs,
     sourceText: caption.text,
     options: {
       focusWords,
+      focusSegments,
       activeWordIndex,
       fullText: caption.text,
+      locale: typography.locale,
+      direction: typography.direction,
       condensed,
     },
   };
 }
 
 function captionChunks(words, wordsPerChunk) {
+  const chunkCount = Math.ceil(words.length / wordsPerChunk);
+  if (!chunkCount) return [];
+  const baseSize = Math.floor(words.length / chunkCount);
+  const largerChunks = words.length % chunkCount;
   const chunks = [];
-  for (let index = 0; index < words.length; index += wordsPerChunk) {
-    chunks.push(words.slice(index, index + wordsPerChunk));
+  let start = 0;
+  for (let index = 0; index < chunkCount; index++) {
+    const size = baseSize + (index < largerChunks ? 1 : 0);
+    chunks.push({ start, items: words.slice(start, start + size) });
+    start += size;
   }
   return chunks;
 }
 
-function buildFocusCaptionFrames(caption, words, nextAtMs, focus) {
+function buildFocusCaptionFrames(caption, segments, nextAtMs, focus, typography) {
   const availableMs = nextAtMs - caption.atMs;
   const hasBoundary = Number.isFinite(availableMs);
-  const desiredMs = words.length * focus.wordMs;
+  const desiredMs = segments.length * focus.wordMs;
   let cadenceMs = focus.wordMs;
 
   if (hasBoundary && availableMs < desiredMs) {
-    cadenceMs = Math.floor(availableMs / words.length);
+    cadenceMs = Math.floor(availableMs / segments.length);
   }
   if (!hasBoundary || cadenceMs >= MIN_FOCUS_FRAME_MS) {
-    return words.map((_word, wordIndex) => {
-      const chunkStart = Math.floor(wordIndex / focus.wordsPerChunk) * focus.wordsPerChunk;
+    const chunks = captionChunks(segments, focus.wordsPerChunk);
+    return segments.map((_segment, wordIndex) => {
+      const chunk = chunks.find((candidate) => (
+        wordIndex >= candidate.start && wordIndex < candidate.start + candidate.items.length
+      ));
       return focusFrame(
         caption,
         caption.atMs + (wordIndex * cadenceMs),
-        words.slice(chunkStart, chunkStart + focus.wordsPerChunk),
-        wordIndex - chunkStart,
+        chunkCaptionSegments(segments, chunk.start, chunk.items.length),
+        wordIndex - chunk.start,
+        typography,
       );
     });
   }
 
-  const chunks = captionChunks(words, focus.wordsPerChunk);
+  const chunks = captionChunks(segments, focus.wordsPerChunk)
+    .map((chunk) => chunkCaptionSegments(segments, chunk.start, chunk.items.length));
   const chunkCadenceMs = Math.floor(availableMs / chunks.length);
   if (chunkCadenceMs >= MIN_FOCUS_FRAME_MS) {
     return chunks.map((chunk, index) => focusFrame(
@@ -156,10 +167,11 @@ function buildFocusCaptionFrames(caption, words, nextAtMs, focus) {
       caption.atMs + (index * chunkCadenceMs),
       chunk,
       0,
+      typography,
     ));
   }
 
-  return [focusFrame(caption, caption.atMs, words, 0, true)];
+  return [focusFrame(caption, caption.atMs, chunkCaptionSegments(segments, 0, segments.length), 0, typography, true)];
 }
 
 function buildCaptionFrames(schedule = [], options = {}) {
@@ -173,11 +185,12 @@ function buildCaptionFrames(schedule = [], options = {}) {
     }));
   }
 
+  const typography = normalizeTypographyOptions(options);
   const frames = [];
   schedule.forEach((caption, captionIndex) => {
-    const words = splitCaptionWords(caption.text);
+    const segments = segmentCaptionText(caption.text, typography.locale);
     const nextAtMs = schedule[captionIndex + 1] ? schedule[captionIndex + 1].atMs : Number.POSITIVE_INFINITY;
-    if (!words.length) {
+    if (!segments.length) {
       frames.push({
         ...caption,
         sourceAtMs: caption.atMs,
@@ -186,7 +199,7 @@ function buildCaptionFrames(schedule = [], options = {}) {
       });
       return;
     }
-    frames.push(...buildFocusCaptionFrames(caption, words, nextAtMs, focus));
+    frames.push(...buildFocusCaptionFrames(caption, segments, nextAtMs, focus, typography));
   });
   return frames;
 }
@@ -198,7 +211,8 @@ function analyzeFocusCaptionDensity(schedule = [], options = {}) {
   return schedule.flatMap((caption, index) => {
     const next = schedule[index + 1];
     if (!next) return [];
-    const wordCount = splitCaptionWords(caption.text).length;
+    const typography = normalizeTypographyOptions(options);
+    const wordCount = segmentCaptionText(caption.text, typography.locale).length;
     const availableMs = next.atMs - caption.atMs;
     const recommendedMs = wordCount * focus.wordMs;
     if (!wordCount || availableMs >= recommendedMs) return [];

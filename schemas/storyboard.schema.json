@@ -99,7 +99,26 @@
         "bottomOffset": { "type": "integer", "minimum": 0 },
         "wordsPerChunk": { "type": "integer", "minimum": 1, "maximum": 6 },
         "wordMs": { "type": "integer", "minimum": 120, "maximum": 2000 },
-        "activeColor": { "type": "string" }
+        "activeColor": { "type": "string" },
+        "locale": { "type": "string", "minLength": 1 },
+        "direction": { "enum": ["ltr", "rtl"] },
+        "typography": {
+          "type": "object",
+          "additionalProperties": true,
+          "required": ["locale", "direction", "family", "minFontSize", "maxLines", "fit"],
+          "properties": {
+            "locale": { "type": "string", "minLength": 1 },
+            "direction": { "enum": ["ltr", "rtl"] },
+            "family": { "type": "string", "minLength": 1 },
+            "weight": { "type": "string" },
+            "minFontSize": { "type": "integer", "minimum": 12, "maximum": 96 },
+            "maxFontSize": { "type": "integer", "minimum": 12, "maximum": 120 },
+            "maxLines": { "type": "integer", "minimum": 1, "maximum": 3 },
+            "fit": { "enum": ["none", "shrink"] },
+            "minLineBalance": { "type": "number", "minimum": 0, "maximum": 1 },
+            "fontFamilies": { "type": "array", "maxItems": 4, "items": { "type": "string" } }
+          }
+        }
       }
     },
     "protectedRegion": {
@@ -120,7 +139,8 @@
       "properties": {
         "at": { "type": "number", "minimum": 0 },
         "atMs": { "type": "integer", "minimum": 0 },
-        "text": { "type": "string" }
+        "text": { "type": "string" },
+        "role": { "enum": ["result", "action", "proof", "safety", "restore", "cta"] }
       }
     },
     "lintSummary": {

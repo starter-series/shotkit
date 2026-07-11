@@ -90,7 +90,8 @@ function analyzeDemoStoryboard(demoConfig, { viewport, mp4Requested } = {}) {
   }
 
   const text = captions.map((caption) => caption.text).join(' ').toLowerCase();
-  if (captions.length && !/(restore|original|safe|undo|revert|reset|복구|원문|되돌)/i.test(text)) {
+  const hasSafetyRole = captions.some((caption) => caption.role === 'safety' || caption.role === 'restore');
+  if (captions.length && !hasSafetyRole && !/(restore|original|safe|undo|revert|reset|복구|원문|되돌)/i.test(text)) {
     warnings.push(storyboardWarning(
       'missing-safety-restore',
       'storyboard has no visible safety/restore beat',

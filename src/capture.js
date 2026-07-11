@@ -39,6 +39,7 @@ const { resolveSize } = require('./presets');
 const { postProcessDemo, probeVideo } = require('./video');
 const { analyzeDemoStoryboard, createDemoController, installDemoCaptionOverlay, normalizeDemoConfigs } = require('./demo');
 const { analyzeDemoCaptionMetrics } = require('./demo-caption-qa');
+const { prepareCaptionTypography } = require('./caption-typography');
 const { applyCalibrationProfiles, loadCalibration } = require('./calibration');
 const { deliveryStatus } = require('./approval');
 const { assetRecord, writeHandoffDocs } = require('./handoff');
@@ -147,6 +148,7 @@ async function capture(config, opts = {}) {
   const capturedDemoConfigs = [];
   const demoViewports = {};
   const demoWarnings = {};
+  const demoCaptionReports = {};
   const shouldRunVisualPass = targetOnly.size === 0 && wantsAny(only, visualOutputNames(config));
   const shouldRunTextPass = targetOnly.size === 0 && wantsAny(only, textOutputNames(config, cwd));
   const requestedDemoConfigs = demoConfigs.filter((demoConfig) => wantsDemo(demoConfig) && wantsTarget(demoConfig));
@@ -369,7 +371,12 @@ async function capture(config, opts = {}) {
       let setup2 = normalizeSetup(null);
       let page = null;
       try {
-        await installDemoCaptionOverlay(demoCtx.context, demoConfig.captionOptions || {});
+        const preparedTypography = await prepareCaptionTypography(
+          demoConfig.captionOptions || {},
+          cwd,
+          (demoConfig.captions || []).map((caption) => caption.text),
+        );
+        await installDemoCaptionOverlay(demoCtx.context, preparedTypography.runtimeOptions);
 
         // Keep a small "unofficial" badge on screen across navigations. A
         // target-specific story may shorten or disable the global screenshot
@@ -401,10 +408,19 @@ async function capture(config, opts = {}) {
         );
         page = await demoCtx.context.newPage();
         await page.setViewportSize(viewport);
+        if (preparedTypography.report.enabled) {
+          await page.evaluate(async () => {
+            if (window.__shotkitDemoCaption && typeof window.__shotkitDemoCaption.ready === 'function') {
+              await window.__shotkitDemoCaption.ready();
+            }
+          });
+        }
         const demo = createDemoController({
           page,
           captions: demoConfig.captions,
           captionOptions: demoConfig.captionOptions,
+          runtimeCaptionOptions: preparedTypography.runtimeOptions,
+          typographyReport: preparedTypography.report,
         });
         let captionMetricReport;
         try {
@@ -423,6 +439,7 @@ async function capture(config, opts = {}) {
           captionMetricReport = demo.captionMetrics();
           demo.stop();
         }
+        demoCaptionReports[demoConfig.name] = captionMetricReport;
         const calibrationProfile = demoConfig.calibrationProfile || {};
         const runtimeCaptionWarnings = analyzeDemoCaptionMetrics(captionMetricReport, {
           viewport,
@@ -522,6 +539,7 @@ async function capture(config, opts = {}) {
         demoConfigs: capturedDemoConfigs,
         demoViewports,
         demoWarnings,
+        demoCaptionReports,
         flags: passFlags,
         // Scene-filtered or --no-video runs only re-capture a subset; merge into
         // the existing handoff contract rather than clobbering a prior full run.

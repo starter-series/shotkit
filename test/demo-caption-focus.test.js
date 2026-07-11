@@ -76,7 +76,7 @@ describe('focused demo captions', () => {
 
     const firstCaption = frames.filter((frame) => frame.sourceText === 'One two three four');
     expect(firstCaption.map((frame) => frame.atMs)).toEqual([0, 125, 250, 375]);
-    expect(firstCaption.at(-1).text).toBe('four');
+    expect(firstCaption.at(-1).text).toBe('three four');
     expect(frames.find((frame) => frame.atMs === 500).text).toBe('Next beat');
     expect(analyzeFocusCaptionDensity([
       { atMs: 0, text: 'One two three four' },
@@ -175,5 +175,51 @@ describe('focused demo captions', () => {
     expect(() => normalizeFocusOptions({ mode: 'focus', position: 'middle' })).toThrow(/position/);
     expect(() => normalizeFocusOptions({ mode: 'focus', appearance: 'bubble' })).toThrow(/appearance/);
     expect(() => normalizeFocusOptions('focus')).toThrow(/must be an object/);
+  });
+
+  test('records locale typography and preserves Japanese separators in focus frames', () => {
+    const frames = buildCaptionFrames([
+      { atMs: 0, text: 'AIレッスンを翻訳します。' },
+    ], {
+      mode: 'focus',
+      wordsPerChunk: 3,
+      typography: {
+        locale: 'ja-JP',
+        family: 'Noto Sans JP, sans-serif',
+        minFontSize: 26,
+        maxFontSize: 42,
+      },
+    });
+
+    expect(frames.map((frame) => frame.text).join('')).not.toContain('AI レッスン');
+    expect(frames[0].options).toMatchObject({ locale: 'ja-JP', direction: 'ltr' });
+    expect(captionStyle({
+      mode: 'focus',
+      typography: { locale: 'ja-JP', family: 'Noto Sans JP, sans-serif' },
+    })).toMatchObject({
+      locale: 'ja-JP',
+      direction: 'ltr',
+      typography: {
+        locale: 'ja-JP',
+        family: 'Noto Sans JP, sans-serif',
+        fit: 'shrink',
+        maxLines: 2,
+      },
+    });
+  });
+
+  test('balances chunks instead of leaving a one-word final orphan', () => {
+    const frames = buildCaptionFrames([
+      { atMs: 0, text: 'AI 강의를 바로 번역' },
+    ], {
+      mode: 'focus',
+      wordsPerChunk: 3,
+      typography: { locale: 'ko-KR' },
+    });
+
+    expect([...new Set(frames.map((frame) => frame.text))]).toEqual([
+      'AI 강의를',
+      '바로 번역',
+    ]);
   });
 });

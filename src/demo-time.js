@@ -1,3 +1,5 @@
+const CAPTION_ROLES = new Set(['result', 'action', 'proof', 'safety', 'restore', 'cta']);
+
 function normalizeDelayMs(value, label) {
   if (!Number.isFinite(value) || value < 0) {
     throw new Error(`shotkit: demo ${label} must be a non-negative number of milliseconds`);
@@ -43,9 +45,13 @@ function normalizeDemoCaptions(captions = []) {
       if (caption.text == null) {
         throw new Error(`shotkit: demo.captions[${index}] needs text`);
       }
+      if (caption.role != null && !CAPTION_ROLES.has(caption.role)) {
+        throw new Error(`shotkit: demo.captions[${index}].role must be result, action, proof, safety, restore, or cta`);
+      }
       return {
         atMs: parseTimeToMs(caption.at, `at for captions[${index}]`),
         text: String(caption.text),
+        ...(caption.role == null ? {} : { role: caption.role }),
       };
     })
     .sort((a, b) => a.atMs - b.atMs);

@@ -51,7 +51,43 @@ function demoCaptionInitScript(options = {}) {
   const styleId = '__shotkit_demo_caption_style__';
   const baseOptions = {
     position: options.position || 'bottom-left',
+    typography: options.typography && typeof options.typography === 'object'
+      ? options.typography
+      : { enabled: false },
   };
+  let fontLoadPromise = null;
+
+  function loadCaptionFonts() {
+    const faces = Array.isArray(baseOptions.typography.fontFaces)
+      ? baseOptions.typography.fontFaces
+      : [];
+    if (!faces.length) return Promise.resolve({ configured: false, loaded: true, errors: [] });
+    if (fontLoadPromise) return fontLoadPromise;
+    fontLoadPromise = (async () => {
+      const startedAt = performance.now();
+      if (typeof FontFace !== 'function' || !document.fonts) {
+        return { configured: true, loaded: false, loadMs: 0, errors: ['FontFace API is unavailable'] };
+      }
+      const results = await Promise.allSettled(faces.map(async (face) => {
+        const loaded = await new FontFace(face.family, `url(${face.source})`, {
+          weight: face.weight || '400',
+          style: face.style || 'normal',
+        }).load();
+        document.fonts.add(loaded);
+        return face.family;
+      }));
+      const errors = results
+        .filter((result) => result.status === 'rejected')
+        .map((result) => String(result.reason && result.reason.message ? result.reason.message : result.reason));
+      return {
+        configured: true,
+        loaded: errors.length === 0,
+        loadMs: Math.round(performance.now() - startedAt),
+        errors,
+      };
+    })();
+    return fontLoadPromise;
+  }
 
   function ensureStyle() {
     if (document.getElementById(styleId)) return;
@@ -88,7 +124,7 @@ function demoCaptionInitScript(options = {}) {
         flex-wrap: wrap;
         align-items: center;
         justify-content: center;
-        column-gap: .22em;
+        column-gap: 0;
         row-gap: .08em;
         padding: 14px 22px 16px;
         background: rgba(8,11,16,.86);
@@ -136,7 +172,10 @@ function demoCaptionInitScript(options = {}) {
         display: inline-block;
         color: rgba(255,255,255,.72);
         transform-origin: center bottom;
+        white-space: pre-wrap;
       }
+      #${rootId} .shotkit-caption-word::before { content: attr(data-before); }
+      #${rootId} .shotkit-caption-word::after { content: attr(data-after); }
       #${rootId} .shotkit-caption-word[data-active="true"] {
         color: var(--shotkit-caption-active-color, #facc15);
         text-shadow: 0 2px 14px rgba(0,0,0,.52);
@@ -243,9 +282,9 @@ function demoCaptionInitScript(options = {}) {
         100% { opacity: 0; transform: scale(1.9); }
       }
       @keyframes shotkit-caption-focus-pop {
-        0% { opacity: .55; transform: translateY(5px) scale(.86); }
-        70% { opacity: 1; transform: translateY(-1px) scale(1.1); }
-        100% { opacity: 1; transform: translateY(0) scale(1.06); }
+        0% { opacity: .55; transform: translateY(4px) scale(.94); }
+        70% { opacity: 1; transform: translateY(-1px) scale(1.04); }
+        100% { opacity: 1; transform: translateY(0) scale(1); }
       }
     `;
     document.head.appendChild(style);
@@ -280,16 +319,135 @@ function demoCaptionInitScript(options = {}) {
     return pointer;
   }
 
-  function show(text, nextOptions = {}) {
+  function captionLines(root) {
+    const words = Array.from(root.querySelectorAll('.shotkit-caption-word'));
+    const rects = words.length
+      ? words.map((word) => ({
+        top: word.offsetTop,
+        left: word.offsetLeft,
+        right: word.offsetLeft + word.offsetWidth,
+        width: word.offsetWidth,
+        height: word.offsetHeight,
+      }))
+      : (() => {
+        const range = document.createRange();
+        range.selectNodeContents(root);
+        return Array.from(range.getClientRects());
+      })();
+    const lines = [];
+    for (const rect of rects.filter((item) => item.width > 0 && item.height > 0)) {
+      let line = lines.find((item) => Math.abs(item.top - rect.top) <= 2);
+      if (!line) {
+        line = { top: rect.top, left: rect.left, right: rect.right };
+        lines.push(line);
+      } else {
+        line.left = Math.min(line.left, rect.left);
+        line.right = Math.max(line.right, rect.right);
+      }
+    }
+    return lines.sort((first, second) => first.top - second.top)
+      .map((line) => Math.max(0, line.right - line.left));
+  }
+
+  function captionMeasure(root) {
+    const lineWidths = captionLines(root);
+    const widest = lineWidths.length ? Math.max(...lineWidths) : 0;
+    const narrowest = lineWidths.length ? Math.min(...lineWidths) : 0;
+    return {
+      overflowX: root.scrollWidth > root.clientWidth + 1,
+      overflowY: root.scrollHeight > root.clientHeight + 1,
+      lineCount: lineWidths.length,
+      lineWidths: lineWidths.map((width) => Math.round(width * 100) / 100),
+      lineBalance: lineWidths.length > 1 && widest > 0 ? narrowest / widest : 1,
+    };
+  }
+
+  function fitCaption(root, typography) {
+    const computed = window.getComputedStyle(root);
+    const cssSize = Number.parseFloat(computed.fontSize) || 24;
+    const maximum = Number.isFinite(typography.maxFontSize) ? typography.maxFontSize : Math.round(cssSize);
+    const minimum = Math.min(maximum, Number.isFinite(typography.minFontSize) ? typography.minFontSize : maximum);
+    const maxLines = Number.isInteger(typography.maxLines) ? typography.maxLines : 2;
+    const setSize = (size) => {
+      root.style.fontSize = `${size}px`;
+      const measured = captionMeasure(root);
+      return {
+        ...measured,
+        fontSize: size,
+        fits: !measured.overflowX && !measured.overflowY && measured.lineCount <= maxLines,
+      };
+    };
+
+    if (!typography.enabled) {
+      const measured = captionMeasure(root);
+      return {
+        ...measured,
+        requestedFontSize: cssSize,
+        fontSize: cssSize,
+        minFontSize: null,
+        maxLines,
+        fitStatus: 'not-requested',
+      };
+    }
+    if (typography.fit !== 'shrink') {
+      const measured = setSize(maximum);
+      return {
+        ...measured,
+        requestedFontSize: maximum,
+        minFontSize: minimum,
+        maxLines,
+        fitStatus: measured.fits ? 'fit' : 'overflow',
+      };
+    }
+
+    let low = minimum;
+    let high = maximum;
+    let best = null;
+    while (low <= high) {
+      const size = Math.floor((low + high) / 2);
+      const measured = setSize(size);
+      if (measured.fits) {
+        best = measured;
+        low = size + 1;
+      } else {
+        high = size - 1;
+      }
+    }
+    const measured = best || setSize(minimum);
+    if (best) root.style.fontSize = `${best.fontSize}px`;
+    return {
+      ...measured,
+      requestedFontSize: maximum,
+      minFontSize: minimum,
+      maxLines,
+      fitStatus: measured.fits ? 'fit' : 'overflow',
+    };
+  }
+
+  async function show(text, nextOptions = {}) {
     const root = ensureRoot();
     if (!root) return null;
     const position = nextOptions.position || baseOptions.position;
+    const typography = baseOptions.typography && baseOptions.typography.enabled
+      ? { ...baseOptions.typography, ...(nextOptions.typography || {}) }
+      : { enabled: false };
     root.dataset.position = position;
     root.dataset.mode = nextOptions.mode === 'focus' ? 'focus' : 'static';
     root.dataset.appearance = nextOptions.appearance === 'outline' ? 'outline' : 'panel';
-    root.dataset.condensed = nextOptions.condensed || (
-      root.dataset.mode === 'focus' && String(text).length > 42
-    ) ? 'true' : 'false';
+    root.dataset.condensed = nextOptions.condensed || (!typography.enabled
+      && root.dataset.mode === 'focus' && String(text).length > 42) ? 'true' : 'false';
+    if (typography.enabled) {
+      root.lang = nextOptions.locale || typography.locale || 'und';
+      root.dir = nextOptions.direction || typography.direction || 'ltr';
+      root.style.fontFamily = typography.family;
+      if (typography.weight) root.style.fontWeight = typography.weight;
+    } else {
+      root.removeAttribute('lang');
+      root.removeAttribute('dir');
+      root.style.removeProperty('font-family');
+      root.style.removeProperty('font-weight');
+      root.style.removeProperty('font-size');
+    }
     if (Number.isFinite(nextOptions.bottomOffset) && nextOptions.bottomOffset >= 0) {
       root.style.setProperty('--shotkit-caption-bottom-offset', `${Math.round(nextOptions.bottomOffset)}px`);
     } else {
@@ -297,14 +455,24 @@ function demoCaptionInitScript(options = {}) {
     }
     root.style.setProperty('--shotkit-caption-active-color', nextOptions.activeColor || '#facc15');
     root.textContent = '';
-    if (root.dataset.mode === 'focus' && Array.isArray(nextOptions.focusWords)) {
-      nextOptions.focusWords.forEach((word, index) => {
+    if (root.dataset.mode === 'focus' && (Array.isArray(nextOptions.focusSegments)
+      || Array.isArray(nextOptions.focusWords))) {
+      const segments = Array.isArray(nextOptions.focusSegments)
+        ? nextOptions.focusSegments
+        : nextOptions.focusWords.map((word, index, words) => ({
+          before: '',
+          text: word,
+          after: index === words.length - 1 ? '' : ' ',
+        }));
+      segments.forEach((segment, index) => {
         // Use an element most page translators do not scan. The root's
         // translate=no marker covers standards-aware localization tools too.
         const wordElement = document.createElement('b');
         wordElement.className = 'shotkit-caption-word';
         wordElement.dataset.active = index === nextOptions.activeWordIndex ? 'true' : 'false';
-        wordElement.textContent = String(word);
+        wordElement.dataset.before = String(segment.before || '');
+        wordElement.dataset.after = String(segment.after || '');
+        wordElement.textContent = String(segment.text);
         root.appendChild(wordElement);
       });
       root.setAttribute('aria-label', String(nextOptions.fullText || text));
@@ -315,26 +483,13 @@ function demoCaptionInitScript(options = {}) {
       root.setAttribute('aria-live', 'polite');
     }
     root.dataset.visible = text ? 'true' : 'false';
+    const fontState = await loadCaptionFonts();
+    const fit = fitCaption(root, typography);
 
     const rect = root.getBoundingClientRect();
     const rootStyle = window.getComputedStyle(root);
     const firstWord = root.querySelector('.shotkit-caption-word');
     const textStyle = firstWord ? window.getComputedStyle(firstWord) : rootStyle;
-    const wordElements = Array.from(root.querySelectorAll('.shotkit-caption-word'));
-    let lineCount;
-    if (wordElements.length) {
-      // offsetTop ignores the active-word scale animation, so a pop cannot be
-      // mistaken for a second line.
-      lineCount = new Set(wordElements.map((wordElement) => wordElement.offsetTop)).size;
-    } else {
-      const range = document.createRange();
-      range.selectNodeContents(root);
-      lineCount = new Set(
-        Array.from(range.getClientRects())
-          .filter((lineRect) => lineRect.width > 0 && lineRect.height > 0)
-          .map((lineRect) => Math.round(lineRect.top)),
-      ).size;
-    }
     const stroke = textStyle.webkitTextStrokeWidth
       || textStyle.getPropertyValue('-webkit-text-stroke-width')
       || '0';
@@ -353,9 +508,23 @@ function demoCaptionInitScript(options = {}) {
         height: rect.height,
       },
       viewport: { width: window.innerWidth, height: window.innerHeight },
-      overflowX: root.scrollWidth > root.clientWidth + 1,
-      overflowY: root.scrollHeight > root.clientHeight + 1,
-      lineCount,
+      overflowX: fit.overflowX,
+      overflowY: fit.overflowY,
+      lineCount: fit.lineCount,
+      lineWidths: fit.lineWidths,
+      lineBalance: fit.lineBalance,
+      fitStatus: fit.fitStatus,
+      fontSize: fit.fontSize,
+      requestedFontSize: fit.requestedFontSize,
+      minFontSize: fit.minFontSize,
+      maxLines: fit.maxLines,
+      locale: typography.enabled ? root.lang : null,
+      direction: typography.enabled ? root.dir : null,
+      fontConfigured: fontState.configured,
+      fontLoaded: fontState.configured ? fontState.loaded : null,
+      fontLoadMs: Number.isFinite(fontState.loadMs) ? fontState.loadMs : null,
+      fontErrors: fontState.errors,
+      fontFamily: rootStyle.fontFamily,
       strokeWidth: Number.parseFloat(stroke) || 0,
     };
   }
@@ -390,8 +559,9 @@ function demoCaptionInitScript(options = {}) {
     if (pointer) pointer.dataset.visible = 'false';
   }
 
-  window.__shotkitDemoCaption = { show, hide };
+  window.__shotkitDemoCaption = { show, hide, ready: loadCaptionFonts };
   window.__shotkitDemoPointer = { move: movePointer, pulse: pulsePointer, hide: hidePointer };
+  void loadCaptionFonts();
   const install = () => ensureRoot();
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', install, { once: true });
   else install();
@@ -429,8 +599,13 @@ async function hideDemoCaption(page) {
   });
 }
 
+function hasDemoPointerOverlay() {
+  return !!window.__shotkitDemoPointer;
+}
+
 async function moveDemoPointer(page, point, options = {}) {
-  await ensureDemoCaptionOverlay(page, options);
+  const installed = await page.evaluate(hasDemoPointerOverlay).catch(() => false);
+  if (!installed) await ensureDemoCaptionOverlay(page);
   await page.evaluate(
     ({ pointerPoint, pointerOptions }) => {
       window.__shotkitDemoPointer.move(pointerPoint, pointerOptions);
@@ -484,7 +659,13 @@ async function clickTarget(page, target, clickOptions) {
   throw new Error('shotkit: demo.click target must be a selector string, Locator, or { x, y } point');
 }
 
-function createDemoController({ page, captions = [], captionOptions = {} }) {
+function createDemoController({
+  page,
+  captions = [],
+  captionOptions = {},
+  runtimeCaptionOptions = captionOptions,
+  typographyReport = null,
+}) {
   const schedule = normalizeDemoCaptions(captions);
   const captionFrames = buildCaptionFrames(schedule, captionOptions);
   const timers = [];
@@ -501,8 +682,9 @@ function createDemoController({ page, captions = [], captionOptions = {} }) {
     activeText = String(text || '');
     activeOptions = options || {};
     activeExpectedAtMs = expectedAtMs;
-    const nextOptions = { ...captionOptions, ...activeOptions };
-    captionStyle(nextOptions);
+    const authoredOptions = { ...captionOptions, ...activeOptions };
+    const nextOptions = { ...runtimeCaptionOptions, ...activeOptions };
+    captionStyle(authoredOptions);
     try {
       if (activeText) {
         if (!overlayReady) {
@@ -608,6 +790,7 @@ function createDemoController({ page, captions = [], captionOptions = {} }) {
       return {
         expectedFrames: captionFrames.map((frame) => ({ atMs: frame.atMs, text: frame.text })),
         samples: captionSamples.map((sample) => ({ ...sample, rect: { ...sample.rect } })),
+        typography: typographyReport ? { ...typographyReport } : null,
       };
     },
 

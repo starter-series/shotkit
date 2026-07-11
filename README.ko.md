@@ -108,7 +108,7 @@ handoff pack은 에이전트가 target별 최종 파일을 검증하고 자동 �
 
 - `storyboard.json` — demo 이름, audience, viewport, trim/framing hint, beats,
   구조화된 storyboard lint warning, 추천 next tool.
-- `captions.json` — demo별 caption timing/text.
+- `captions.json` — demo별 caption timing/text와 실제 렌더링 타이포그래피 QA.
 - `shotkit-manifest.json` — entrypoint. asset inventory/integrity, 실행·freshness
   metadata, 로컬 schema path, `handoff.automation`의 target 검사/retry action,
   `handoff.approval`의 최종 게시 게이트.
@@ -119,6 +119,39 @@ handoff pack은 에이전트가 target별 최종 파일을 검증하고 자동 �
 
 target workflow에서는 수동 editor hint를 기본으로 숨기며,
 `automation.manualFallback:true`일 때만 명시적으로 다시 노출합니다.
+
+다국어 campaign variant는 실행 환경의 시스템 폰트 대신 locale과 프로젝트 내부
+폰트를 명시할 수 있습니다. Shotkit은 작성된 글자의 glyph coverage를 먼저
+확인하고, 필요한 글자만 WOFF2로 줄여 녹화 페이지에 삽입한 뒤 브라우저 로드를
+기다립니다. 각 caption은 선언된 최소 크기와 최대 줄 수 안에서만 자동으로
+축소됩니다.
+
+```js
+captionOptions: {
+  mode: 'focus',
+  appearance: 'outline',
+  typography: {
+    locale: 'ko-KR',
+    family: '"Campaign Sans", sans-serif',
+    weight: 800,
+    minFontSize: 28,
+    maxFontSize: 44,
+    maxLines: 2,
+    fit: 'shrink',
+    fonts: [{
+      family: 'Campaign Sans',
+      from: '.shotkit/fonts/campaign-sans.woff2',
+      weight: '100 900',
+    }],
+  },
+}
+```
+
+폰트 경로는 consumer 프로젝트 내부여야 합니다. OTF, TTF, WOFF, WOFF2를
+최대 4개, 파일당 24 MB까지 사용할 수 있습니다. focus caption은 locale-aware
+word segmentation으로 원문의 문장부호와 구분자를 보존하므로 일본어·중국어에
+임의의 공백을 넣지 않습니다. 누락 glyph, 폰트 로드 실패, 최소 크기 overflow,
+불균형한 두 줄 구성은 에이전트가 수정할 구조화 warning이 됩니다.
 
 handoff 규약은 버전과 schema를 갖습니다. `$schema` 값은 안정적인 URN
 식별자이고, `handoff.schemaFiles`가 output pack 안의 실제 schema로 연결합니다.
@@ -225,7 +258,9 @@ storyboard lint는 기본으로 켜져 있으며 실패 대신 warning을 남깁
 형태로 기록되므로, 에이전트가 다음 패스에서 `shotkit.config.js`를 고치기
 쉽습니다. mp4 누락, 3초 이후 첫 캡션, 홀수 영상 크기, 너무 긴 캡션,
 safety/restore beat 누락, crop/zoom edge risk, 20~40초 바깥 trim을
-잡아줍니다.
+잡아줍니다. 실제 녹화 중에는 모든 caption frame의 위치, overflow, 줄 수,
+outline, 시간 오차와 함께 폰트 적용 여부, 적용된 글자 크기, 줄 균형도
+측정합니다.
 자동 channel target은 lint가 켜져 있어야 하며, `storyboardLint:false`이면
 automation status가 `needs-fix`가 됩니다.
 

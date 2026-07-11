@@ -14,7 +14,7 @@ Every successful run writes these files unless `handoff: false` is set:
 - `shotkit-manifest.json` — the entry point. Read this first.
 - `storyboard.json` — demo intent, beats, viewport, trim/framing hints, and
   structured storyboard lint.
-- `captions.json` — portable caption timing and text.
+- `captions.json` — portable caption timing, text, style, and measured rendering QA.
 - `schemas/shotkit-manifest.schema.json` — local manifest validation contract.
 - `schemas/storyboard.schema.json` — local storyboard validation contract.
 - `schemas/captions.schema.json` — local captions validation contract.
@@ -90,6 +90,14 @@ for downstream agents. `captions.demos[].timeline[]` is the reproducible
 trim-relative render plan: each frame includes its start/end, rendered chunk,
 source phrase, words, and active-word index.
 
+Localized variants may also declare `captionOptions.typography`. The resolved
+locale, direction, family stack, fitting bounds, and configured font families
+remain in the public style. Project-local font files are glyph-checked and
+subset before browser injection; data URLs never enter the handoff. Instead,
+`captions.demos[].qa` records project-relative font paths, source/subset byte
+counts, missing glyphs, scheduled/measured frame counts, browser font-load
+state, fitted sizes, line count, and line balance.
+
 When `config.calibration` is declared, `storyboard.demos[].calibration` records
 the applied profile hash, layout preset, and protected regions. The tracked
 calibration JSON remains the editable source; the storyboard is run evidence.
@@ -103,7 +111,8 @@ is considered verified only when its current hash has produced a real
 - ffprobe codec, pixel format, actual dimensions, and actual duration;
 - poster-frame presence and nonblank PNG pixel statistics;
 - measured caption presence, viewport bounds, overflow, line count, outline
-  stroke, and schedule drift from the real recorded page;
+  stroke, schedule drift, font application, fitted size, and line balance from
+  the real recorded page;
 - storyboard lint being enabled for every publish target;
 - structured storyboard warnings, including early result and restore beats;
 - configured targets that were skipped or produced no output.
@@ -205,9 +214,12 @@ Fallback tool notes:
 
 Current warning codes:
 
+- `invalid-captions`
 - `no-captions`
 - `single-caption`
 - `late-first-caption`
+- `dense-focus-caption`
+- `invalid-caption-options`
 - `long-caption`
 - `missing-safety-restore`
 - `missing-mp4`
@@ -216,6 +228,22 @@ Current warning codes:
 - `short-duration`
 - `long-duration`
 - `missing-duration`
+- `invalid-duration`
+- `caption-locale-missing`
+- `caption-font-not-embedded`
+- `caption-missing-glyph`
+- `caption-font-load-failed`
+- `caption-typography-not-applied`
+- `caption-type-fit-failed`
+- `caption-unbalanced-lines`
+- `caption-outside-viewport`
+- `caption-overflow`
+- `caption-too-many-lines`
+- `caption-outline-missing`
+- `caption-protected-region-overlap`
+- `protected-region-outside-viewport`
+- `caption-frame-missing`
+- `caption-timing-drift`
 
 Lint warnings do not fail a capture. They tell the agent how to improve the next
 `shotkit.config.js` edit.

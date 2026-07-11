@@ -224,6 +224,41 @@ reviews the final candidate. Request changes sends the note back into the agent
 loop; Approve unlocks only the exact reviewed digest. Manual editor hints appear
 only with `automation: { manualFallback: true }`.
 
+Localized campaign variants can opt into deterministic, measured typography.
+Declare the authored locale and project-local font files; Shotkit embeds those
+fonts into the recorded page, verifies glyph coverage before launch, waits for
+the browser font load, and shrinks each rendered caption only as far as the
+declared minimum size and line count allow:
+
+```js
+captionOptions: {
+  mode: 'focus',
+  appearance: 'outline',
+  typography: {
+    locale: 'ko-KR',
+    family: '"Campaign Sans", sans-serif',
+    weight: 800,
+    minFontSize: 28,
+    maxFontSize: 44,
+    maxLines: 2,
+    fit: 'shrink',
+    fonts: [{
+      family: 'Campaign Sans',
+      from: '.shotkit/fonts/campaign-sans.woff2',
+      weight: '100 900',
+    }],
+  },
+}
+```
+
+Font paths must remain inside the consumer project. OTF, TTF, WOFF, and WOFF2
+files up to 24 MB are accepted, with at most four fallback faces. Focus chunks
+use locale-aware word segmentation and preserve the authored punctuation and
+separators, so Japanese and Chinese are not rebuilt with injected spaces.
+Runtime QA reports missing glyphs, failed font loads, minimum-size overflow,
+and severely unbalanced two-line captions as structured agent fixes. Existing
+configs without `typography` retain their legacy system-font behavior.
+
 Project-specific application plans stay repo-internal and are not included in
 the npm package.
 
@@ -376,7 +411,8 @@ dimensions, long captions, missing safety/restore beat, unsupported/offscreen
 caption placement, crop/zoom edge risk, and clips outside the 20-40 second
 target. During the real recording, Shotkit also measures every scheduled
 caption frame's bounding box, overflow, line count, computed outline stroke,
-presence, and timing drift. A mismatch becomes structured lint and prevents
+presence, timing drift, configured font load, fitted size, and line balance.
+A mismatch becomes structured lint and prevents
 `publish-ready`.
 Autonomous channel targets require lint to remain enabled; setting
 `storyboardLint:false` makes their automation status `needs-fix`.

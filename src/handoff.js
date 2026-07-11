@@ -141,9 +141,13 @@ function trimEndMs(demoConfig, startMs) {
 // the beat/caption schema: at >= 0 (number), atMs >= 0 (integer).
 function deliverableBeats(captions, startMs) {
   return captions
-    .map((caption) => ({ atMs: caption.atMs - startMs, text: caption.text }))
+    .map((caption) => ({
+      atMs: caption.atMs - startMs,
+      text: caption.text,
+      ...(caption.role == null ? {} : { role: caption.role }),
+    }))
     .filter((beat) => beat.atMs >= 0)
-    .map((beat) => ({ at: beat.atMs / 1000, atMs: beat.atMs, text: beat.text }));
+    .map((beat) => ({ at: beat.atMs / 1000, ...beat }));
 }
 
 // Coerce loosely-typed demo config into the storyboard schema's shape: preset
@@ -200,7 +204,41 @@ function demoStoryboard(demoConfig, viewport) {
   };
 }
 
-function demoCaptions(demoConfig) {
+function finiteSampleValues(samples, key) {
+  return samples.map((sample) => sample[key]).filter(Number.isFinite);
+}
+
+function captionQaReport(report) {
+  if (!report) return undefined;
+  const expectedFrames = Array.isArray(report.expectedFrames) ? report.expectedFrames : [];
+  const samples = Array.isArray(report.samples) ? report.samples : [];
+  const fontSamples = samples.filter((sample) => sample.fontConfigured);
+  const fontLoadTimes = finiteSampleValues(fontSamples, 'fontLoadMs');
+  const fontSizes = finiteSampleValues(samples, 'fontSize');
+  const lineCounts = finiteSampleValues(samples, 'lineCount');
+  const lineBalances = finiteSampleValues(samples, 'lineBalance');
+  const typographyEnabled = !!(report.typography && report.typography.enabled);
+  const allFramesLoaded = samples.length
+    ? samples.every((sample) => sample.fontConfigured === true && sample.fontLoaded === true)
+    : null;
+  return {
+    scheduledFrameCount: expectedFrames.length,
+    measuredFrameCount: samples.length,
+    typography: report.typography || null,
+    rendering: {
+      fontLoaded: typographyEnabled
+        ? allFramesLoaded
+        : fontSamples.length ? fontSamples.every((sample) => sample.fontLoaded === true) : null,
+      maxFontLoadMs: fontLoadTimes.length ? Math.max(...fontLoadTimes) : null,
+      fitStatuses: [...new Set(samples.map((sample) => sample.fitStatus).filter(Boolean))],
+      resolvedFontSize: fontSizes.length ? { min: Math.min(...fontSizes), max: Math.max(...fontSizes) } : null,
+      maxLineCount: lineCounts.length ? Math.max(...lineCounts) : 0,
+      minLineBalance: lineBalances.length ? Math.min(...lineBalances) : null,
+    },
+  };
+}
+
+function demoCaptions(demoConfig, captionReport) {
   const startMs = trimStartMs(demoConfig);
   const captions = normalizeDemoCaptions(demoConfig.captions || []);
   const frames = buildCaptionFrames(captions, demoConfig.captionOptions);
@@ -209,6 +247,7 @@ function demoCaptions(demoConfig) {
     story: demoConfig.story,
     target: demoConfig.target,
     style: captionStyle(demoConfig.captionOptions || {}),
+    ...(captionReport ? { qa: captionQaReport(captionReport) } : {}),
     captions: deliverableBeats(captions, startMs),
     timeline: buildCaptionTimeline(frames, { startMs, endMs: trimEndMs(demoConfig, startMs) }),
   };
@@ -273,7 +312,18 @@ function refreshManifestHandoff(manifest, storyboard, config, approvalDocument =
   };
 }
 
-function buildHandoffDocs({ cwd, outDir, config, assets, demoConfigs, demoViewports, demoWarnings, flags, run = {} }) {
+function buildHandoffDocs({
+  cwd,
+  outDir,
+  config,
+  assets,
+  demoConfigs,
+  demoViewports,
+  demoWarnings,
+  demoCaptionReports = {},
+  flags,
+  run = {},
+}) {
   const generatedAt = new Date().toISOString();
   const project = readProjectInfo(cwd);
   const runInfo = {
@@ -314,7 +364,7 @@ function buildHandoffDocs({ cwd, outDir, config, assets, demoConfigs, demoViewpo
     version: HANDOFF_VERSION,
     generatedAt,
     project,
-    demos: demoConfigs.map((demoConfig) => demoCaptions(demoConfig)),
+    demos: demoConfigs.map((demoConfig) => demoCaptions(demoConfig, demoCaptionReports[demoConfig.name])),
   };
   const manifest = {
     $schema: HANDOFF_SCHEMA_IDS.manifest,
@@ -378,7 +428,19 @@ function compatiblePreviousPack(previous, current) {
   return !previousProject || !currentProject || previousProject === currentProject;
 }
 
-function writeHandoffDocs({ cwd, outDir, config, assets, demoConfigs, demoViewports, demoWarnings, flags, partial = false, run = {} }) {
+function writeHandoffDocs({
+  cwd,
+  outDir,
+  config,
+  assets,
+  demoConfigs,
+  demoViewports,
+  demoWarnings,
+  demoCaptionReports = {},
+  flags,
+  partial = false,
+  run = {},
+}) {
   const storyboardPath = path.join(outDir, 'storyboard.json');
   const captionsPath = path.join(outDir, 'captions.json');
   const manifestPath = path.join(outDir, 'shotkit-manifest.json');
@@ -420,6 +482,7 @@ function writeHandoffDocs({ cwd, outDir, config, assets, demoConfigs, demoViewpo
     demoConfigs,
     demoViewports,
     demoWarnings,
+    demoCaptionReports,
     flags,
     run: { ...run, mode: partial ? 'partial' : 'full' },
   });

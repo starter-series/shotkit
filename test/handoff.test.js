@@ -92,6 +92,29 @@ describe('handoff contract', () => {
           fix: 'fix the demo',
         }],
       },
+      demoCaptionReports: {
+        demo: {
+          expectedFrames: [{ atMs: 1000, text: 'Restore anytime' }],
+          samples: [{
+            fontConfigured: true,
+            fontLoaded: true,
+            fontLoadMs: 7,
+            fitStatus: 'fit',
+            fontSize: 38,
+            lineCount: 1,
+            lineBalance: 1,
+          }],
+          typography: {
+            enabled: true,
+            deterministic: true,
+            locale: 'en-US',
+            direction: 'ltr',
+            fontFiles: ['fonts/NotoSans.ttf'],
+            fontOptimization: [{ family: 'Noto Sans', sourceBytes: 1000, embeddedBytes: 300 }],
+            missingGlyphs: [],
+          },
+        },
+      },
       flags: { freeze: true, liveGt: false },
     });
 
@@ -135,6 +158,19 @@ describe('handoff contract', () => {
       activeWordIndex: null,
       condensed: false,
     }]);
+    expect(docs.captions.demos[0].qa).toEqual({
+      scheduledFrameCount: 1,
+      measuredFrameCount: 1,
+      typography: expect.objectContaining({ deterministic: true, locale: 'en-US' }),
+      rendering: {
+        fontLoaded: true,
+        maxFontLoadMs: 7,
+        fitStatuses: ['fit'],
+        resolvedFontSize: { min: 38, max: 38 },
+        maxLineCount: 1,
+        minLineBalance: 1,
+      },
+    });
     expect(docs.storyboard.demos[0].beats[0].text).toBe('Restore anytime');
     expect(docs.captions.demos[0].captions[0].atMs).toBe(1000);
     expect(docs.storyboard.storyboardLint).toEqual([{
@@ -193,6 +229,35 @@ describe('handoff contract', () => {
     expect(storyboard.bytes).toBeGreaterThan(0);
     expect(storyboard.integrity).toMatchObject({ algorithm: 'sha256' });
     expect(storyboard.integrity.digest).toMatch(/^[a-f0-9]{64}$/);
+  });
+
+  test('reports deterministic fonts loaded only when every measured frame kept the font setup', () => {
+    const { cwd, outDir } = tmpProject();
+    const docs = buildHandoffDocs({
+      cwd,
+      outDir,
+      config: {},
+      assets: [],
+      demoConfigs: [{ name: 'demo', run: async () => {} }],
+      demoViewports: { demo: { width: 720, height: 1280 } },
+      demoWarnings: { demo: [] },
+      demoCaptionReports: {
+        demo: {
+          expectedFrames: [{ atMs: 0, text: 'A' }, { atMs: 200, text: 'B' }],
+          samples: [
+            { fontConfigured: true, fontLoaded: true, fitStatus: 'fit' },
+            { fontConfigured: false, fontLoaded: null, fitStatus: 'not-requested' },
+          ],
+          typography: { enabled: true, deterministic: true, locale: 'en-US', direction: 'ltr' },
+        },
+      },
+      flags: {},
+    });
+
+    expect(docs.captions.demos[0].qa.rendering).toMatchObject({
+      fontLoaded: false,
+      fitStatuses: ['fit', 'not-requested'],
+    });
   });
 
   test('partial runs prune missing files and recompute adapter readiness from preserved assets', () => {

@@ -91,6 +91,12 @@ test/            → unit tests for the pure/safe modules (no browser)
   carries the resolved trim-relative frame timeline for downstream adapters.
   Add Whisper-style alignment only as an optional future audio adapter; silent
   product demos already have deterministic caption timing.
+- **Localized typography is measured, not guessed**: localized publishing
+  configs declare `captionOptions.typography.locale` and project-local font
+  files. Preserve authored separators during focus segmentation, verify glyph
+  coverage and browser font loading, fit only within declared size/line bounds,
+  and treat typography QA warnings as agent-owned fixes. A Skill may author
+  copy and emphasis, but the harness owns deterministic measurement.
 - **Handoff JSON is the machine boundary**: target workflows use
   `handoff.automation` to fix and retry until technical `publish-ready`; users
   do not read manifests or repair media. They review the resulting media in the
