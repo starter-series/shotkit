@@ -17,7 +17,7 @@ module.exports = [
     },
   },
   {
-    files: ['test/**/*.js'],
+    files: ['test/**/*.{js,mjs}'],
     languageOptions: { globals: { ...globals.jest } },
   },
   {
@@ -25,7 +25,7 @@ module.exports = [
     languageOptions: { sourceType: 'module' },
   },
   {
-    files: ['calibrator/**/*.js', 'campaign/**/*.js'],
+    files: ['calibrator/**/*.js', 'campaign/**/*.js', 'test/**/*.mjs'],
     languageOptions: { sourceType: 'module' },
   },
   {

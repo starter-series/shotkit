@@ -26,8 +26,6 @@ const path = require('path');
 const { execSync } = require('child_process');
 
 const { launchWithExtension, closeContext } = require('./launch');
-const { compositeCaption, DEFAULT_BAND_HEIGHT } = require('./caption');
-const { renderPromoTile } = require('./promo');
 const {
   extractListing,
   extractProductManifest,
@@ -36,23 +34,14 @@ const {
   renderPrivacyDisclosureDoc,
 } = require('./describe');
 const { resolveSize } = require('./presets');
-const { postProcessDemo, probeVideo } = require('./video');
-const { analyzeDemoStoryboard, createDemoController, installDemoCaptionOverlay, normalizeDemoConfigs } = require('./demo');
-const { analyzeDemoCaptionMetrics } = require('./demo-caption-qa');
-const { prepareCaptionTypography } = require('./caption-typography');
+const { analyzeDemoStoryboard, normalizeDemoConfigs } = require('./demo');
+const { captureDemo, DemoPostProcessError } = require('./capture-demo');
+const { normalizeSetup } = require('./capture-lifecycle');
+const { createCapturePlan, DEFAULT_VIEWPORT } = require('./capture-plan');
+const { captureStaticAssets } = require('./capture-static');
 const { applyCalibrationProfiles, loadCalibration } = require('./calibration');
 const { deliveryStatus } = require('./approval');
 const { assetRecord, writeHandoffDocs } = require('./handoff');
-const { analyzePng } = require('./image-qa');
-
-const DEFAULT_VIEWPORT = { width: 1280, height: 800 };
-
-/** Normalize whatever setup() returns into { env, teardown }. */
-function normalizeSetup(result) {
-  if (!result) return { env: {}, teardown: async () => {} };
-  if (typeof result.teardown === 'function') return { env: result.env || {}, teardown: result.teardown };
-  return { env: result.env || result, teardown: async () => {} };
-}
 
 function isManagedTempDir(dir, prefix) {
   const resolved = path.resolve(dir);
@@ -75,42 +64,6 @@ function normalizePreparedExtension(result) {
   throw new Error('prepareExtension() must return an extension directory string or { dir, cleanup }');
 }
 
-function wantsAny(only, names) {
-  if (only.size === 0) return names.length > 0;
-  return names.some((name) => only.has(name));
-}
-
-function visualOutputNames(config) {
-  return [
-    ...(config.scenes || []).map((scene) => scene.name),
-    ...(config.promoTiles || []).map((tile) => tile.name),
-  ].filter(Boolean);
-}
-
-function textOutputNames(config, cwd) {
-  const names = [];
-  if (config.description && config.description.from) {
-    const sourcePath = path.resolve(cwd, config.description.from);
-    names.push('description');
-    if (hasJsonExtension(sourcePath)) names.push('privacy');
-  }
-  return names.filter(Boolean);
-}
-
-function outputNames(config, cwd, demoConfigs) {
-  return [
-    ...visualOutputNames(config),
-    ...textOutputNames(config, cwd),
-    ...demoConfigs.flatMap((demo) => [demo.name, demo.story]).filter(Boolean),
-  ];
-}
-
-function usageError(message) {
-  const err = new Error(message);
-  err.exitCode = 2;
-  return err;
-}
-
 /**
  * @param {object} config  the project's shotkit config object (scenes, etc.)
  * @param {object} [opts]
@@ -127,50 +80,34 @@ function usageError(message) {
  */
 async function capture(config, opts = {}) {
   const cwd = opts.cwd || process.cwd();
-  const only = new Set(opts.scenes || []);
-  const targetOnly = new Set(opts.targets || []);
-  const wants = (name) => only.size === 0 || only.has(name);
-  const wantsDemo = (demo) => wants(demo.name) || (demo.story && only.has(demo.story));
-  const wantsTarget = (demo) => targetOnly.size === 0 || targetOnly.has(demo.target);
   const log = opts.log || ((msg) => console.log(`[shotkit] ${msg}`));
-  const passFlags = { liveGt: !!opts.liveGt, freeze: !!opts.freeze };
-
-  const outDir = path.resolve(cwd, config.outDir || 'store-assets');
-  const defaultViewport = resolveSize(config.viewport, DEFAULT_VIEWPORT);
-  const bandHeight = config.bandHeight || DEFAULT_BAND_HEIGHT;
+  const calibration = loadCalibration(config, cwd);
+  const demoConfigs = applyCalibrationProfiles(normalizeDemoConfigs(config), calibration.document);
+  const plan = createCapturePlan({ config, opts, cwd, demoConfigs });
+  const {
+    bandHeight,
+    defaultViewport,
+    needsBrowser,
+    only,
+    outDir,
+    partial,
+    passFlags,
+    requestedDemoConfigs,
+    selectedDemoConfigs,
+    shouldRunTextPass,
+    shouldRunVisualPass,
+    targetOnly,
+    wants,
+  } = plan;
   const produced = [];
   let manifest = null;
   let status = 'not-requested';
   let machineStatus = 'not-requested';
   const assets = [];
-  const calibration = loadCalibration(config, cwd);
-  const demoConfigs = applyCalibrationProfiles(normalizeDemoConfigs(config), calibration.document);
   const capturedDemoConfigs = [];
   const demoViewports = {};
   const demoWarnings = {};
   const demoCaptionReports = {};
-  const shouldRunVisualPass = targetOnly.size === 0 && wantsAny(only, visualOutputNames(config));
-  const shouldRunTextPass = targetOnly.size === 0 && wantsAny(only, textOutputNames(config, cwd));
-  const requestedDemoConfigs = demoConfigs.filter((demoConfig) => wantsDemo(demoConfig) && wantsTarget(demoConfig));
-  const selectedDemoConfigs = requestedDemoConfigs.filter(() => !opts.noVideo);
-  const needsBrowser = shouldRunVisualPass || selectedDemoConfigs.length > 0;
-  if (only.size > 0) {
-    const knownNames = new Set(outputNames(config, cwd, demoConfigs));
-    const unknownNames = [...only].filter((name) => !knownNames.has(name));
-    if (unknownNames.length) {
-      throw usageError(`unknown scene: ${unknownNames.join(', ')}. Known: ${[...knownNames].join(', ') || '(none)'}`);
-    }
-  }
-  if (targetOnly.size > 0) {
-    const configuredTargets = new Set(demoConfigs.map((demo) => demo.target).filter(Boolean));
-    const unknownTargets = [...targetOnly].filter((target) => !configuredTargets.has(target));
-    if (unknownTargets.length) {
-      throw usageError(`target not configured: ${unknownTargets.join(', ')}. Configured: ${[...configuredTargets].join(', ') || '(none)'}`);
-    }
-    if (!requestedDemoConfigs.length) {
-      throw usageError('no configured demo matches the requested scene and target filters');
-    }
-  }
   fs.mkdirSync(outDir, { recursive: true });
   const tempDirs = [];
   let fatalDemoError = null;
@@ -285,61 +222,18 @@ async function capture(config, opts = {}) {
         setup = normalizeSetup(
           config.setup ? await config.setup({ context: ctx.context, extensionId: ctx.extensionId, flags: passFlags }) : null,
         );
-        for (const scene of config.scenes || []) {
-          if (!wants(scene.name)) continue;
-          const viewport = resolveSize(scene.preset || scene.viewport, defaultViewport);
-          const captioned = !!(config.disclaimer || scene.caption);
-          const captureHeight = captioned ? viewport.height - bandHeight : viewport.height;
-
-          const page = await ctx.context.newPage();
-          try {
-            await page.setViewportSize({ width: viewport.width, height: captureHeight });
-            await scene.run({ page, context: ctx.context, extensionId: ctx.extensionId, env: setup.env, baseUrl: setup.env.baseUrl, flags: passFlags });
-            let buf = await page.screenshot({ clip: { x: 0, y: 0, width: viewport.width, height: captureHeight } });
-            if (captioned) {
-              buf = await compositeCaption({
-                context: ctx.context, imageBuffer: buf,
-                width: viewport.width, height: viewport.height, bandHeight,
-                caption: scene.caption, disclaimer: config.disclaimer,
-              });
-            }
-            writeAsset(
-              path.join(outDir, `${scene.name}.png`),
-              buf,
-              {
-                name: scene.name,
-                type: 'image',
-                role: 'store-screenshot',
-                width: viewport.width,
-                height: viewport.height,
-                source: { kind: 'scene', name: scene.name },
-              },
-              `✓ ${scene.name}.png (${viewport.width}×${viewport.height})`,
-            );
-          } finally {
-            await page.close();
-          }
-        }
-
-        for (const tile of config.promoTiles || []) {
-          if (!wants(tile.name)) continue;
-          const { width, height } = resolveSize(tile.preset || { width: tile.width, height: tile.height }, defaultViewport);
-          const buf = await renderPromoTile({ context: ctx.context, template: tile.template, width, height, replacements: tile.replacements });
-          writeAsset(
-            path.join(outDir, `${tile.name}.png`),
-            buf,
-            {
-              name: tile.name,
-              type: 'image',
-              role: 'promo-tile',
-              width,
-              height,
-              source: { kind: 'promoTile', name: tile.name },
-            },
-            `✓ ${tile.name}.png (${width}×${height})`,
-          );
-        }
-
+        await captureStaticAssets({
+          config,
+          context: ctx.context,
+          extensionId: ctx.extensionId,
+          setup,
+          passFlags,
+          wants,
+          defaultViewport,
+          bandHeight,
+          outDir,
+          writeAsset,
+        });
       } finally {
         // Close the context (drops the browser's sockets) BEFORE the fixture server:
         // server.close() waits for open connections to drain, and a still-open page
@@ -368,156 +262,41 @@ async function capture(config, opts = {}) {
       const videoDir = fs.mkdtempSync(path.join(os.tmpdir(), 'shotkit-video-'));
       tempDirs.push(videoDir);
       const demoCtx = await launchWithExtension({ extensionDir, viewport, recordVideoDir: videoDir, recordVideoSize: viewport });
-      let setup2 = normalizeSetup(null);
-      let page = null;
+      const resources = { setup: normalizeSetup(null), page: null };
       try {
-        const preparedTypography = await prepareCaptionTypography(
-          demoConfig.captionOptions || {},
+        const result = await captureDemo({
+          config,
+          demoConfig,
+          opts,
           cwd,
-          (demoConfig.captions || []).map((caption) => caption.text),
-        );
-        await installDemoCaptionOverlay(demoCtx.context, preparedTypography.runtimeOptions);
-
-        // Keep a small "unofficial" badge on screen across navigations. A
-        // target-specific story may shorten or disable the global screenshot
-        // disclaimer when the video header has less room.
-        const demoDisclaimer = Object.prototype.hasOwnProperty.call(demoConfig, 'disclaimer')
-          ? demoConfig.disclaimer
-          : config.disclaimer;
-        if (demoDisclaimer != null && demoDisclaimer !== false
-          && (typeof demoDisclaimer !== 'string' || !demoDisclaimer.trim())) {
-          throw new Error(`demo "${demoConfig.name}".disclaimer must be a non-empty string or false`);
-        }
-        if (demoDisclaimer) {
-          await demoCtx.context.addInitScript((text) => {
-            const add = () => {
-              if (document.getElementById('__shotkit_badge__') || !document.body) return;
-              const b = document.createElement('div');
-              b.id = '__shotkit_badge__';
-              b.textContent = text;
-              b.style.cssText = 'position:fixed;top:10px;left:10px;z-index:2147483647;background:rgba(20,21,26,.86);color:#fff;font:600 11px -apple-system,Segoe UI,Roboto,sans-serif;padding:5px 9px;border-radius:6px;pointer-events:none';
-              document.body.appendChild(b);
-            };
-            if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', add, { once: true });
-            else add();
-          }, demoDisclaimer);
-        }
-
-        setup2 = normalizeSetup(
-          config.setup ? await config.setup({ context: demoCtx.context, extensionId: demoCtx.extensionId, flags: passFlags }) : null,
-        );
-        page = await demoCtx.context.newPage();
-        await page.setViewportSize(viewport);
-        if (preparedTypography.report.enabled) {
-          await page.evaluate(async () => {
-            if (window.__shotkitDemoCaption && typeof window.__shotkitDemoCaption.ready === 'function') {
-              await window.__shotkitDemoCaption.ready();
-            }
-          });
-        }
-        const demo = createDemoController({
-          page,
-          captions: demoConfig.captions,
-          captionOptions: demoConfig.captionOptions,
-          runtimeCaptionOptions: preparedTypography.runtimeOptions,
-          typographyReport: preparedTypography.report,
-        });
-        let captionMetricReport;
-        try {
-          await demoConfig.run({
-            page,
-            context: demoCtx.context,
-            extensionId: demoCtx.extensionId,
-            env: setup2.env,
-            baseUrl: setup2.env.baseUrl,
-            flags: passFlags,
-            demo,
-            target: demoConfig.targetProfile || null,
-            calibration: demoConfig.calibrationProfile || null,
-          });
-        } finally {
-          captionMetricReport = demo.captionMetrics();
-          demo.stop();
-        }
-        demoCaptionReports[demoConfig.name] = captionMetricReport;
-        const calibrationProfile = demoConfig.calibrationProfile || {};
-        const runtimeCaptionWarnings = analyzeDemoCaptionMetrics(captionMetricReport, {
+          outDir,
           viewport,
-          protectedRegions: calibrationProfile.protectedRegions || [],
-          framing: calibrationProfile.framing || null,
+          passFlags,
+          demoCtx,
+          resources,
+          registerAsset,
+          log,
         });
-        demoWarnings[demoConfig.name].push(...runtimeCaptionWarnings);
-        for (const warning of runtimeCaptionWarnings) {
-          log(`⚠️  ${demoConfig.name}: ${warning.message}${warning.fix ? `; ${warning.fix}` : ''}`);
-        }
-        // Ordering: grab the video handle, page.close() (finalizes recording +
-        // drops the page socket), video.saveAs() while the browser is still up,
-        // THEN closeContext, THEN server teardown (no page holds a socket → no
-        // deadlock). See the screenshots finally above.
-        const video = page.video();
-        await page.close();
-        if (!video) throw new Error(`demo "${demoConfig.name}" did not produce a video recording`);
-        const out = path.join(outDir, `${demoConfig.name}.webm`);
-        await video.saveAs(out);
         capturedDemoConfigs.push(demoConfig);
-        registerAsset(out, {
-          name: demoConfig.name,
-          type: 'video',
-          role: 'source-demo-webm',
-          width: viewport.width,
-          height: viewport.height,
-          target: demoConfig.target,
-          channel: demoConfig.channel,
-          source: { kind: 'demo', name: demoConfig.name, story: demoConfig.story, target: demoConfig.target },
-        }, `✓ ${demoConfig.name}.webm (${viewport.width}×${viewport.height})`);
-        // SNS post-processing: mp4 (H.264) and/or trim — needs a real ffmpeg,
-        // fails loudly if one was requested but none is installed.
-        let extra;
-        try {
-          extra = postProcessDemo({
-            webmPath: out,
-            mp4: demoConfig.mp4 || opts.mp4,
-            trim: demoConfig.trim,
-            crop: demoConfig.crop,
-            zoom: demoConfig.zoom,
-            thumbnail: demoConfig.thumbnail,
-            log,
-          });
-        } catch (err) {
-          const msg = err && err.message ? err.message : String(err);
-          fatalDemoError = new Error(`demo "${demoConfig.name}" post-processing failed: ${msg}`, { cause: err });
+        demoCaptionReports[demoConfig.name] = result.captionMetricReport;
+        demoWarnings[demoConfig.name].push(...result.runtimeCaptionWarnings);
+      } catch (err) {
+        if (err instanceof DemoPostProcessError) {
+          fatalDemoError = err;
           log(`❌ ${fatalDemoError.message}`);
           break;
         }
-        for (const extraPath of extra) {
-          const format = path.extname(extraPath).toLowerCase();
-          const media = format === '.mp4' && demoConfig.target ? probeVideo(extraPath) : undefined;
-          const visual = format === '.png' && demoConfig.target ? analyzePng(extraPath) : undefined;
-          registerAsset(extraPath, {
-            name: path.basename(extraPath, path.extname(extraPath)),
-            type: format === '.png' ? 'image' : 'video',
-            role: format === '.png' ? 'thumbnail' : 'sns-demo-mp4',
-            width: media && media.ok ? media.width : undefined,
-            height: media && media.ok ? media.height : undefined,
-            target: demoConfig.target,
-            channel: demoConfig.channel,
-            media,
-            visual,
-            source: { kind: 'demo', name: demoConfig.name, story: demoConfig.story, target: demoConfig.target },
-          });
-        }
-      } catch (err) {
         // One demo run/recording failure must not abort the remaining demos, the
         // later teardown, but it must still make the run fail. A requested demo
         // clip missing from produced[] is a false-positive success signal.
         demoErrors.push({ name: demoConfig.name, error: err });
         log(`❌ demo "${demoConfig.name}" failed: ${err.message} — continuing with the remaining demos`);
       } finally {
-        if (page && !page.isClosed()) await page.close().catch(() => {});
+        if (resources.page && !resources.page.isClosed()) await resources.page.close().catch(() => {});
         try {
           await closeContext(demoCtx);
         } finally {
-          await setup2.teardown();
+          await resources.setup.teardown();
         }
       }
     }
@@ -543,7 +322,7 @@ async function capture(config, opts = {}) {
         flags: passFlags,
         // Scene-filtered or --no-video runs only re-capture a subset; merge into
         // the existing handoff contract rather than clobbering a prior full run.
-        partial: only.size > 0 || targetOnly.size > 0 || !!opts.noVideo,
+        partial,
         run: {
           requestedScenes: [...only],
           requestedTargets: [...targetOnly],

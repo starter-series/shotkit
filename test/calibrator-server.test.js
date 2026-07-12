@@ -133,7 +133,10 @@ describe('calibrator server', () => {
   test.each(['calibrator', 'campaign'])('%s static DOM keeps every JavaScript id binding valid', (surface) => {
     const root = path.join(__dirname, '..', surface);
     const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
-    const script = fs.readFileSync(path.join(root, 'app.js'), 'utf8');
+    const script = fs.readdirSync(root)
+      .filter((name) => name.endsWith('.js'))
+      .map((name) => fs.readFileSync(path.join(root, name), 'utf8'))
+      .join('\n');
     const ids = [...html.matchAll(/\sid="([^"]+)"/g)].map((match) => match[1]);
     expect(new Set(ids).size).toBe(ids.length);
     const bindings = [...script.matchAll(/\$\('([^']+)'\)/g)].map((match) => match[1]);
@@ -177,6 +180,9 @@ describe('calibrator server', () => {
         ['/regions.js', 'text/javascript'],
         ['/campaign/styles.css', 'text/css'],
         ['/campaign/app.js', 'text/javascript'],
+        ['/campaign/api.js', 'text/javascript'],
+        ['/campaign/model.js', 'text/javascript'],
+        ['/campaign/render.js', 'text/javascript'],
       ]) {
         const response = await fetch(`${calibrator.url}${assetPath}`);
         expect(response.status).toBe(200);

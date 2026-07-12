@@ -22,7 +22,8 @@
   "scripts": {
     "lint": "eslint src/ bin/ calibrator/ campaign/ scripts/ test/",
     "research": "node scripts/research-to-product-fit.mjs",
-    "test": "jest --verbose --coverage",
+    "test": "npm run test:campaign && jest --verbose --coverage",
+    "test:campaign": "node --test test/campaign-ui.node.mjs",
     "pack:check": "node scripts/verify-pack.mjs",
     "install:browser": "playwright install chromium"
   },
@@ -73,6 +74,9 @@
       "src/approval.js",
       "src/calibration.js",
       "src/calibrator-server.js",
+      "src/calibrator-http.js",
+      "src/calibrator-routes.js",
+      "src/calibrator-state.js",
       "src/campaign.js",
       "src/campaign-dashboard.js",
       "src/calibration-verification.js",
@@ -83,6 +87,11 @@
       "src/cli.js",
       "src/cli-runner.js",
       "src/index.js",
+      "src/capture.js",
+      "src/capture-demo.js",
+      "src/capture-lifecycle.js",
+      "src/capture-plan.js",
+      "src/capture-static.js",
       "src/video.js",
       "src/demo.js",
       "src/caption-language.js",
@@ -97,7 +106,8 @@
       "src/handoff-validator.js",
       "src/image-qa.js",
       "src/integrations.js",
-      "src/publish.js"
+      "src/publish.js",
+      "src/review-request.js"
     ],
     "coverageReporters": [
       "text",

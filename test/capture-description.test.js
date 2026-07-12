@@ -134,3 +134,27 @@ test('capture does not delete caller-owned extension directories', async () => {
 
   expect(fs.existsSync(extensionDir)).toBe(true);
 });
+
+test('a filtered text recapture retains untouched handoff assets from the full run', async () => {
+  const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'shotkit-capture-partial-text-'));
+  writeProductManifest(cwd);
+  const config = {
+    outDir: 'store-assets',
+    description: { from: 'product.manifest.json', channel: 'chromeWebStore' },
+  };
+
+  await capture(config, { cwd, noBuild: true, log: () => {} });
+  const result = await capture(config, {
+    cwd,
+    scenes: ['description'],
+    noBuild: true,
+    log: () => {},
+  });
+
+  const manifest = JSON.parse(fs.readFileSync(result.manifest, 'utf8'));
+  expect(manifest.run).toMatchObject({ mode: 'partial', requestedScenes: ['description'] });
+  expect(manifest.assets.find((asset) => asset.role === 'store-listing-copy'))
+    .toMatchObject({ state: 'produced' });
+  expect(manifest.assets.find((asset) => asset.role === 'privacy-disclosure'))
+    .toMatchObject({ state: 'retained' });
+});
