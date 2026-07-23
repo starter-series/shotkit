@@ -4,6 +4,9 @@ export function createPreviewController({ elements, state, markDirty }) {
   let frameRequest = null;
 
   function setMedia(target) {
+    const mediaLabel = `${target.name || `${target.story} ${target.target}`} capture`;
+    elements.previewVideo.setAttribute('aria-label', `${mediaLabel} video`);
+    elements.previewPoster.alt = `${mediaLabel} thumbnail`;
     const cacheKey = target.videoUrl ? `${target.videoUrl}${target.videoUrl.includes('?') ? '&' : '?'}v=${Date.now()}` : '';
     if (target.videoUrl) {
       if (elements.previewVideo.dataset.source !== target.videoUrl) {

@@ -26,6 +26,7 @@ const { elements } = renderer;
 
 function setBusy(busy, label) {
   state.busy = busy;
+  elements.app.setAttribute('aria-busy', busy ? 'true' : 'false');
   renderer.renderBusy();
   if (label) renderer.setConnection(label, busy ? 'busy' : 'ready');
 }
@@ -95,8 +96,8 @@ async function review(status, targetIds) {
   if (!recipe || state.busy) return;
   const note = renderer.reviewNote();
   if (status === 'changes-requested' && !note) {
-    renderer.focusReviewNote();
     renderer.showNotice('Feedback required', 'Describe what the agent should change.');
+    renderer.focusReviewNote();
     return;
   }
   setBusy(true, status === 'approved' ? 'Approving' : 'Submitting');

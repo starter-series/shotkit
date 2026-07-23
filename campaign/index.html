@@ -18,20 +18,20 @@
           </span>
         </a>
 
-        <nav class="steps" aria-label="Campaign stages" role="tablist">
-          <button class="step" id="planTab" type="button" role="tab" data-view="plan" aria-selected="true">
+        <nav class="steps" aria-label="Campaign stages">
+          <button class="step" id="planTab" type="button" data-view="plan" aria-current="step">
             <span>1</span>Plan
           </button>
-          <button class="step" id="productionTab" type="button" role="tab" data-view="production" aria-selected="false" disabled>
+          <button class="step" id="productionTab" type="button" data-view="production" disabled>
             <span>2</span>Production
           </button>
-          <button class="step" id="reviewTab" type="button" role="tab" data-view="review" aria-selected="false" disabled>
+          <button class="step" id="reviewTab" type="button" data-view="review" disabled>
             <span>3</span>Review
           </button>
         </nav>
 
         <div class="topbar-actions">
-          <span class="connection" id="connectionState"><i aria-hidden="true"></i><span>Connecting</span></span>
+          <span class="connection" id="connectionState" role="status" aria-live="polite"><i aria-hidden="true"></i><span>Connecting</span></span>
           <a class="icon-link" id="advancedLink" href="/" title="Open composition calibrator" aria-label="Open composition calibrator">
             <svg class="icon" aria-hidden="true"><use href="#icon-sliders"></use></svg>
           </a>
@@ -39,7 +39,7 @@
       </header>
 
       <main>
-        <section class="view plan-view" id="planView" data-view="plan" role="tabpanel" aria-labelledby="planTab">
+        <section class="view plan-view" id="planView" data-view="plan">
           <header class="view-heading">
             <div>
               <p class="eyebrow">Campaign recipe</p>
@@ -49,7 +49,7 @@
           </header>
 
           <div class="plan-layout">
-            <div class="recipe-grid" id="recipeGrid" role="radiogroup" aria-label="Campaign recipes"></div>
+            <div class="recipe-grid" id="recipeGrid" role="group" aria-label="Campaign recipes"></div>
 
             <aside class="channel-panel" aria-label="Delivery channels">
               <header>
@@ -77,18 +77,18 @@
           </div>
         </section>
 
-        <section class="view production-view" id="productionView" data-view="production" role="tabpanel" aria-labelledby="productionTab" hidden>
+        <section class="view production-view" id="productionView" data-view="production" hidden>
           <header class="view-heading production-heading">
             <div>
               <p class="eyebrow">Production</p>
               <h1 id="productionTitle">Preparing outputs</h1>
             </div>
-            <span class="run-state" id="runState">Idle</span>
+            <span class="run-state" id="runState" role="status" aria-live="polite">Idle</span>
           </header>
 
           <div class="production-layout">
             <section class="production-board" aria-label="Production progress">
-              <div class="progress-track" aria-hidden="true"><span id="progressBar"></span></div>
+              <div class="progress-track" id="progressTrack" role="progressbar" aria-label="Production progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><span id="progressBar"></span></div>
               <div class="target-progress-list" id="targetProgressList"></div>
             </section>
 
@@ -118,20 +118,20 @@
           </div>
         </section>
 
-        <section class="view review-view" id="reviewView" data-view="review" role="tabpanel" aria-labelledby="reviewTab" hidden>
+        <section class="view review-view" id="reviewView" data-view="review" hidden>
           <header class="view-heading review-heading">
             <div>
               <p class="eyebrow">Final review</p>
               <h1 id="reviewTitle">Campaign outputs</h1>
             </div>
-            <span class="approval-state" id="approvalState">Awaiting decision</span>
+            <span class="approval-state" id="approvalState" role="status" aria-live="polite">Awaiting decision</span>
           </header>
 
           <div class="review-layout">
             <section class="media-panel" aria-label="Final media">
-              <div class="target-tabs" id="reviewTargetTabs" role="tablist" aria-label="Output channels"></div>
+              <div class="target-tabs" id="reviewTargetTabs" role="group" aria-label="Output channels"></div>
               <div class="media-stage" id="mediaStage">
-                <video id="reviewVideo" controls playsinline preload="metadata" hidden></video>
+                <video id="reviewVideo" controls playsinline preload="metadata" aria-label="Campaign output video" hidden></video>
                 <img id="reviewImage" alt="Campaign output" hidden>
                 <div class="media-placeholder" id="mediaPlaceholder">
                   <svg class="placeholder-icon" aria-hidden="true"><use href="#icon-film"></use></svg>
@@ -146,7 +146,7 @@
                   <p class="eyebrow">Selected output</p>
                   <h2 id="reviewTargetName">No output selected</h2>
                 </div>
-                <span class="target-review-state" id="targetReviewState">Not ready</span>
+                <span class="target-review-state" id="targetReviewState" role="status" aria-live="polite">Not ready</span>
               </header>
               <dl class="output-facts">
                 <div><dt>Channel</dt><dd id="reviewPlatform">--</dd></div>

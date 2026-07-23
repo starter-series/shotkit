@@ -12,6 +12,22 @@ const {
 
 const DIGEST = 'a'.repeat(64);
 
+function luminance(hex) {
+  const channels = hex.match(/../g).map((value) => parseInt(value, 16) / 255).map((value) => (
+    value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4
+  ));
+  return 0.2126 * channels[0] + 0.7152 * channels[1] + 0.0722 * channels[2];
+}
+
+function contrast(first, second) {
+  const values = [luminance(first), luminance(second)].sort((a, b) => b - a);
+  return (values[0] + 0.05) / (values[1] + 0.05);
+}
+
+function cssColor(css, name) {
+  return css.match(new RegExp(`--${name}: #([0-9a-f]{6})`, 'i'))[1];
+}
+
 function writeJson(filePath, value) {
   fs.writeFileSync(filePath, `${JSON.stringify(value, null, 2)}\n`);
 }
@@ -141,6 +157,24 @@ describe('calibrator server', () => {
     expect(new Set(ids).size).toBe(ids.length);
     const bindings = [...script.matchAll(/\$\('([^']+)'\)/g)].map((match) => match[1]);
     for (const binding of bindings) expect(ids).toContain(binding);
+  });
+
+  test.each(['calibrator', 'campaign'])('%s keeps selection controls native and motion optional', (surface) => {
+    const root = path.join(__dirname, '..', surface);
+    const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
+    const css = fs.readFileSync(path.join(root, 'styles.css'), 'utf8');
+    const script = fs.readdirSync(root)
+      .filter((name) => name.endsWith('.js'))
+      .map((name) => fs.readFileSync(path.join(root, name), 'utf8'))
+      .join('\n');
+
+    expect(html).not.toMatch(/\srole="(?:listbox|option|radiogroup|radio|tablist|tab)"/);
+    expect(script).not.toMatch(/setAttribute\('role', '(?:option|radio|tab|button)'\)/);
+    expect(script).not.toMatch(/setAttribute\('aria-(?:checked|selected)'/);
+    expect(css).toContain('@media (prefers-reduced-motion: reduce)');
+    expect(css).toContain('@media (forced-colors: active)');
+    expect(contrast(cssColor(css, 'accent'), 'ffffff')).toBeGreaterThanOrEqual(4.5);
+    expect(contrast(cssColor(css, 'muted'), cssColor(css, 'panel'))).toBeGreaterThanOrEqual(4.5);
   });
 
   test('adds a campaign workflow while preserving the calibrator and approval APIs', async () => {

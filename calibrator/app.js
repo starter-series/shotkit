@@ -74,11 +74,22 @@ import { createRegionEditor } from './regions.js';
     dirty: false,
     busy: false,
   };
+  let noticeReturnFocus = null;
 
   function showNotice(title, message) {
+    if (elements.notice.hidden && document.activeElement instanceof HTMLElement) {
+      noticeReturnFocus = document.activeElement;
+    }
     elements.noticeTitle.textContent = title;
     elements.noticeMessage.textContent = message;
     elements.notice.hidden = false;
+    elements.noticeClose.focus();
+  }
+
+  function dismissNotice() {
+    elements.notice.hidden = true;
+    if (noticeReturnFocus && noticeReturnFocus.isConnected) noticeReturnFocus.focus();
+    noticeReturnFocus = null;
   }
 
   function setOperation(label) {
@@ -87,6 +98,7 @@ import { createRegionEditor } from './regions.js';
 
   function setBusy(busy, label) {
     state.busy = busy;
+    elements.app.setAttribute('aria-busy', busy ? 'true' : 'false');
     elements.saveButton.disabled = busy || !state.target || !state.dirty;
     elements.recaptureButton.disabled = busy || !state.target;
     const reviewable = !!(state.target && state.target.reviewable);
@@ -242,13 +254,14 @@ import { createRegionEditor } from './regions.js';
       const button = document.createElement('button');
       button.type = 'button';
       button.className = 'layout-item';
-      button.setAttribute('role', 'option');
-      button.setAttribute('aria-selected', state.profile.layoutPreset === layout ? 'true' : 'false');
+      button.setAttribute('aria-pressed', state.profile.layoutPreset === layout ? 'true' : 'false');
       button.textContent = layout.replaceAll('-', ' ');
       button.addEventListener('click', () => {
         state.profile.layoutPreset = layout;
         markDirty();
-        renderLayouts();
+        for (const item of elements.layoutList.querySelectorAll('.layout-item')) {
+          item.setAttribute('aria-pressed', item === button ? 'true' : 'false');
+        }
       });
       return button;
     });
@@ -258,6 +271,7 @@ import { createRegionEditor } from './regions.js';
   function renderWarnings() {
     const warnings = state.target.warnings || [];
     elements.warningCount.textContent = String(warnings.length);
+    elements.warningSummary.setAttribute('aria-label', `View ${warnings.length} target warning${warnings.length === 1 ? '' : 's'}`);
     elements.warningSummary.hidden = warnings.length === 0;
     elements.warningsBadge.textContent = String(warnings.length);
     if (!warnings.length) {
@@ -429,8 +443,11 @@ import { createRegionEditor } from './regions.js';
     elements.recaptureButton.addEventListener('click', recapture);
     elements.requestChangesButton.addEventListener('click', () => submitReview('changes-requested'));
     elements.approveButton.addEventListener('click', () => submitReview('approved'));
-    elements.noticeClose.addEventListener('click', () => { elements.notice.hidden = true; });
-    elements.warningSummary.addEventListener('click', () => $('warningsSection').scrollIntoView({ behavior: 'smooth', block: 'start' }));
+    elements.noticeClose.addEventListener('click', dismissNotice);
+    elements.warningSummary.addEventListener('click', () => {
+      const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      $('warningsSection').scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth', block: 'start' });
+    });
     preview.bind();
     regions.bind();
 

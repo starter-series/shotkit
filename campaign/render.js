@@ -31,6 +31,7 @@ function bindElements() {
     startButton: $('startButton'),
     productionTitle: $('productionTitle'),
     runState: $('runState'),
+    progressTrack: $('progressTrack'),
     progressBar: $('progressBar'),
     targetProgressList: $('targetProgressList'),
     productionOutputCount: $('productionOutputCount'),
@@ -65,15 +66,22 @@ function bindElements() {
 
 export function createCampaignRenderer({ state, onSelectRecipe, onSelectTarget }) {
   const elements = bindElements();
+  let noticeReturnFocus = null;
 
   function showNotice(title, message) {
+    if (elements.notice.hidden && document.activeElement instanceof HTMLElement) {
+      noticeReturnFocus = document.activeElement;
+    }
     elements.noticeTitle.textContent = title;
     elements.noticeMessage.textContent = message;
     elements.notice.hidden = false;
+    elements.noticeClose.focus();
   }
 
   function dismissNotice() {
     elements.notice.hidden = true;
+    if (noticeReturnFocus && noticeReturnFocus.isConnected) noticeReturnFocus.focus();
+    noticeReturnFocus = null;
   }
 
   function setConnection(label, tone = 'ready') {
@@ -94,8 +102,7 @@ export function createCampaignRenderer({ state, onSelectRecipe, onSelectTarget }
     const button = document.createElement('button');
     button.type = 'button';
     button.className = 'recipe-card';
-    button.setAttribute('role', 'radio');
-    button.setAttribute('aria-checked', recipe.id === state.recipeId ? 'true' : 'false');
+    button.setAttribute('aria-pressed', recipe.id === state.recipeId ? 'true' : 'false');
 
     const preview = document.createElement('div');
     preview.className = 'recipe-preview';
@@ -156,8 +163,10 @@ export function createCampaignRenderer({ state, onSelectRecipe, onSelectTarget }
 
   function renderPlan() {
     const recipes = state.document.recipes;
+    const restoreRecipeFocus = elements.recipeGrid.contains(document.activeElement);
     elements.recipeCount.textContent = `${recipes.length} recipe${recipes.length === 1 ? '' : 's'}`;
     elements.recipeGrid.replaceChildren(...recipes.map(recipeCard));
+    if (restoreRecipeFocus) elements.recipeGrid.querySelector('[aria-pressed="true"]')?.focus();
     const recipe = selectedRecipe(state);
     if (!recipe) return;
     elements.selectedRecipeName.textContent = recipe.name;
@@ -211,7 +220,9 @@ export function createCampaignRenderer({ state, onSelectRecipe, onSelectTarget }
     const hasChangesRequested = targets.some((target) => target.review.status === 'changes-requested');
     elements.productionTitle.textContent = recipe.name;
     elements.targetProgressList.replaceChildren(...targets.map(progressRow));
-    elements.progressBar.style.width = `${targets.length ? Math.round((completed / targets.length) * 100) : 0}%`;
+    const progress = targets.length ? Math.round((completed / targets.length) * 100) : 0;
+    elements.progressBar.style.width = `${progress}%`;
+    elements.progressTrack.setAttribute('aria-valuenow', String(progress));
     elements.productionOutputCount.textContent = String(targets.length);
     elements.readyOutputCount.textContent = String(ready);
     elements.reviewOutputCount.textContent = String(reviewable);
@@ -233,8 +244,8 @@ export function createCampaignRenderer({ state, onSelectRecipe, onSelectTarget }
     const button = document.createElement('button');
     button.type = 'button';
     button.className = 'target-tab';
-    button.setAttribute('role', 'tab');
-    button.setAttribute('aria-selected', current && target.id === current.id ? 'true' : 'false');
+    button.setAttribute('aria-pressed', current && target.id === current.id ? 'true' : 'false');
+    button.setAttribute('aria-label', `${target.label}, ${statusLabel(target.review.status)}`);
     button.dataset.status = target.review.status;
     button.textContent = target.id;
     button.addEventListener('click', () => onSelectTarget(target.id));
@@ -253,6 +264,8 @@ export function createCampaignRenderer({ state, onSelectRecipe, onSelectTarget }
     elements.mediaPlaceholder.hidden = true;
     elements.reviewVideo.removeAttribute('src');
     elements.reviewImage.removeAttribute('src');
+    elements.reviewVideo.setAttribute('aria-label', `${target.label} campaign output video`);
+    elements.reviewImage.alt = `${target.label} campaign output preview`;
     if (target.videoUrl) {
       elements.reviewVideo.src = target.videoUrl;
       elements.reviewVideo.poster = target.thumbnailUrl || '';
@@ -278,7 +291,9 @@ export function createCampaignRenderer({ state, onSelectRecipe, onSelectTarget }
       elements.advancedLink.href = `/?story=${encodeURIComponent(recipe.story)}&target=${encodeURIComponent(target.id)}`;
     }
     elements.reviewTitle.textContent = recipe.name;
+    const restoreTargetFocus = elements.reviewTargetTabs.contains(document.activeElement);
     elements.reviewTargetTabs.replaceChildren(...targets.map(targetTab));
+    if (restoreTargetFocus) elements.reviewTargetTabs.querySelector('[aria-pressed="true"]')?.focus();
     renderMedia(target);
     elements.reviewTargetName.textContent = target.label;
     elements.reviewPlatform.textContent = target.platform;
@@ -322,7 +337,8 @@ export function createCampaignRenderer({ state, onSelectRecipe, onSelectTarget }
 
   function renderView() {
     for (const tab of elements.tabs) {
-      tab.setAttribute('aria-selected', tab.dataset.view === state.view ? 'true' : 'false');
+      if (tab.dataset.view === state.view) tab.setAttribute('aria-current', 'step');
+      else tab.removeAttribute('aria-current');
     }
     for (const panel of elements.views) panel.hidden = panel.dataset.view !== state.view;
     if (state.view === 'review') renderReview();
@@ -332,7 +348,8 @@ export function createCampaignRenderer({ state, onSelectRecipe, onSelectTarget }
     const hasRecipes = state.document.recipes.length > 0;
     elements.emptyView.hidden = hasRecipes;
     for (const tab of elements.tabs) {
-      tab.setAttribute('aria-selected', tab.dataset.view === state.view ? 'true' : 'false');
+      if (tab.dataset.view === state.view) tab.setAttribute('aria-current', 'step');
+      else tab.removeAttribute('aria-current');
     }
     for (const view of elements.views) view.hidden = !hasRecipes || view.dataset.view !== state.view;
     if (!hasRecipes) return;
@@ -348,7 +365,7 @@ export function createCampaignRenderer({ state, onSelectRecipe, onSelectTarget }
   }
 
   function markLoaded() {
-    elements.app.setAttribute('aria-busy', 'false');
+    elements.app.setAttribute('aria-busy', state.busy ? 'true' : 'false');
   }
 
   function reviewNote() {

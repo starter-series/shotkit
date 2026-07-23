@@ -5,25 +5,35 @@ export function createRegionEditor({ elements, state, markDirty }) {
     return state.profile.protectedRegions.find((region) => region.id === state.selectedRegionId) || null;
   }
 
-  function select(id) {
-    state.selectedRegionId = id;
-    render();
+  function selectedTab() {
+    return elements.regionTabs.querySelector(`[data-region-id="${CSS.escape(state.selectedRegionId || '')}"]`);
   }
 
-  function renderInspector() {
-    const { width, height } = state.target.viewport;
+  function select(id, { focus = false } = {}) {
+    state.selectedRegionId = id;
+    syncSelection();
+    renderInspectorFields();
+    if (focus) selectedTab()?.focus();
+  }
+
+  function renderTabs() {
     const tabs = state.profile.protectedRegions.map((region, index) => {
       const button = document.createElement('button');
       button.type = 'button';
       button.className = 'region-tab';
-      button.setAttribute('role', 'tab');
-      button.setAttribute('aria-selected', region.id === state.selectedRegionId ? 'true' : 'false');
+      button.dataset.regionId = region.id;
+      button.setAttribute('aria-pressed', region.id === state.selectedRegionId ? 'true' : 'false');
+      button.setAttribute('aria-label', `Protected region ${index + 1}: ${region.label || region.id}`);
       button.title = region.label || region.id;
       button.textContent = String(index + 1);
       button.addEventListener('click', () => select(region.id));
       return button;
     });
     elements.regionTabs.replaceChildren(...tabs);
+  }
+
+  function renderInspectorFields() {
+    const { width, height } = state.target.viewport;
     const region = current();
     elements.regionEmpty.hidden = !!region;
     elements.regionFields.hidden = !region;
@@ -34,6 +44,15 @@ export function createRegionEditor({ elements, state, markDirty }) {
     elements.regionY.value = round(region.y / height * 100, 1);
     elements.regionWidth.value = round(region.width / width * 100, 1);
     elements.regionHeight.value = round(region.height / height * 100, 1);
+  }
+
+  function syncSelection() {
+    for (const node of elements.regionLayer.querySelectorAll('.protected-region')) {
+      node.classList.toggle('is-selected', node.dataset.id === state.selectedRegionId);
+    }
+    for (const button of elements.regionTabs.querySelectorAll('.region-tab')) {
+      button.setAttribute('aria-pressed', button.dataset.regionId === state.selectedRegionId ? 'true' : 'false');
+    }
   }
 
   function startDrag(event, id, resize) {
@@ -55,7 +74,8 @@ export function createRegionEditor({ elements, state, markDirty }) {
         region.y = clamp(start.region.y + dy, 0, viewport.height - region.height);
       }
       markDirty();
-      render();
+      renderRegions();
+      renderInspectorFields();
     };
     const up = () => {
       window.removeEventListener('pointermove', move);
@@ -65,7 +85,7 @@ export function createRegionEditor({ elements, state, markDirty }) {
     window.addEventListener('pointerup', up, { once: true });
   }
 
-  function render() {
+  function renderRegions() {
     const { width, height } = state.target.viewport;
     const nodes = state.profile.protectedRegions.map((region) => {
       const node = document.createElement('div');
@@ -75,9 +95,6 @@ export function createRegionEditor({ elements, state, markDirty }) {
       node.style.top = `${region.y / height * 100}%`;
       node.style.width = `${region.width / width * 100}%`;
       node.style.height = `${region.height / height * 100}%`;
-      node.tabIndex = 0;
-      node.setAttribute('role', 'button');
-      node.setAttribute('aria-label', `Protected region ${region.label || region.id}`);
       const label = document.createElement('span');
       label.className = 'protected-region-label';
       label.textContent = region.label || region.id;
@@ -86,11 +103,15 @@ export function createRegionEditor({ elements, state, markDirty }) {
       handle.setAttribute('aria-hidden', 'true');
       node.append(label, handle);
       node.addEventListener('pointerdown', (event) => startDrag(event, region.id, event.target === handle));
-      node.addEventListener('focus', () => select(region.id));
       return node;
     });
     elements.regionLayer.replaceChildren(...nodes);
-    renderInspector();
+  }
+
+  function render() {
+    renderRegions();
+    renderTabs();
+    renderInspectorFields();
   }
 
   function updateFromFields() {
@@ -104,7 +125,7 @@ export function createRegionEditor({ elements, state, markDirty }) {
     region.width = clamp(Number(elements.regionWidth.value) / 100 * width, 16, width - region.x);
     region.height = clamp(Number(elements.regionHeight.value) / 100 * height, 16, height - region.y);
     markDirty();
-    render();
+    renderRegions();
   }
 
   function bind() {
@@ -125,12 +146,15 @@ export function createRegionEditor({ elements, state, markDirty }) {
       state.selectedRegionId = id;
       markDirty();
       render();
+      selectedTab()?.focus();
     });
     elements.deleteRegionButton.addEventListener('click', () => {
       state.profile.protectedRegions = state.profile.protectedRegions.filter((region) => region.id !== state.selectedRegionId);
       state.selectedRegionId = state.profile.protectedRegions[0] && state.profile.protectedRegions[0].id;
       markDirty();
       render();
+      if (state.selectedRegionId) selectedTab()?.focus();
+      else elements.addRegionButton.focus();
     });
   }
 

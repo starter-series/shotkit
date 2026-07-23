@@ -20,7 +20,7 @@
 
         <div class="toolbar-status">
           <span class="status-dot is-neutral" id="statusDot" aria-hidden="true"></span>
-          <span class="target-status" id="targetStatus">Loading</span>
+          <span class="target-status" id="targetStatus" role="status" aria-live="polite">Loading</span>
           <span class="operation-state" id="operationState" role="status" aria-live="polite">Connecting</span>
         </div>
 
@@ -66,7 +66,7 @@
               <h2>Layout preset</h2>
               <span id="layoutCount">0</span>
             </div>
-            <div class="layout-list" id="layoutList" role="listbox" aria-label="Layout presets"></div>
+            <div class="layout-list" id="layoutList" role="group" aria-label="Layout presets"></div>
           </section>
         </aside>
 
@@ -77,7 +77,7 @@
               <span id="captureIdentity">--</span>
             </div>
             <div class="stage-meta">
-              <button class="warning-summary" id="warningSummary" type="button" title="View target warnings" hidden>
+              <button class="warning-summary" id="warningSummary" type="button" title="View target warnings" aria-label="View target warnings" hidden>
                 <svg class="icon" aria-hidden="true"><use href="#icon-alert"></use></svg>
                 <span id="warningCount">0</span>
               </button>
@@ -104,10 +104,10 @@
                 <span id="captionPreview">Caption preview</span>
               </div>
 
-              <div class="region-layer" id="regionLayer" aria-label="Protected regions"></div>
-              <button class="focus-point" id="focusPoint" type="button" aria-label="Focus point" title="Drag to set focus point">
+              <div class="region-layer" id="regionLayer" aria-hidden="true"></div>
+              <div class="focus-point" id="focusPoint" aria-hidden="true" title="Drag to set focus point">
                 <span aria-hidden="true"></span>
-              </button>
+              </div>
             </div>
           </div>
         </section>
@@ -125,7 +125,7 @@
             <section class="inspector-section review-section">
               <div class="review-heading">
                 <h3>Final review</h3>
-                <span class="review-state" id="reviewState">Not ready</span>
+                <span class="review-state" id="reviewState" role="status" aria-live="polite">Not ready</span>
               </div>
               <label class="field-label" for="reviewNote">Feedback</label>
               <textarea id="reviewNote" maxlength="2000" rows="3" placeholder="What should the agent change?"></textarea>
@@ -177,15 +177,15 @@
                 <span>percent</span>
               </div>
               <div class="coordinate-grid">
-                <label><span>X</span><input id="focusX" type="number" min="0" max="100" step="1" value="50"></label>
-                <label><span>Y</span><input id="focusY" type="number" min="0" max="100" step="1" value="50"></label>
+                <label><span>X</span><input id="focusX" type="number" min="0" max="100" step="1" value="50" aria-label="Focus point X percent"></label>
+                <label><span>Y</span><input id="focusY" type="number" min="0" max="100" step="1" value="50" aria-label="Focus point Y percent"></label>
               </div>
             </fieldset>
 
             <fieldset class="inspector-section regions-section">
               <legend>Protected regions</legend>
               <div class="region-toolbar">
-                <div class="region-tabs" id="regionTabs" role="tablist" aria-label="Protected regions"></div>
+                <div class="region-tabs" id="regionTabs" role="group" aria-label="Protected regions"></div>
                 <div class="region-actions">
                   <button class="icon-button" id="deleteRegionButton" type="button" title="Delete selected region" aria-label="Delete selected protected region" disabled>
                     <svg class="icon" aria-hidden="true"><use href="#icon-trash"></use></svg>
@@ -198,10 +198,10 @@
 
               <div class="region-empty" id="regionEmpty">No protected regions</div>
               <div class="region-fields" id="regionFields" hidden>
-                <label><span>X</span><input id="regionX" type="number" min="0" max="100" step="0.5"></label>
-                <label><span>Y</span><input id="regionY" type="number" min="0" max="100" step="0.5"></label>
-                <label><span>W</span><input id="regionWidth" type="number" min="2" max="100" step="0.5"></label>
-                <label><span>H</span><input id="regionHeight" type="number" min="2" max="100" step="0.5"></label>
+                <label><span>X</span><input id="regionX" type="number" min="0" max="100" step="0.5" aria-label="Protected region X percent"></label>
+                <label><span>Y</span><input id="regionY" type="number" min="0" max="100" step="0.5" aria-label="Protected region Y percent"></label>
+                <label><span>W</span><input id="regionWidth" type="number" min="2" max="100" step="0.5" aria-label="Protected region width percent"></label>
+                <label><span>H</span><input id="regionHeight" type="number" min="2" max="100" step="0.5" aria-label="Protected region height percent"></label>
               </div>
             </fieldset>
 
@@ -225,7 +225,7 @@
             </div>
             <output id="timeReadout" aria-live="off">00:00 / 00:00</output>
           </header>
-          <div class="beat-list" id="beatList" role="list"></div>
+          <div class="beat-list" id="beatList"></div>
         </section>
       </main>
     </div>
