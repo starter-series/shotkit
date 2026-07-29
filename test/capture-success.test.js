@@ -33,7 +33,7 @@ jest.mock('../src/launch', () => {
       events.length = 0;
       closed = false;
     },
-    launchWithExtension: jest.fn(async () => ({
+    launchBrowser: jest.fn(async () => ({
       extensionId: 'test-extension',
       context: {
         addInitScript: jest.fn(async () => {}),

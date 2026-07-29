@@ -3,14 +3,14 @@ const os = require('os');
 const path = require('path');
 
 jest.mock('../src/launch', () => ({
-  launchWithExtension: jest.fn(async () => ({
+  launchBrowser: jest.fn(async () => ({
     extensionId: 'test-extension',
     context: { newPage: jest.fn() },
   })),
   closeContext: jest.fn(async () => {}),
 }));
 
-const { launchWithExtension } = require('../src/launch');
+const { launchBrowser: launchWithExtension } = require('../src/launch');
 const { capture } = require('../src/capture');
 
 afterEach(() => {

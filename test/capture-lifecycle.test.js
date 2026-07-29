@@ -2,8 +2,8 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 
-jest.mock('../src/launch', () => ({
-  launchWithExtension: jest.fn(async () => ({
+jest.mock('../src/launch', () => {
+  const launchBrowser = jest.fn(async () => ({
     extensionId: 'test-extension',
     context: {
       addInitScript: jest.fn(async () => {}),
@@ -11,11 +11,15 @@ jest.mock('../src/launch', () => ({
         throw new Error('newPage should not be called');
       }),
     },
-  })),
-  closeContext: jest.fn(async () => {}),
-}));
+  }));
+  return {
+    launchBrowser,
+    launchWithExtension: launchBrowser,
+    closeContext: jest.fn(async () => {}),
+  };
+});
 
-const { launchWithExtension, closeContext } = require('../src/launch');
+const { launchBrowser: launchWithExtension, closeContext } = require('../src/launch');
 const { capture } = require('../src/capture');
 
 function tempCwd() {

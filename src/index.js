@@ -15,7 +15,8 @@
  */
 
 const { capture, DEFAULT_VIEWPORT } = require('./capture');
-const { launchWithExtension, closeContext } = require('./launch');
+const { launchBrowser, launchWithExtension, closeContext } = require('./launch');
+const { buildQuickDemoConfig, makeQuickDemoRun, resolveDemoTarget } = require('./quick-demo');
 const { serveDirectory, FIXTURE_CSP } = require('./serve');
 const { stageExtension, patchManifestForLocalhost, LOCALHOST_MATCHES } = require('./extension');
 const { compositeCaption, DEFAULT_BAND_HEIGHT } = require('./caption');
@@ -72,7 +73,12 @@ const {
 module.exports = {
   capture,
   DEFAULT_VIEWPORT,
+  // zero-config demo
+  buildQuickDemoConfig,
+  makeQuickDemoRun,
+  resolveDemoTarget,
   // launch
+  launchBrowser,
   launchWithExtension,
   closeContext,
   // fixtures

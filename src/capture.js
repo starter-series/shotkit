@@ -25,7 +25,7 @@ const os = require('os');
 const path = require('path');
 const { execSync } = require('child_process');
 
-const { launchWithExtension, closeContext } = require('./launch');
+const { launchBrowser, closeContext } = require('./launch');
 const {
   extractListing,
   extractProductManifest,
@@ -206,9 +206,10 @@ async function capture(config, opts = {}) {
 
     // 2. Prepare the unpacked extension dir to load only when a browser capture
     // is required. Text-only description/privacy runs should not depend on
-    // Chromium, build artifacts, or extension manifests.
+    // Chromium, build artifacts, or extension manifests. Configs without
+    // prepareExtension capture a plain web app — scenes/demos get extensionId:null.
     let extensionDir = null;
-    if (needsBrowser) {
+    if (needsBrowser && typeof config.prepareExtension === 'function') {
       const preparedExtension = normalizePreparedExtension(await config.prepareExtension(passFlags));
       extensionDir = preparedExtension.dir;
       extensionCleanup = preparedExtension.cleanup;
@@ -216,7 +217,7 @@ async function capture(config, opts = {}) {
 
     // 3. Screenshots + promo run in a no-video context.
     if (shouldRunVisualPass) {
-      const ctx = await launchWithExtension({ extensionDir, viewport: defaultViewport });
+      const ctx = await launchBrowser({ extensionDir, viewport: defaultViewport });
       let setup = normalizeSetup(null);
       try {
         setup = normalizeSetup(
@@ -251,7 +252,9 @@ async function capture(config, opts = {}) {
     for (const demoConfig of selectedDemoConfigs) {
       const viewport = resolveSize(demoConfig.preset || demoConfig.viewport, defaultViewport);
       demoViewports[demoConfig.name] = viewport;
-      const warnings = analyzeDemoStoryboard(demoConfig, {
+      // Runtime-captioned demos (e.g. the zero-config quick demo) opt out of
+      // static storyboard lint with lint:false — their captions don't exist yet.
+      const warnings = demoConfig.lint === false ? [] : analyzeDemoStoryboard(demoConfig, {
         viewport,
         mp4Requested: !!(demoConfig.mp4 || opts.mp4 || demoConfig.crop || demoConfig.zoom),
       });
@@ -261,7 +264,7 @@ async function capture(config, opts = {}) {
       }
       const videoDir = fs.mkdtempSync(path.join(os.tmpdir(), 'shotkit-video-'));
       tempDirs.push(videoDir);
-      const demoCtx = await launchWithExtension({ extensionDir, viewport, recordVideoDir: videoDir, recordVideoSize: viewport });
+      const demoCtx = await launchBrowser({ extensionDir, viewport, recordVideoDir: videoDir, recordVideoSize: viewport });
       const resources = { setup: normalizeSetup(null), page: null };
       try {
         const result = await captureDemo({

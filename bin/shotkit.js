@@ -4,6 +4,7 @@
  *
  *   shotkit [path] [--config <path>] [--scene <name>]... [--json|--calibrate]
  *           [--no-video] [--no-build] [--live-gt] [--freeze]
+ *   shotkit demo <url|dir|file.html> [--out <dir>] [--duration <s>] [--json]
  *
  * `path` (optional positional) is the repo to run against (default: cwd) —
  * lets an agent invoke shotkit against any checkout without cd'ing first.

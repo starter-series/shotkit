@@ -13,6 +13,8 @@ const path = require('path');
 const USAGE = `shotkit — autonomously build and verify launch assets, then gate final user approval
 
 Usage: shotkit [path] [options]
+       shotkit demo <url|dir|file.html> [options]   zero-config proof clip
+                                                    (see: shotkit demo --help)
 
 Arguments:
   path              repo to run against (default: current directory);

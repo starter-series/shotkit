@@ -4,6 +4,7 @@ const path = require('path');
 const { parseArgs, resolveConfigPath, USAGE } = require('./cli');
 const { capture: defaultCapture } = require('./capture');
 const { startCalibrator: defaultStartCalibrator } = require('./calibrator-server');
+const { DEMO_USAGE, buildQuickDemoConfig, parseDemoArgs, resolveDemoTarget } = require('./quick-demo');
 
 function writeJson(stream, payload) {
   stream.write(`${JSON.stringify(payload)}\n`);
@@ -13,6 +14,50 @@ function errorPayload(error, code) {
   return { ok: false, error, code };
 }
 
+/**
+ * `shotkit demo <url|dir>` — the zero-config path. No config file resolution:
+ * the target is the only required input and the config is synthesized.
+ */
+async function runQuickDemo(argv, io, deps) {
+  const stdout = io.stdout || process.stdout;
+  const stderr = io.stderr || process.stderr;
+  const processCwd = io.processCwd || (() => process.cwd());
+  const capture = deps.capture || defaultCapture;
+
+  const opts = parseDemoArgs(argv);
+  if (opts.help) {
+    stdout.write(DEMO_USAGE);
+    return 0;
+  }
+  if (opts.errors.length) {
+    const msg = opts.errors.join('; ');
+    if (opts.json) writeJson(stdout, errorPayload(msg, 2));
+    else stderr.write(`[shotkit] ${msg}\n\n${DEMO_USAGE}`);
+    return 2;
+  }
+  const cwd = processCwd();
+  try {
+    const target = resolveDemoTarget(opts.target, cwd);
+    const config = buildQuickDemoConfig({
+      target,
+      name: opts.name,
+      outDir: opts.out,
+      durationS: opts.duration,
+      mp4: opts.mp4,
+    });
+    const log = opts.json ? (m) => stderr.write(`[shotkit] ${m}\n`) : undefined;
+    const { produced, outDir } = await capture(config, { cwd, json: opts.json, log });
+    if (opts.json) writeJson(stdout, { ok: true, outDir, produced });
+    return 0;
+  } catch (err) {
+    const msg = err && err.message ? err.message : String(err);
+    const code = Number.isInteger(err && err.exitCode) ? err.exitCode : 1;
+    if (opts.json) writeJson(stdout, errorPayload(msg, code));
+    else stderr.write(`[shotkit] ${code === 2 ? msg : `FAILED: ${err && err.stack ? err.stack : err}`}\n`);
+    return code;
+  }
+}
+
 async function runCli(argv, io = {}, deps = {}) {
   const stdout = io.stdout || process.stdout;
   const stderr = io.stderr || process.stderr;
@@ -20,6 +65,8 @@ async function runCli(argv, io = {}, deps = {}) {
   const capture = deps.capture || defaultCapture;
   const startCalibrator = deps.startCalibrator || defaultStartCalibrator;
   const loadConfig = deps.loadConfig || ((configPath) => require(configPath));
+
+  if (argv[0] === 'demo') return runQuickDemo(argv.slice(1), io, deps);
 
   const opts = parseArgs(argv);
   if (opts.help) {
