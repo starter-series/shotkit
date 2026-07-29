@@ -149,6 +149,19 @@ describe('buildQuickDemoConfig', () => {
 describe('channel delivery (--for)', () => {
   const urlTarget = { kind: 'url', url: 'http://localhost:3000' };
 
+  // --for requires ffmpeg, which not every CI runner has. Building a channel
+  // config must be testable without one, so stub discovery rather than the
+  // host PATH; the "no ffmpeg" case below still exercises the real lookup.
+  function withFfmpeg(assert) {
+    jest.isolateModules(() => {
+      jest.doMock('../src/video', () => ({
+        ...jest.requireActual('../src/video'),
+        findFfmpeg: () => 'ffmpeg',
+      }));
+      assert(require('../src/quick-demo'));
+    });
+  }
+
   test('parses repeatable and comma-separated channels, de-duplicated', () => {
     expect(parseDemoArgs(['u', '--for', 'x']).channels).toEqual(['x']);
     expect(parseDemoArgs(['u', '--for', 'x,youtube-shorts']).channels).toEqual(['x', 'youtube-shorts']);
@@ -168,37 +181,41 @@ describe('channel delivery (--for)', () => {
   });
 
   test('a channel hands viewport/codec/trim to the profile instead of the defaults', () => {
-    const config = buildQuickDemoConfig({ target: urlTarget, channels: ['youtube-shorts'] });
-    expect(config.demos[0].targets).toEqual(['youtube-shorts']);
-    // The plain-clip defaults must not leak in and override the profile.
-    expect(config.demos[0].viewport).toBeUndefined();
-    expect(config.demos[0].mp4).toBeUndefined();
+    withFfmpeg(({ buildQuickDemoConfig: build }) => {
+      const config = build({ target: urlTarget, channels: ['youtube-shorts'] });
+      expect(config.demos[0].targets).toEqual(['youtube-shorts']);
+      // The plain-clip defaults must not leak in and override the profile.
+      expect(config.demos[0].viewport).toBeUndefined();
+      expect(config.demos[0].mp4).toBeUndefined();
 
-    // capture() expands targets through normalizeDemoConfigs — assert the shape
-    // the engine actually runs, not just the declaration.
-    const [demo] = normalizeDemoConfigs(config);
-    expect(demo.name).toBe('demo-youtube-shorts');
-    expect(demo.target).toBe('youtube-shorts');
-    expect(demo.preset).toBe('sns-vertical');
-    expect(demo.trim).toMatchObject({ duration: 30 });
-    expect(demo.thumbnail).toEqual({ at: 1.2 });
-    expect(demo.captionOptions).toMatchObject({ mode: 'focus' });
-    // Runtime captions still skip static storyboard lint after expansion.
-    expect(demo.lint).toBe(false);
+      // capture() expands targets through normalizeDemoConfigs — assert the
+      // shape the engine actually runs, not just the declaration.
+      const [demo] = normalizeDemoConfigs(config);
+      expect(demo.name).toBe('demo-youtube-shorts');
+      expect(demo.target).toBe('youtube-shorts');
+      expect(demo.preset).toBe('sns-vertical');
+      expect(demo.trim).toMatchObject({ duration: 30 });
+      expect(demo.thumbnail).toEqual({ at: 1.2 });
+      expect(demo.captionOptions).toMatchObject({ mode: 'focus' });
+      // Runtime captions still skip static storyboard lint after expansion.
+      expect(demo.lint).toBe(false);
+    });
   });
 
   test('multiple channels produce one demo each', () => {
-    const config = buildQuickDemoConfig({ target: urlTarget, channels: ['x', 'youtube-shorts'] });
-    expect(normalizeDemoConfigs(config).map((d) => d.name)).toEqual(['demo-x', 'demo-youtube-shorts']);
+    withFfmpeg(({ buildQuickDemoConfig: build }) => {
+      const config = build({ target: urlTarget, channels: ['x', 'youtube-shorts'] });
+      expect(normalizeDemoConfigs(config).map((d) => d.name)).toEqual(['demo-x', 'demo-youtube-shorts']);
+    });
   });
 
   test('the recording budget fills the channel trim window', () => {
-    // A 20s default would leave a 30s trim window short; the profile wins.
-    const config = buildQuickDemoConfig({ target: urlTarget, channels: ['x'] });
-    expect(config.demos[0].run.durationS).toBe(30);
-    // An explicit --duration still overrides the channel default.
-    const explicit = buildQuickDemoConfig({ target: urlTarget, channels: ['x'], durationS: 12 });
-    expect(explicit.demos[0].run.durationS).toBe(12);
+    withFfmpeg(({ buildQuickDemoConfig: build }) => {
+      // A 20s default would leave a 30s trim window short; the profile wins.
+      expect(build({ target: urlTarget, channels: ['x'] }).demos[0].run.durationS).toBe(30);
+      // An explicit --duration still overrides the channel default.
+      expect(build({ target: urlTarget, channels: ['x'], durationS: 12 }).demos[0].run.durationS).toBe(12);
+    });
   });
 
   test('--for without ffmpeg is a usage error, not a half-finished run', () => {
@@ -207,9 +224,11 @@ describe('channel delivery (--for)', () => {
   });
 
   test('every known channel id resolves to a buildable config', () => {
-    for (const id of CHANNEL_IDS) {
-      expect(buildQuickDemoConfig({ target: urlTarget, channels: [id] }).demos).toHaveLength(1);
-    }
+    withFfmpeg(({ buildQuickDemoConfig: build }) => {
+      for (const id of CHANNEL_IDS) {
+        expect(normalizeDemoConfigs(build({ target: urlTarget, channels: [id] }))).toHaveLength(1);
+      }
+    });
   });
 });
 
