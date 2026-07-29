@@ -11,6 +11,7 @@ const {
   resolveCampaignRecipes,
   saveCampaignSelection,
 } = require('../src/campaign');
+const { createCampaignRunController } = require('../src/campaign-dashboard');
 
 function targetedConfig(overrides = {}) {
   return {
@@ -131,5 +132,44 @@ describe('campaign selection', () => {
     expect(() => normalizeCampaignSelection(recipes, null)).toThrow('must be an object');
     expect(() => normalizeCampaignSelection(recipes, { recipeId: 'missing' }))
       .toThrow('recipe was not found');
+  });
+});
+
+describe('campaign run status', () => {
+  test('preserves blocked target status after automatic attempts are exhausted', async () => {
+    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'shotkit-campaign-run-'));
+    const outDir = path.join(cwd, 'store-assets');
+    fs.mkdirSync(outDir);
+    const config = targetedConfig();
+    const recipes = resolveCampaignRecipes(config);
+    const runner = jest.fn(async () => {
+      fs.writeFileSync(path.join(outDir, 'shotkit-manifest.json'), JSON.stringify({
+        handoff: {
+          automation: {
+            attempt: 3,
+            status: 'blocked',
+            targets: [{ story: 'proof', target: 'x', status: 'blocked' }],
+          },
+        },
+      }));
+      return { status: 'blocked', machineStatus: 'blocked' };
+    });
+    const controller = createCampaignRunController({
+      cwd,
+      config,
+      configPath: path.join(cwd, 'shotkit.config.js'),
+      outDir,
+      recipes,
+      runner,
+    });
+
+    controller.start({ recipeId: 'proof', targets: ['x'] });
+    await controller.wait();
+
+    expect(controller.snapshot()).toMatchObject({
+      status: 'blocked',
+      error: '1 target(s) exhausted automatic attempts',
+      targets: [{ target: 'x', status: 'blocked', machineStatus: 'blocked' }],
+    });
   });
 });

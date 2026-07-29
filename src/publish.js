@@ -111,10 +111,21 @@ function targetPublishPlan({ demo, lint, assets, skipped }) {
         thumbnail.visual && thumbnail.visual.error ? thumbnail.visual.error : 'thumbnail pixels were not analyzed',
         'regenerate the thumbnail and rerun automated pixel QA',
       );
-    } else if (!thumbnail.visual.nonBlank) {
-      fail('blank-publish-thumbnail', 'poster/QA thumbnail appears blank or uniform', 'recapture this target after verifying the visible result state');
     } else {
-      pass('thumbnail-nonblank', `thumbnail has ${thumbnail.visual.colorBuckets} color buckets`);
+      if (thumbnail.visual.width === profile.viewport.width && thumbnail.visual.height === profile.viewport.height) {
+        pass('thumbnail-dimensions', `thumbnail dimensions match ${profile.viewport.width}x${profile.viewport.height}`);
+      } else {
+        fail(
+          'wrong-thumbnail-dimensions',
+          `thumbnail dimensions are ${thumbnail.visual.width}x${thumbnail.visual.height}; expected ${profile.viewport.width}x${profile.viewport.height}`,
+          `regenerate the thumbnail from the final ${profile.id} video`,
+        );
+      }
+      if (!thumbnail.visual.nonBlank) {
+        fail('blank-publish-thumbnail', 'poster/QA thumbnail appears blank or uniform', 'recapture this target after verifying the visible result state');
+      } else {
+        pass('thumbnail-nonblank', `thumbnail has ${thumbnail.visual.colorBuckets} color buckets`);
+      }
     }
   }
 

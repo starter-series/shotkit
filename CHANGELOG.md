@@ -61,6 +61,16 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
   `automation.manualFallback:true`.
 
 ### Fixed
+- Final MP4 readiness now requires a bounded full ffmpeg decode after ffprobe
+  metadata inspection, so truncated files with a readable header cannot be
+  marked `publish-ready`.
+- Storyboard lint now evaluates captions inside the delivered trim window and
+  measures the first retained beat relative to `trim.start`; captions before
+  the start or after `trim.duration` no longer make a weak final cut look valid.
+- Poster thumbnails must match the target channel dimensions in addition to
+  passing nonblank pixel QA.
+- Campaign runs preserve exhausted `blocked` targets, expose concrete runtime
+  errors, and distinguish waiting-for-agent states from an active capture.
 - Caption and native-select overlays are isolated from host-page translation,
   so localization products cannot rewrite authored campaign text. Outline also
   applies to direct helper/static captions, and condensed outline sizing now

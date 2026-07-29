@@ -111,6 +111,45 @@ function parseProbeOutput(stdout) {
   };
 }
 
+function decodeVideo(filePath, env = process.env) {
+  const bin = findFfmpeg(env);
+  if (!bin) {
+    return {
+      ok: false,
+      error: 'final MP4 decode was not verified because ffmpeg was not found',
+    };
+  }
+  const result = spawnSync(bin, [
+    '-hide_banner',
+    '-loglevel', 'error',
+    '-xerror',
+    '-err_detect', 'explode',
+    '-i', filePath,
+    '-map', '0:v:0',
+    '-f', 'null',
+    '-',
+  ], {
+    stdio: ['ignore', 'ignore', 'pipe'],
+    encoding: 'utf8',
+    env,
+    timeout: ffmpegTimeoutMs(env),
+  });
+  if (result.status === 0) return { ok: true };
+  if (result.error && (result.error.code === 'ETIMEDOUT' || result.error.killed)) {
+    return {
+      ok: false,
+      error: `final MP4 decode timed out after ${Math.round(ffmpegTimeoutMs(env) / 1000)}s`,
+    };
+  }
+  const detail = String(result.stderr || (result.error && result.error.message) || `ffmpeg exited ${result.status}`)
+    .trim()
+    .slice(-2000);
+  return {
+    ok: false,
+    error: `final MP4 failed full decode${detail ? `: ${detail}` : ''}`,
+  };
+}
+
 function probeVideo(filePath, env = process.env) {
   const bin = findFfprobe(env);
   if (!bin) {
@@ -132,7 +171,9 @@ function probeVideo(filePath, env = process.env) {
     return { ok: false, error: (result.stderr || `ffprobe exited ${result.status}`).trim() };
   }
   try {
-    return parseProbeOutput(result.stdout);
+    const media = parseProbeOutput(result.stdout);
+    const decode = decodeVideo(filePath, env);
+    return decode.ok ? media : { ...media, ok: false, error: decode.error };
   } catch (err) {
     return { ok: false, error: err.message };
   }
@@ -308,6 +349,7 @@ function postProcessDemo({ webmPath, mp4, trim, crop, zoom, thumbnail, log, env 
 module.exports = {
   findFfmpeg,
   findFfprobe,
+  decodeVideo,
   parseProbeOutput,
   probeVideo,
   buildFfmpegArgs,

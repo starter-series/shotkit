@@ -23,7 +23,7 @@ enter the technical loop when automation reaches a blocker.
 
 ## Status & Scope
 
-- **Currently implemented** — An autonomous launch asset **pipeline** whose Playwright engine builds and drives the *shipped* extension, expands one story into `cws-youtube`, `x`, and `youtube-shorts` variants, applies target viewport/H.264/trim/caption/thumbnail defaults, probes the final MP4 with ffprobe, checks the poster pixels for blank-frame failures, and emits a technical `machineStatus` of `publish-ready`, `needs-fix`, or `blocked`. A separate digest-bound approval gate returns `awaiting-approval`, `changes-requested`, or `approved` as the delivery status. The schema-backed pack carries source evidence, captions, run provenance, integrity, user decisions, and agent-owned retry actions. The same engine is exposed through the CLI, `capture()`, skill, and AGENTS.md run-block.
+- **Currently implemented** — An autonomous launch asset **pipeline** whose Playwright engine builds and drives the *shipped* extension, expands one story into `cws-youtube`, `x`, and `youtube-shorts` variants, applies target viewport/H.264/trim/caption/thumbnail defaults, probes final MP4 metadata with ffprobe, fully decodes the delivered video with ffmpeg, checks poster dimensions and pixels for blank-frame failures, and emits a technical `machineStatus` of `publish-ready`, `needs-fix`, or `blocked`. A separate digest-bound approval gate returns `awaiting-approval`, `changes-requested`, or `approved` as the delivery status. The schema-backed pack carries source evidence, captions, run provenance, integrity, user decisions, and agent-owned retry actions. The same engine is exposed through the CLI, `capture()`, skill, and AGENTS.md run-block.
 - **Story renderer** — Demo configs can use one `demo` or several `demos: []` entries, timed static or Shorts-style focus captions, pointer-highlighted clicks, recordable native-select changes, paced cursor movement, static zoom/crop framing, thumbnail frames, storyboard lint, and a small `demo` helper (`caption`, `step`, `wait`, `click`, `select`) so an agent can turn a feature checklist into 20-40 second before → action → result stories without pulling in a general video editor.
 - **Design intent** — *One engine, many surfaces — matched to the tool's nature.* shotkit is a heavy, file-producing build tool, so its surfaces are CLI (+`--json`), skill, and CI — not MCP (see Non-goals). Captures are **deterministic** (login-free fixtures, frozen data) and the run **doubles as a real-bundle smoke test** — a screenshot only appears if that feature rendered from the shipped code. **Trademark-safe** by construction: a disclaimer band is composited onto every shot.
 - **Non-goals** — An **MCP server** inside shotkit (agents with a shell get a better contract from `--json` + the skill). Removing the per-repo **story/action config** (which product state proves the claim is irreducible intent). A general-purpose timeline editor or hosted demo platform. Repeatable channel work is automated; manual editors are fallback-only and disabled unless explicitly requested.
@@ -112,6 +112,13 @@ dashboard's Advanced control. Campaign selection is stored separately in
 manifest, calibration, or approval contracts. Projects without
 `config.calibration` can still use the Campaign Dashboard; Advanced is exposed
 only when calibration is configured.
+
+The dashboard records feedback and follows output files, but it does not edit a
+consumer repo by itself. `needs-fix` and Request changes therefore mean that an
+attached coding agent must read the manifest/approval note, apply the source or
+config edit, and recapture. The UI reports these as waiting states; only an
+active capture is labeled as work in progress, and exhausted attempts remain
+`blocked` instead of being presented as an active retry.
 
 ### Composition Calibrator
 

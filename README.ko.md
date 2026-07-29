@@ -21,7 +21,7 @@
 
 ## 상태와 범위 (Status & Scope)
 
-- **현재 구현된 것** — Playwright로 *실제 출하 빌드*를 실행하고 하나의 story를 `cws-youtube`, `x`, `youtube-shorts` variant로 확장합니다. target별 viewport/H.264/trim/caption/thumbnail을 자동 적용하고, 최종 MP4를 ffprobe로 검사하며, thumbnail 픽셀의 blank-frame 여부까지 확인해 기술 상태 `machineStatus`(`publish-ready`, `needs-fix`, `blocked`)를 산출합니다. 별도의 해시 기반 승인 게이트가 전달 상태 `awaiting-approval`, `changes-requested`, `approved`를 관리합니다. manifest에는 에이전트가 실행할 retry action, source evidence와 사용자 승인 상태가 함께 남습니다.
+- **현재 구현된 것** — Playwright로 *실제 출하 빌드*를 실행하고 하나의 story를 `cws-youtube`, `x`, `youtube-shorts` variant로 확장합니다. target별 viewport/H.264/trim/caption/thumbnail을 자동 적용하고, 최종 MP4의 ffprobe metadata와 ffmpeg 전체 decode를 검사하며, thumbnail 크기와 픽셀의 blank-frame 여부까지 확인해 기술 상태 `machineStatus`(`publish-ready`, `needs-fix`, `blocked`)를 산출합니다. 별도의 해시 기반 승인 게이트가 전달 상태 `awaiting-approval`, `changes-requested`, `approved`를 관리합니다. manifest에는 에이전트가 실행할 retry action, source evidence와 사용자 승인 상태가 함께 남습니다.
 - **스토리 렌더러** — 데모 config는 단일 `demo` 또는 여러 `demos: []`, timed `captions`, click highlight, 녹화 가능한 native select 변경, cursor pacing, 정적 zoom/crop, thumbnail frame, storyboard lint, 작은 `demo` helper(`caption`, `step`, `wait`, `click`, `select`)를 쓸 수 있습니다. 에이전트가 기능 체크리스트를 20~40초짜리 before → action → result → safety/restore 캠페인 컷으로 바꾸기 쉬운 정도까지만 제공합니다.
 - **설계 의도** — *엔진 1개, 표면 여러 개 — 단, 도구 성격에 맞는 표면.* shotkit은 무겁고 파일을 산출하는 빌드 도구라 표면이 CLI(+`--json`)·skill·CI입니다 — MCP가 아니라(하지 않기로 한 것 참고). 캡처는 **결정적**(로그인 불필요 픽스처, freeze된 데이터)이고, 실행이 **실제 빌드본 smoke test를 겸함** — 스크린샷이 나온다 = 그 기능이 출하 코드에서 렌더됨. 모든 샷에 면책 밴드를 합성해 **상표 안전**.
 - **하지 않기로 한 것** — shotkit 내부 MCP 서버, repo별 story/action 의도 제거, 범용 timeline editor, 호스티드 데모 플랫폼. 반복 가능한 채널 작업은 자동화하고 수동 편집기는 명시적으로 요청한 fallback일 때만 노출합니다.
@@ -83,6 +83,12 @@ manifest, calibration, approval 계약을 바꾸지 않습니다. `config.campai
 로 Recipe의 이름과 설명을 붙일 수 있으며, calibration을 사용하지 않는 repo도
 Campaign Dashboard에서 제작과 digest-bound 승인을 사용할 수 있습니다.
 구도 예외가 있을 때만 Advanced의 기존 Calibrator를 엽니다.
+
+Dashboard는 feedback과 산출물 상태를 기록하지만 소비자 repo의 source/config를
+직접 수정하지는 않습니다. 따라서 `needs-fix`나 Request changes가 발생하면 연결된
+코딩 에이전트가 manifest 또는 승인 메모를 읽고 수정·재촬영해야 합니다. UI는 이를
+대기 상태로 표시하며 실제 capture가 실행 중일 때만 작업 중이라고 표시합니다.
+자동 시도 횟수를 소진한 target은 활성 재시도처럼 보이지 않고 `blocked`로 유지됩니다.
 
 ### 구도 Calibrator
 

@@ -93,7 +93,9 @@ test('campaign view and polling rules stay constrained to known workflow phases'
   state.document.phase = 'production';
   setCampaignView(state, 'production');
   assert.equal(shouldPoll(state), true);
-  assert.equal(statusLabel('changes-requested'), 'Agent working');
+  assert.equal(statusLabel('needs-fix'), 'Awaiting agent fix');
+  assert.equal(statusLabel('changes-requested'), 'Feedback saved');
+  assert.equal(statusLabel('blocked'), 'Blocked — input required');
   assert.equal(statusLabel('unknown'), 'Preparing');
 });
 

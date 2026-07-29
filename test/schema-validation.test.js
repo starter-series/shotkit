@@ -37,6 +37,7 @@ function buildSampleDocs() {
     captions: [
       { at: 0.5, text: 'cut off by trim.start' },
       { at: 4, text: 'kept and offset' },
+      { at: 40, text: 'cut off after trim.duration' },
     ],
   };
   const simple = {
@@ -93,7 +94,7 @@ describe('handoff docs conform to the published JSON schemas', () => {
     expect(tb.preset).toBeUndefined();             // object preset omitted (schema requires string)
     expect(tb.trim).toEqual({ start: 2, duration: '00:30' });
     expect(tb.thumbnail).toEqual({ at: 1.2 });      // bare number -> { at }
-    expect(tb.beats).toHaveLength(1);               // 0.5s caption dropped (before trim.start = 2s)
+    expect(tb.beats).toHaveLength(1);               // captions outside the 2s..32s deliverable are dropped
     expect(tb.beats[0].atMs).toBe(2000);            // 4s - 2s offset
 
     const tc = docs.captions.demos.find((d) => d.name === 'tricky');

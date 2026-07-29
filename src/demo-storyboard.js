@@ -21,11 +21,35 @@ function analyzeDemoStoryboard(demoConfig, { viewport, mp4Requested } = {}) {
   // Lint must never throw — a malformed caption time should surface AS a lint
   // warning, not crash the whole capture run (this runs before any try/catch).
   let captions = [];
+  let trimStartMs = 0;
+  let trimDurationMs = null;
   try {
     captions = Array.isArray(demoConfig.captions) ? normalizeDemoCaptions(demoConfig.captions) : [];
   } catch (e) {
     warnings.push(storyboardWarning('invalid-captions', e.message, 'fix the caption time/text so the storyboard can be linted'));
   }
+  if (demoConfig.trim && typeof demoConfig.trim === 'object') {
+    if (demoConfig.trim.start != null) {
+      try {
+        trimStartMs = parseTimeToMs(demoConfig.trim.start, 'trim.start');
+      } catch (e) {
+        warnings.push(storyboardWarning('invalid-start', e.message, 'use a non-negative number of seconds or an "mm:ss" string'));
+      }
+    }
+    if (demoConfig.trim.duration != null) {
+      try {
+        trimDurationMs = parseTimeToMs(demoConfig.trim.duration, 'trim.duration');
+      } catch (e) {
+        warnings.push(storyboardWarning('invalid-duration', e.message, 'use a number of seconds or an "mm:ss" string'));
+      }
+    }
+  }
+  const trimEndMs = trimDurationMs == null ? null : trimStartMs + trimDurationMs;
+  // Story checks must describe the delivered clip, not beats that ffmpeg trims
+  // away. Shift retained captions so early-result timing is also trim-relative.
+  captions = captions
+    .filter((caption) => caption.atMs >= trimStartMs && (trimEndMs == null || caption.atMs < trimEndMs))
+    .map((caption) => ({ ...caption, atMs: caption.atMs - trimStartMs }));
   if (!captions.length) {
     warnings.push(storyboardWarning(
       'no-captions',
@@ -126,27 +150,21 @@ function analyzeDemoStoryboard(demoConfig, { viewport, mp4Requested } = {}) {
     ));
   }
 
-  if (demoConfig.trim && demoConfig.trim.duration != null) {
-    let durationMs = null;
-    try {
-      durationMs = parseTimeToMs(demoConfig.trim.duration, 'trim.duration');
-    } catch (e) {
-      warnings.push(storyboardWarning('invalid-duration', e.message, 'use a number of seconds or an "mm:ss" string'));
-    }
-    if (durationMs != null && durationMs < 20000) {
+  if (demoConfig.trim && typeof demoConfig.trim === 'object' && demoConfig.trim.duration != null) {
+    if (trimDurationMs != null && trimDurationMs < 20000) {
       warnings.push(storyboardWarning(
         'short-duration',
         'trim.duration is under 20s',
         'make sure the story has enough context',
-        { durationMs },
+        { durationMs: trimDurationMs },
       ));
     }
-    if (durationMs != null && durationMs > 40000) {
+    if (trimDurationMs != null && trimDurationMs > 40000) {
       warnings.push(storyboardWarning(
         'long-duration',
         'trim.duration is over 40s',
         'X clips usually perform better shorter',
-        { durationMs },
+        { durationMs: trimDurationMs },
       ));
     }
   } else {

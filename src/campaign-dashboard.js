@@ -180,9 +180,9 @@ function createCampaignRunController({
           const item = run.targets.find((target) => target.target === result.target);
           item.machineStatus = result.machineStatus;
           item.deliveryStatus = batch.result.status || 'not-requested';
-          item.status = result.machineStatus === 'publish-ready' && result.verified
-            ? 'publish-ready'
-            : 'needs-fix';
+          if (result.machineStatus === 'publish-ready' && result.verified) item.status = 'publish-ready';
+          else if (result.machineStatus === 'blocked') item.status = 'blocked';
+          else item.status = 'needs-fix';
         }
       } catch (error) {
         for (const item of run.targets) {
@@ -191,10 +191,12 @@ function createCampaignRunController({
         }
       }
       const failed = run.targets.filter((target) => target.status === 'failed');
+      const blocked = run.targets.filter((target) => target.status === 'blocked');
       const needsFix = run.targets.filter((target) => target.status === 'needs-fix');
-      run.status = failed.length ? 'failed' : needsFix.length ? 'needs-fix' : 'completed';
+      run.status = failed.length ? 'failed' : blocked.length ? 'blocked' : needsFix.length ? 'needs-fix' : 'completed';
       run.completedAt = new Date().toISOString();
       if (failed.length) run.error = `${failed.length} target(s) failed`;
+      else if (blocked.length) run.error = `${blocked.length} target(s) exhausted automatic attempts`;
     })().finally(() => {
       onRunningChange(false);
       activeRun = null;

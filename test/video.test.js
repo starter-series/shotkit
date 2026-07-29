@@ -3,6 +3,7 @@ const os = require('os');
 const path = require('path');
 const {
   findFfmpeg,
+  probeVideo,
   parseProbeOutput,
   buildFfmpegArgs,
   buildThumbnailArgs,
@@ -73,6 +74,76 @@ describe('ffprobe metadata', () => {
 
   test('rejects probe output without a video stream', () => {
     expect(() => parseProbeOutput('{"streams":[],"format":{}}')).toThrow(/no video stream/);
+  });
+
+  test('fails closed when metadata is readable but the full MP4 decode is corrupt', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sk-probe-'));
+    const ffprobe = path.join(dir, 'ffprobe');
+    const ffmpeg = path.join(dir, 'ffmpeg');
+    const video = path.join(dir, 'truncated.mp4');
+    fs.writeFileSync(video, 'truncated');
+    fs.writeFileSync(ffprobe, `#!/usr/bin/env node
+if (process.argv.includes('-version')) {
+  console.log('ffprobe version fake');
+} else {
+  console.log(JSON.stringify({
+    streams: [{ codec_name: 'h264', pix_fmt: 'yuv420p', width: 720, height: 1280 }],
+    format: { duration: '21.680000' },
+  }));
+}
+`);
+    fs.writeFileSync(ffmpeg, `#!/usr/bin/env node
+if (process.argv.includes('-version')) {
+  console.log('ffmpeg version fake');
+  process.exit(0);
+}
+console.error('Invalid NAL unit: truncated input');
+process.exit(183);
+`);
+    fs.chmodSync(ffprobe, 0o755);
+    fs.chmodSync(ffmpeg, 0o755);
+
+    expect(probeVideo(video, {
+      SHOTKIT_FFPROBE: ffprobe,
+      SHOTKIT_FFMPEG: ffmpeg,
+      PATH: process.env.PATH,
+    })).toMatchObject({
+      ok: false,
+      codec: 'h264',
+      width: 720,
+      height: 1280,
+      error: expect.stringMatching(/failed full decode.*truncated input/i),
+    });
+  });
+
+  test('accepts a final MP4 only after metadata and full decode both pass', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sk-probe-'));
+    const ffprobe = path.join(dir, 'ffprobe');
+    const ffmpeg = path.join(dir, 'ffmpeg');
+    const video = path.join(dir, 'healthy.mp4');
+    fs.writeFileSync(video, 'healthy');
+    fs.writeFileSync(ffprobe, `#!/usr/bin/env node
+if (process.argv.includes('-version')) console.log('ffprobe version fake');
+else console.log('{"streams":[{"codec_name":"h264","pix_fmt":"yuv420p","width":1280,"height":720}],"format":{"duration":"30"}}');
+`);
+    fs.writeFileSync(ffmpeg, `#!/usr/bin/env node
+if (process.argv.includes('-version')) console.log('ffmpeg version fake');
+`);
+    fs.chmodSync(ffprobe, 0o755);
+    fs.chmodSync(ffmpeg, 0o755);
+
+    expect(probeVideo(video, {
+      SHOTKIT_FFPROBE: ffprobe,
+      SHOTKIT_FFMPEG: ffmpeg,
+      PATH: process.env.PATH,
+    })).toMatchObject({
+      ok: true,
+      codec: 'h264',
+      pixelFormat: 'yuv420p',
+      width: 1280,
+      height: 720,
+      durationSeconds: 30,
+    });
   });
 });
 

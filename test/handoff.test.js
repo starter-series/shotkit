@@ -495,7 +495,7 @@ describe('handoff contract', () => {
         role: 'thumbnail',
         target: 'x',
         channel: 'x',
-        visual: { ok: true, nonBlank: true, colorBuckets: 32 },
+        visual: { ok: true, width: 1280, height: 720, nonBlank: true, colorBuckets: 32 },
         source,
       }),
     ];

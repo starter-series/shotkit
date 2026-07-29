@@ -108,8 +108,9 @@ is considered verified only when its current hash has produced a real
 `handoff.automation.targets[]` validates:
 
 - final MP4 presence and unchanged integrity;
-- ffprobe codec, pixel format, actual dimensions, and actual duration;
-- poster-frame presence and nonblank PNG pixel statistics;
+- ffprobe codec, pixel format, actual dimensions, and actual duration, plus a
+  bounded full-video ffmpeg decode that rejects truncated/corrupt MP4s;
+- poster-frame presence, exact target dimensions, and nonblank PNG pixel statistics;
 - measured caption presence, viewport bounds, overflow, line count, outline
   stroke, schedule drift, font application, fitted size, and line balance from
   the real recorded page;

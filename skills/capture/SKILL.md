@@ -161,7 +161,7 @@ rendered from the shipped code. By default, it also writes a handoff pack:
   recommendations are omitted. Never suggest iMovie, Screen Studio, Canva, or
   manual recapture unless the user explicitly requests a manual fallback.
 - Machine `publish-ready` means the final file passed shotkit's automated story, codec,
-  pixel-format, actual-dimension, actual-duration, thumbnail, nonblank-frame,
+  pixel-format, actual-dimension, actual-duration, full-video decode, thumbnail-dimension, nonblank-frame,
   integrity, and channel-profile checks. It is not user approval. Publication
   additionally requires `handoff.approval.publishable:true` and an authorized
   connector.

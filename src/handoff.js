@@ -136,17 +136,17 @@ function trimEndMs(demoConfig, startMs) {
   }
 }
 
-// Shift caption times by the trimmed-off prefix and drop captions that fall
-// before the clip starts (they are not in the deliverable). Output conforms to
-// the beat/caption schema: at >= 0 (number), atMs >= 0 (integer).
-function deliverableBeats(captions, startMs) {
+// Shift caption times by the trimmed-off prefix and drop captions outside the
+// delivered trim window. Output conforms to the beat/caption schema: at >= 0
+// (number), atMs >= 0 (integer).
+function deliverableBeats(captions, startMs, endMs = null) {
   return captions
+    .filter((caption) => caption.atMs >= startMs && (endMs == null || caption.atMs < endMs))
     .map((caption) => ({
       atMs: caption.atMs - startMs,
       text: caption.text,
       ...(caption.role == null ? {} : { role: caption.role }),
     }))
-    .filter((beat) => beat.atMs >= 0)
     .map((beat) => ({ at: beat.atMs / 1000, ...beat }));
 }
 
@@ -167,6 +167,7 @@ function storyboardThumbnail(thumbnail) {
 function demoStoryboard(demoConfig, viewport) {
   const captions = normalizeDemoCaptions(demoConfig.captions || []);
   const startMs = trimStartMs(demoConfig);
+  const endMs = trimEndMs(demoConfig, startMs);
   return {
     name: demoConfig.name,
     story: demoConfig.story,
@@ -199,7 +200,7 @@ function demoStoryboard(demoConfig, viewport) {
       durationSeconds: { min: 20, max: 40 },
       shape: ['result-first', 'action', 'proof', 'safety-restore'],
     },
-    beats: deliverableBeats(captions, startMs),
+    beats: deliverableBeats(captions, startMs, endMs),
     guidance: demoConfig.guidance || null,
   };
 }
@@ -240,6 +241,7 @@ function captionQaReport(report) {
 
 function demoCaptions(demoConfig, captionReport) {
   const startMs = trimStartMs(demoConfig);
+  const endMs = trimEndMs(demoConfig, startMs);
   const captions = normalizeDemoCaptions(demoConfig.captions || []);
   const frames = buildCaptionFrames(captions, demoConfig.captionOptions);
   return {
@@ -248,8 +250,8 @@ function demoCaptions(demoConfig, captionReport) {
     target: demoConfig.target,
     style: captionStyle(demoConfig.captionOptions || {}),
     ...(captionReport ? { qa: captionQaReport(captionReport) } : {}),
-    captions: deliverableBeats(captions, startMs),
-    timeline: buildCaptionTimeline(frames, { startMs, endMs: trimEndMs(demoConfig, startMs) }),
+    captions: deliverableBeats(captions, startMs, endMs),
+    timeline: buildCaptionTimeline(frames, { startMs, endMs }),
   };
 }
 

@@ -228,12 +228,19 @@ export function createCampaignRenderer({ state, onSelectRecipe, onSelectTarget }
     elements.reviewOutputCount.textContent = String(reviewable);
     const ownerRunStatus = hasChangesRequested ? 'needs-fix' : run.status;
     elements.runState.textContent = statusLabel(ownerRunStatus);
-    elements.runState.className = `run-state ${ownerRunStatus === 'running' || ownerRunStatus === 'needs-fix' ? 'is-running' : ownerRunStatus === 'completed' ? 'is-complete' : ownerRunStatus === 'failed' ? 'is-error' : ''}`;
+    elements.runState.className = `run-state ${ownerRunStatus === 'running' ? 'is-running' : ownerRunStatus === 'completed' ? 'is-complete' : ['failed', 'blocked'].includes(ownerRunStatus) ? 'is-error' : ''}`;
     const allReviewable = !hasChangesRequested && targets.length > 0
       && targets.every((target) => target.reviewable);
     if (allReviewable) elements.runMessage.textContent = 'Final media is ready for your decision.';
-    else if (hasChangesRequested) elements.runMessage.textContent = 'The agent is applying your requested changes.';
-    else if (run.status === 'failed') elements.runMessage.textContent = 'The agent needs to resolve a production blocker.';
+    else if (hasChangesRequested) elements.runMessage.textContent = 'Your feedback is saved. The agent must apply it before a revised capture can start.';
+    else if (run.status === 'blocked') elements.runMessage.textContent = 'Automatic attempts are exhausted. The agent needs your input on the blocker.';
+    else if (run.status === 'needs-fix') elements.runMessage.textContent = 'Technical fixes are waiting for the agent before production can continue.';
+    else if (run.status === 'failed') {
+      const failure = run.targets.find((target) => target.error);
+      elements.runMessage.textContent = failure
+        ? `Production failed: ${failure.error}`
+        : 'Production failed before final media was ready.';
+    }
     else elements.runMessage.textContent = 'The agent is producing and validating each channel output.';
     elements.retryButton.hidden = true;
     elements.openReviewButton.hidden = !allReviewable;

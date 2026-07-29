@@ -37,7 +37,7 @@ describe('autonomous publish plan', () => {
           },
         }),
         asset('thumbnail', 'skillbridge-x', {
-          visual: { ok: true, nonBlank: true, colorBuckets: 48 },
+          visual: { ok: true, width: 1280, height: 720, nonBlank: true, colorBuckets: 48 },
         }),
       ],
     });
@@ -51,6 +51,32 @@ describe('autonomous publish plan', () => {
       actions: [],
     });
     expect(plan.targets[0].checks.every((check) => check.status === 'pass')).toBe(true);
+  });
+
+  test('rejects a nonblank thumbnail that does not match the channel dimensions', () => {
+    const plan = buildPublishPlan({
+      storyboard: storyboard(),
+      assets: [
+        asset('sns-demo-mp4', 'skillbridge-x', {
+          media: {
+            ok: true,
+            codec: 'h264',
+            pixelFormat: 'yuv420p',
+            width: 1280,
+            height: 720,
+            durationSeconds: 30,
+          },
+        }),
+        asset('thumbnail', 'skillbridge-x', {
+          visual: { ok: true, width: 32, height: 32, nonBlank: true, colorBuckets: 48 },
+        }),
+      ],
+    });
+
+    expect(plan).toMatchObject({
+      status: 'needs-fix',
+      actions: [expect.objectContaining({ code: 'wrong-thumbnail-dimensions', owner: 'agent' })],
+    });
   });
 
   test('turns media and story failures into agent-owned retry actions', () => {
@@ -104,7 +130,7 @@ describe('autonomous publish plan', () => {
           },
         }),
         asset('thumbnail', 'skillbridge-x', {
-          visual: { ok: true, nonBlank: true, colorBuckets: 48 },
+          visual: { ok: true, width: 1280, height: 720, nonBlank: true, colorBuckets: 48 },
         }),
       ],
     });
@@ -157,7 +183,7 @@ describe('autonomous publish plan', () => {
           },
         }),
         asset('thumbnail', 'skillbridge-x', {
-          visual: { ok: true, nonBlank: true, colorBuckets: 48 },
+          visual: { ok: true, width: 1280, height: 720, nonBlank: true, colorBuckets: 48 },
         }),
       ],
     });

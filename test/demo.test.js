@@ -262,6 +262,37 @@ describe('lintDemoStoryboard', () => {
     }, { viewport: { width: 1280, height: 720 }, mp4Requested: true })).toEqual([]);
   });
 
+  test('lints the final trimmed story instead of captions removed from the deliverable', () => {
+    const warnings = analyzeDemoStoryboard({
+      name: 'trimmed-away-story',
+      mp4: true,
+      trim: { start: 10, duration: 30 },
+      captions: [
+        { at: 0.5, text: 'Show the result', role: 'result' },
+        { at: 4, text: 'Run the action', role: 'action' },
+        { at: 8, text: 'Restore the original', role: 'restore' },
+      ],
+    }, { viewport: { width: 1280, height: 720 }, mp4Requested: true });
+
+    expect(warnings).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: 'no-captions' }),
+    ]));
+  });
+
+  test('measures the first retained caption relative to trim.start', () => {
+    const warnings = analyzeDemoStoryboard({
+      name: 'trimmed-story',
+      mp4: true,
+      trim: { start: 10, duration: 30 },
+      captions: [
+        { at: 11, text: 'Show the result', role: 'result' },
+        { at: 20, text: 'Restore the original', role: 'restore' },
+      ],
+    }, { viewport: { width: 1280, height: 720 }, mp4Requested: true });
+
+    expect(warnings.map((warning) => warning.code)).not.toContain('late-first-caption');
+  });
+
   test('accepts a non-English restore beat through its semantic role', () => {
     const warnings = analyzeDemoStoryboard({
       name: 'demo-ja',
