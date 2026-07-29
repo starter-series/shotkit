@@ -26,6 +26,31 @@ const path = require('path');
 const { chromium } = require('playwright');
 
 /**
+ * Playwright's own "browser not downloaded" message tells the user to run
+ * `npx playwright install`, which resolves a *different* playwright than the
+ * one shotkit runs under when shotkit was launched through a bare `npx` — the
+ * browser lands in a build directory this process never looks at. Rewrite it
+ * into the instruction that works: install into the same dependency tree.
+ *
+ * @returns {Error|null} the replacement error, or null when this isn't that failure
+ */
+function missingBrowserError(err) {
+  const message = err && err.message ? err.message : '';
+  if (!/Executable doesn't exist|Please run the following command to download/.test(message)) return null;
+  const replacement = new Error(
+    "shotkit needs Playwright's Chromium, and this install doesn't have it yet.\n"
+    + '  npm i -D demoshot && npx playwright install chromium\n'
+    + 'Installing demoshot into the project first is what makes `npx playwright` resolve\n'
+    + "the same Playwright shotkit runs under; a bare `npx playwright install` can download\n"
+    + 'a build for a different version. Set SHOTKIT_FFMPEG / PLAYWRIGHT_BROWSERS_PATH if you\n'
+    + 'keep browsers somewhere custom.',
+    { cause: err },
+  );
+  replacement.exitCode = 2;
+  return replacement;
+}
+
+/**
  * Launch a capture context, with or without an extension.
  *
  * @param {object} opts
@@ -68,7 +93,7 @@ async function launchBrowser({ extensionDir = null, viewport, recordVideoDir, re
     if (userDataDir && fs.existsSync(userDataDir)) {
       fs.rmSync(userDataDir, { recursive: true, force: true });
     }
-    throw err;
+    throw missingBrowserError(err) || err;
   }
 
   if (!extensionDir) return { context, extensionId: null, userDataDir };

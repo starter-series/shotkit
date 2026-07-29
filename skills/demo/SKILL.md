@@ -19,9 +19,12 @@ the files into `shotkit-demo/`.
 
 ## Run
 
-1. **Preconditions** — Node ≥ 22 and Playwright's Chromium
-   (`npm exec -- playwright install chromium`, one-time). ffmpeg on PATH is
-   optional; with it you also get `demo.mp4` + `demo-thumbnail.png`.
+1. **Preconditions** — Node ≥ 22 and Playwright's Chromium. Install both into
+   the project so they resolve the same tree:
+   `npm i -D demoshot && npx playwright install chromium` (one-time). A bare
+   `npx playwright install` can fetch a build for a different Playwright
+   version, which shotkit will not find. ffmpeg on PATH is optional; with it
+   you also get `demo.mp4` + `demo-thumbnail.png`.
 2. **Pick the target** — a running dev server URL (`http://localhost:5173`),
    a static build directory (`./dist`), or one `.html` file. Directories and
    files are served on a local loopback port automatically.

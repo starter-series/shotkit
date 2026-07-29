@@ -19,7 +19,7 @@ clean checkout, that the thing actually renders and works.
 ![shotkit demo — a captioned proof clip recorded from one command](docs/media/quick-demo.gif)
 
 ```bash
-npx playwright install chromium          # one-time: the browser it drives
+npm i -D demoshot && npx playwright install chromium   # one-time
 npx demoshot demo http://localhost:3000  # a dev server
 npx demoshot demo ./dist                 # a static build dir
 npx demoshot demo page.html              # a single file

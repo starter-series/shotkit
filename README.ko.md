@@ -19,7 +19,7 @@
 ![shotkit demo — 명령 한 줄로 녹화한 캡션 데모 클립](docs/media/quick-demo.gif)
 
 ```bash
-npx playwright install chromium          # 최초 1회: 구동할 브라우저
+npm i -D demoshot && npx playwright install chromium   # 최초 1회
 npx demoshot demo http://localhost:3000  # 개발 서버
 npx demoshot demo ./dist                 # 정적 빌드 디렉토리
 npx demoshot demo page.html              # 단일 파일
