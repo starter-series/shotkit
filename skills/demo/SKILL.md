@@ -1,7 +1,7 @@
 ---
 name: demo
 description: Record a captioned demo video of a web app with shotkit so the user can see it running — proof that what was just built actually works. Use when the user asks to "show me", "record a demo", "make a video of the app", "prove it works", or after building/changing a web app when visual evidence would close the loop. Works zero-config against a dev-server URL, a static build directory, or a single .html file; outputs webm plus mp4 and a thumbnail when ffmpeg exists.
-allowed-tools: Bash(shotkit demo*), Bash(node bin/shotkit.js demo*), Bash(npx shotkit demo*), Bash(npm exec -- playwright install chromium), Read
+allowed-tools: Bash(shotkit demo*), Bash(demoshot demo*), Bash(node bin/shotkit.js demo*), Bash(npx demoshot demo*), Bash(npm exec -- playwright install chromium), Read
 ---
 
 # Record a proof clip with `shotkit demo`
@@ -28,8 +28,8 @@ the files into `shotkit-demo/`.
 3. **Record** — always use `--json` so the result is machine-readable:
 
    ```bash
-   shotkit demo http://localhost:3000 --json
-   # not yet installed? from a shotkit clone:
+   npx demoshot demo http://localhost:3000 --json
+   # inside a shotkit clone:
    node bin/shotkit.js demo http://localhost:3000 --json
    ```
 

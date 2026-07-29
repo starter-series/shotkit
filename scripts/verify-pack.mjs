@@ -6,8 +6,9 @@ import { spawnSync } from "node:child_process";
 const root = new URL("..", import.meta.url);
 const pkg = JSON.parse(readFileSync(new URL("package.json", root), "utf8"));
 
-assert.equal(pkg.name, "shotkit", "npm package name must stay unscoped");
-assert.equal(pkg.bin?.shotkit, "bin/shotkit.js", "shotkit bin must point at bin/shotkit.js");
+assert.equal(pkg.name, "demoshot", "npm package name must stay unscoped (npm blocks 'shotkit' as too similar to shot-kit)");
+assert.equal(pkg.bin?.demoshot, "bin/shotkit.js", "demoshot bin must point at bin/shotkit.js");
+assert.equal(pkg.bin?.shotkit, "bin/shotkit.js", "shotkit bin alias must point at bin/shotkit.js");
 assert.ok(Array.isArray(pkg.files), "package files allowlist is required");
 
 const requiredFiles = [
@@ -51,7 +52,7 @@ if (packed.status !== 0) {
 }
 
 const [manifest] = JSON.parse(packed.stdout);
-assert.equal(manifest.name, "shotkit", "pack output must use the unscoped shotkit name");
+assert.equal(manifest.name, "demoshot", "pack output must use the unscoped demoshot name");
 const packedPaths = new Set(manifest.files.map((file) => file.path));
 for (const relpath of requiredFiles) {
   assert.ok(packedPaths.has(relpath), `npm pack output is missing ${relpath}`);

@@ -19,11 +19,15 @@
 ![shotkit demo — 명령 한 줄로 녹화한 캡션 데모 클립](docs/media/quick-demo.gif)
 
 ```bash
-npm ci && npx playwright install chromium   # 클론에서 실행; npm 게시는 대기 중
-node bin/shotkit.js demo http://localhost:3000   # 개발 서버
-node bin/shotkit.js demo ./dist                  # 정적 빌드 디렉토리
-node bin/shotkit.js demo page.html               # 단일 파일
+npx playwright install chromium          # 최초 1회: 구동할 브라우저
+npx demoshot demo http://localhost:3000  # 개발 서버
+npx demoshot demo ./dist                 # 정적 빌드 디렉토리
+npx demoshot demo page.html              # 단일 파일
 ```
+
+> npm 패키지 이름은 **`demoshot`**입니다 (npm이 기존 `shot-kit`과 유사하다는
+> 이유로 `shotkit` 이름을 차단). 설치하면 `demoshot`과 `shotkit` 두 명령이
+> 모두 제공됩니다.
 
 설정은 이것이 전부입니다. 약 30초 뒤 `shotkit-demo/demo.webm`이 나오고,
 ffmpeg가 있으면 `demo.mp4`와 썸네일까지 나옵니다. **설정 파일 없음** —
@@ -38,7 +42,7 @@ ffmpeg가 있으면 `demo.mp4`와 썸네일까지 나옵니다. **설정 파일 
 
 ---
 
-> **[Starter Series](https://github.com/starter-series)** — 재사용 가능한 출시 도구. `shotkit`은 unscoped 패키지 이름이며, 공개 npm 설치는 릴리스 게이트로 README가 게시 상태를 가정하지 않습니다.
+> **[Starter Series](https://github.com/starter-series)** — 재사용 가능한 출시 도구. npm에는 [`demoshot`](https://www.npmjs.com/package/demoshot)으로 게시되며, 프로젝트·CLI 이름은 `shotkit`을 유지합니다.
 
 ## 상태와 범위 (Status & Scope)
 
@@ -50,14 +54,12 @@ ffmpeg가 있으면 `demo.mp4`와 썸네일까지 나옵니다. **설정 파일 
 
 ## 설치
 
-npm 패키지 게시 후:
-
 ```bash
-npm i -D shotkit
+npm i -D demoshot
 npx playwright install chromium    # 최초 1회: shotkit이 구동할 브라우저
 ```
 
-npm 게시 전에는 이 repo에서 실행합니다:
+또는 이 repo에서 직접 실행합니다:
 
 ```bash
 npm ci
@@ -66,10 +68,10 @@ npm test
 node bin/shotkit.js --help
 ```
 
-npm 게시 후에는 설정 파일이 있는 repo에서 무설치 실행이 가능합니다:
+설정 파일이 있는 repo에서 무설치 실행:
 
 ```bash
-npx shotkit
+npx demoshot
 ```
 
 > shotkit은 **풀 Chromium**(`channel: 'chromium'`)을 구동합니다 — 확장 서브시스템이 없는 headless-shell이 아닙니다. **headless 동작 검증 완료**(`HEADED=0`; macOS·Linux CI, 영상 포함)이며 starter capture 워크플로의 기본값입니다. 로컬 기본은 디버깅 편의상 headed. CI 러너에서 headed-under-xvfb는 신뢰할 수 없었습니다(8비트 기본값은 스크린샷 캡처가 깨지고, 24비트로도 무성 실패) — CI에서는 headless를 쓰십시오.
@@ -350,7 +352,7 @@ skill(Agent Skills 표준 — 호환 도구의 skills 디렉터리에 폴더째 
 
 ## 로드맵 — 엔진 1개, 표면 여러 개
 
-CLI `--json`+`path`(소스에서 ✅, `npx`는 npm 게시 후) · `capture()`(✅) · Claude Code plugin+skill(✅ `/plugin install shotkit@starter-series`) · AGENTS.md 실행 블록(✅) · npm 패키지(릴리스 대상) · capture-in-CI GitHub Action(✅) · 데모 story rendering(`demo`/`demos[]`/캡션/click highlight/cursor pacing/zoom/crop/thumbnail/lint/mp4/trim ✅). MCP stdio 도구는 검토 후 **폐기** — "하지 않기로 한 것" 참고.
+CLI `--json`+`path`(소스 ✅, `npx demoshot` ✅) · `capture()`(✅) · Claude Code plugin+skill(✅ `/plugin install shotkit@starter-series`) · AGENTS.md 실행 블록(✅) · npm 패키지(릴리스 대상) · capture-in-CI GitHub Action(✅) · 데모 story rendering(`demo`/`demos[]`/캡션/click highlight/cursor pacing/zoom/crop/thumbnail/lint/mp4/trim ✅). MCP stdio 도구는 검토 후 **폐기** — "하지 않기로 한 것" 참고.
 
 **일반화 규칙**(시리즈의 다음 기능용): npm 패키지 1개(엔진+얇은 CLI) + `*.config.js` 이음새 1개 + **도구 성격에 맞는 에이전트 표면**(빠른 구조화 도구: `path` 받는 MCP 도구 / 무거운 빌드 도구: `--json` CLI + skill + AGENTS.md 블록) + 마켓플레이스 항목 1개. **엔진은 config 이음새 외엔 프로젝트 특이사항을 읽지 않는다.**
 

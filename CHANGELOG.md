@@ -6,6 +6,12 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+### Changed
+- The npm package name is `demoshot`: the registry rejects `shotkit` as too
+  similar to the existing `shot-kit` package. The project, repository, and
+  CLI keep the `shotkit` name, and the package installs both the `demoshot`
+  and `shotkit` commands.
+
 ### Added
 - `shotkit demo <url|dir|file.html>` — a zero-config proof clip for any web
   app. No `shotkit.config.js`: the clip is captioned from the page's own title
