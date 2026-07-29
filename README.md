@@ -19,11 +19,15 @@ clean checkout, that the thing actually renders and works.
 ![shotkit demo — a captioned proof clip recorded from one command](docs/media/quick-demo.gif)
 
 ```bash
-npm ci && npx playwright install chromium   # in a clone; npm publish is pending
-node bin/shotkit.js demo http://localhost:3000   # a dev server
-node bin/shotkit.js demo ./dist                  # a static build dir
-node bin/shotkit.js demo page.html               # a single file
+npx playwright install chromium          # one-time: the browser it drives
+npx demoshot demo http://localhost:3000  # a dev server
+npx demoshot demo ./dist                 # a static build dir
+npx demoshot demo page.html              # a single file
 ```
+
+> The npm package is **`demoshot`** (npm blocks the name `shotkit` as too
+> similar to the existing `shot-kit`). Installing it provides both the
+> `demoshot` and `shotkit` commands.
 
 That's the whole setup. In about half a minute you get
 `shotkit-demo/demo.webm`, plus `demo.mp4` and a thumbnail when ffmpeg is
@@ -40,7 +44,7 @@ below this line.
 
 ---
 
-> **Part of [Starter Series](https://github.com/starter-series)** — reusable launch tooling. `shotkit` is the unscoped package identity; public npm install is a release gate, not assumed by this README.
+> **Part of [Starter Series](https://github.com/starter-series)** — reusable launch tooling. Published on npm as [`demoshot`](https://www.npmjs.com/package/demoshot); the project and CLI keep the `shotkit` name.
 
 ## Status & Scope
 
@@ -52,14 +56,12 @@ below this line.
 
 ## Install
 
-After the unscoped npm package is published:
-
 ```bash
-npm i -D shotkit
+npm i -D demoshot
 npx playwright install chromium    # one-time: the browser shotkit drives
 ```
 
-Before npm publication, run from this repository:
+Or work from this repository:
 
 ```bash
 npm ci
@@ -75,10 +77,10 @@ Or as a **Claude Code plugin** (bundles the capture skill):
 /plugin install shotkit@starter-series
 ```
 
-Zero-install after npm publication in any repo that has a config:
+Zero-install in any repo that has a config:
 
 ```bash
-npx shotkit
+npx demoshot
 ```
 
 > shotkit launches the **full Chromium** (`channel: 'chromium'`) — never the default headless-shell, which strips the extension subsystem. **Headless works** (`HEADED=0`; verified on macOS and Linux CI, video included) and is the CI default in the starter's capture workflow; the local default stays headed for easy debugging. Headed-under-xvfb proved unreliable on CI runners (the 8-bit default breaks Chromium's screenshot capture, and a 24-bit screen still failed silently) — run headless in CI.

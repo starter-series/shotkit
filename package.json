@@ -1,5 +1,5 @@
 {
-  "name": "shotkit",
+  "name": "demoshot",
   "version": "1.4.0",
   "description": "Record a captioned demo video of any web app with one command — then grow into autonomous CWS/X/YouTube launch assets with final-file QA and a human approval gate.",
   "main": "src/index.js",
@@ -8,6 +8,7 @@
     "./schemas/*": "./schemas/*"
   },
   "bin": {
+    "demoshot": "bin/shotkit.js",
     "shotkit": "bin/shotkit.js"
   },
   "files": [
@@ -30,7 +31,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/starter-series/shotkit.git"
+    "url": "git+https://github.com/starter-series/shotkit.git"
   },
   "keywords": [
     "screen-recording",
