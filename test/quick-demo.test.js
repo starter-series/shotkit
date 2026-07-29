@@ -3,12 +3,16 @@ const os = require('os');
 const path = require('path');
 
 const {
+  CHANNEL_IDS,
   buildQuickDemoConfig,
   makeQuickDemoRun,
+  normalizeChannels,
   parseDemoArgs,
   resolveDemoTarget,
+  verifyChannelOutputs,
 } = require('../src/quick-demo');
 const { runCli } = require('../src/cli-runner');
+const { normalizeDemoConfigs } = require('../src/demo');
 
 const NO_FFMPEG_ENV = { PATH: fs.mkdtempSync(path.join(os.tmpdir(), 'sk-empty-path-')) };
 
@@ -63,7 +67,9 @@ describe('parseDemoArgs', () => {
       target: 'http://localhost:3000',
       out: 'shotkit-demo',
       name: 'demo',
-      duration: 20,
+      // null means "unset" so --for can supply the channel's trim length.
+      duration: null,
+      channels: [],
       mp4: 'auto',
       json: false,
       help: false,
@@ -137,6 +143,142 @@ describe('buildQuickDemoConfig', () => {
     } finally {
       await setup.teardown();
     }
+  });
+});
+
+describe('channel delivery (--for)', () => {
+  const urlTarget = { kind: 'url', url: 'http://localhost:3000' };
+
+  // --for requires ffmpeg, which not every CI runner has. Building a channel
+  // config must be testable without one, so stub discovery rather than the
+  // host PATH; the "no ffmpeg" case below still exercises the real lookup.
+  function withFfmpeg(assert) {
+    jest.isolateModules(() => {
+      jest.doMock('../src/video', () => ({
+        ...jest.requireActual('../src/video'),
+        findFfmpeg: () => 'ffmpeg',
+      }));
+      assert(require('../src/quick-demo'));
+    });
+  }
+
+  test('parses repeatable and comma-separated channels, de-duplicated', () => {
+    expect(parseDemoArgs(['u', '--for', 'x']).channels).toEqual(['x']);
+    expect(parseDemoArgs(['u', '--for', 'x,youtube-shorts']).channels).toEqual(['x', 'youtube-shorts']);
+    expect(parseDemoArgs(['u', '--for', 'x', '--for', 'x']).channels).toEqual(['x']);
+  });
+
+  test('rejects an unknown channel and --no-mp4 combined with --for', () => {
+    expect(parseDemoArgs(['u', '--for', 'tiktok']).errors[0]).toMatch(/unknown channel for --for: tiktok/);
+    expect(parseDemoArgs(['u', '--for', 'x', '--no-mp4']).errors)
+      .toContain('--no-mp4 cannot be combined with --for (a channel deliverable is the mp4)');
+  });
+
+  test('normalizeChannels validates ids', () => {
+    expect(normalizeChannels(['x', 'x'])).toEqual(['x']);
+    expect(normalizeChannels('x,youtube-shorts')).toEqual(['x', 'youtube-shorts']);
+    expect(() => normalizeChannels(['nope'])).toThrow(expect.objectContaining({ exitCode: 2 }));
+  });
+
+  test('a channel hands viewport/codec/trim to the profile instead of the defaults', () => {
+    withFfmpeg(({ buildQuickDemoConfig: build }) => {
+      const config = build({ target: urlTarget, channels: ['youtube-shorts'] });
+      expect(config.demos[0].targets).toEqual(['youtube-shorts']);
+      // The plain-clip defaults must not leak in and override the profile.
+      expect(config.demos[0].viewport).toBeUndefined();
+      expect(config.demos[0].mp4).toBeUndefined();
+
+      // capture() expands targets through normalizeDemoConfigs — assert the
+      // shape the engine actually runs, not just the declaration.
+      const [demo] = normalizeDemoConfigs(config);
+      expect(demo.name).toBe('demo-youtube-shorts');
+      expect(demo.target).toBe('youtube-shorts');
+      expect(demo.preset).toBe('sns-vertical');
+      expect(demo.trim).toMatchObject({ duration: 30 });
+      expect(demo.thumbnail).toEqual({ at: 1.2 });
+      expect(demo.captionOptions).toMatchObject({ mode: 'focus' });
+      // Runtime captions still skip static storyboard lint after expansion.
+      expect(demo.lint).toBe(false);
+    });
+  });
+
+  test('multiple channels produce one demo each', () => {
+    withFfmpeg(({ buildQuickDemoConfig: build }) => {
+      const config = build({ target: urlTarget, channels: ['x', 'youtube-shorts'] });
+      expect(normalizeDemoConfigs(config).map((d) => d.name)).toEqual(['demo-x', 'demo-youtube-shorts']);
+    });
+  });
+
+  test('the recording budget fills the channel trim window', () => {
+    withFfmpeg(({ buildQuickDemoConfig: build }) => {
+      // A 20s default would leave a 30s trim window short; the profile wins.
+      expect(build({ target: urlTarget, channels: ['x'] }).demos[0].run.durationS).toBe(30);
+      // An explicit --duration still overrides the channel default.
+      expect(build({ target: urlTarget, channels: ['x'], durationS: 12 }).demos[0].run.durationS).toBe(12);
+    });
+  });
+
+  test('--for without ffmpeg is a usage error, not a half-finished run', () => {
+    expect(() => buildQuickDemoConfig({ target: urlTarget, channels: ['x'], env: NO_FFMPEG_ENV }))
+      .toThrow(expect.objectContaining({ exitCode: 2 }));
+  });
+
+  test('every known channel id resolves to a buildable config', () => {
+    withFfmpeg(({ buildQuickDemoConfig: build }) => {
+      for (const id of CHANNEL_IDS) {
+        expect(normalizeDemoConfigs(build({ target: urlTarget, channels: [id] }))).toHaveLength(1);
+      }
+    });
+  });
+});
+
+describe('verifyChannelOutputs', () => {
+  const OUT = '/tmp/out';
+
+  test('passes when the delivered mp4 matches the channel spec', () => {
+    jest.isolateModules(() => {
+      jest.doMock('../src/video', () => ({
+        ...jest.requireActual('../src/video'),
+        probeVideo: () => ({ ok: true, codec: 'h264', width: 1280, height: 720, durationSeconds: 30 }),
+      }));
+      const { verifyChannelOutputs: verify } = require('../src/quick-demo');
+      const result = verify([`${OUT}/demo-x.mp4`], ['x']);
+      expect(result).toEqual([expect.objectContaining({ target: 'x', ok: true, problems: [] })]);
+    });
+  });
+
+  test('flags wrong dimensions, wrong codec, and over-limit duration', () => {
+    jest.isolateModules(() => {
+      jest.doMock('../src/video', () => ({
+        ...jest.requireActual('../src/video'),
+        probeVideo: () => ({ ok: true, codec: 'vp9', width: 640, height: 480, durationSeconds: 999 }),
+      }));
+      const { verifyChannelOutputs: verify } = require('../src/quick-demo');
+      const [result] = verify([`${OUT}/demo-x.mp4`], ['x']);
+      expect(result.ok).toBe(false);
+      expect(result.problems.join(' ')).toMatch(/640×480, expected 1280×720/);
+      expect(result.problems.join(' ')).toMatch(/codec is vp9/);
+      expect(result.problems.join(' ')).toMatch(/over the 140s limit/);
+    });
+  });
+
+  test('reports a missing file rather than silently passing', () => {
+    const [result] = verifyChannelOutputs([`${OUT}/demo.webm`], ['x']);
+    expect(result).toMatchObject({ target: 'x', file: null, ok: false });
+    expect(result.problems[0]).toMatch(/no demo-x\.mp4 was produced/);
+  });
+
+  test('surfaces a probe failure as a problem', () => {
+    jest.isolateModules(() => {
+      jest.doMock('../src/video', () => ({
+        ...jest.requireActual('../src/video'),
+        probeVideo: () => ({ ok: false, error: 'final MP4 failed full decode' }),
+      }));
+      const { verifyChannelOutputs: verify } = require('../src/quick-demo');
+      const [result] = verify([`${OUT}/demo-x.mp4`], ['x']);
+      expect(result.ok).toBe(false);
+      expect(result.problems).toEqual(['final MP4 failed full decode']);
+    });
   });
 });
 
@@ -227,7 +369,12 @@ describe('runCli demo subcommand', () => {
     }, { capture });
 
     expect(code).toBe(0);
-    expect(JSON.parse(stdout.read())).toEqual({ ok: true, outDir: '/tmp/out', produced: ['/tmp/out/demo.webm'] });
+    expect(JSON.parse(stdout.read())).toEqual({
+      ok: true,
+      outDir: '/tmp/out',
+      produced: ['/tmp/out/demo.webm'],
+      channels: [],
+    });
   });
 
   test('demo --help prints usage without requiring a target', async () => {

@@ -6,6 +6,17 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+### Added
+- `shotkit demo --for <channel>` delivers an uploadable file instead of a plain
+  clip. The channel profile (`x`, `youtube-shorts`, `cws-youtube`) supplies
+  viewport, codec, trim, and caption style, and channels are repeatable or
+  comma-separated so one run produces every cut. Each delivered mp4 is then
+  probed and checked against that channel's published dimensions, codec, and
+  duration limit: a miss fails the run and is reported per channel in
+  `channels[]`, so "ready to upload" is measured rather than assumed. The
+  recording budget defaults to the channel's trim window instead of 20s, and
+  `--for` requires ffmpeg (a channel deliverable *is* the H.264 file).
+
 ### Fixed
 - Playwright's "browser not downloaded" failure is rewritten into an install
   command that actually works. Its own hint (`npx playwright install`) can

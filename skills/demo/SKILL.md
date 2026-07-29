@@ -38,10 +38,17 @@ the files into `shotkit-demo/`.
 
    Useful options: `--out <dir>` (default `shotkit-demo`), `--name <clip>`,
    `--duration <s>` (default 20, clamped 5–120), `--no-mp4`.
-4. **Report** — parse the single JSON object on stdout
-   (`{ok, outDir, produced[]}`) and hand the user the produced file paths.
+4. **Uploadable file?** When the user wants something they can post rather than
+   just look at, add `--for <channel>` (`x`, `youtube-shorts`, `cws-youtube`;
+   repeatable or comma-separated). The channel supplies viewport, codec, trim,
+   and caption style, and each delivered mp4 is measured against that channel's
+   published limits — the run exits 1 if one misses. Needs ffmpeg. The JSON
+   result gains `channels[]` with `{target, file, ok, width, height,
+   durationSeconds, problems[]}`; report `problems[]` verbatim on failure.
+5. **Report** — parse the single JSON object on stdout
+   (`{ok, outDir, produced[], channels[]}`) and hand the user the file paths.
    Exit codes: `0 ok · 1 runtime failure · 2 usage error`.
-5. **Headless CI** — set `HEADED=0`; the recording still works.
+6. **Headless CI** — set `HEADED=0`; the recording still works.
 
 ## Escalate to the full pipeline
 

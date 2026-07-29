@@ -86,6 +86,19 @@ shotkit demo ./dist --duration 30    # 정적 디렉토리, 더 긴 클립
 shotkit demo --help                  # 전체 옵션
 ```
 
+그대로 올릴 수 있는 파일이 필요하면 채널만 지정하면 됩니다. 크기·트림·캡션이
+채널 규격으로 맞춰지고, **그 채널의 공개 제한값에 대해 실제로 검증**됩니다:
+
+```bash
+shotkit demo http://localhost:3000 --for x                # 1280×720, 140초 이하
+shotkit demo http://localhost:3000 --for youtube-shorts   # 720×1280, focus 캡션
+shotkit demo http://localhost:3000 --for x,cws-youtube    # 한 번에 둘 다
+```
+
+채널마다 `demo-<채널>.mp4`와 포스터 프레임이 추가됩니다. 산출 파일이 해당
+채널의 해상도·코덱·길이 제한을 벗어나면 실행이 실패하므로, "업로드 준비됨"은
+가정이 아니라 측정 결과입니다. `--for`에는 ffmpeg가 필요합니다.
+
 전체 파이프라인은 `shotkit.config.js`(repo별 이음새 — 영문 README의
 contract 참고)를 두고:
 

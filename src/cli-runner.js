@@ -4,7 +4,13 @@ const path = require('path');
 const { parseArgs, resolveConfigPath, USAGE } = require('./cli');
 const { capture: defaultCapture } = require('./capture');
 const { startCalibrator: defaultStartCalibrator } = require('./calibrator-server');
-const { DEMO_USAGE, buildQuickDemoConfig, parseDemoArgs, resolveDemoTarget } = require('./quick-demo');
+const {
+  DEMO_USAGE,
+  buildQuickDemoConfig,
+  parseDemoArgs,
+  resolveDemoTarget,
+  verifyChannelOutputs,
+} = require('./quick-demo');
 
 function writeJson(stream, payload) {
   stream.write(`${JSON.stringify(payload)}\n`);
@@ -44,10 +50,30 @@ async function runQuickDemo(argv, io, deps) {
       outDir: opts.out,
       durationS: opts.duration,
       mp4: opts.mp4,
+      channels: opts.channels,
     });
     const log = opts.json ? (m) => stderr.write(`[shotkit] ${m}\n`) : undefined;
     const { produced, outDir } = await capture(config, { cwd, json: opts.json, log });
-    if (opts.json) writeJson(stdout, { ok: true, outDir, produced });
+
+    // A channel deliverable is only "ready" if the final file measures up, so
+    // report the verdict per channel and fail the run when one does not.
+    const channels = opts.channels.length
+      ? (deps.verifyChannelOutputs || verifyChannelOutputs)(produced, opts.channels, opts.name)
+      : [];
+    const report = opts.json ? (m) => stderr.write(`[shotkit] ${m}\n`) : (m) => stdout.write(`[shotkit] ${m}\n`);
+    for (const channel of channels) {
+      report(channel.ok
+        ? `✓ ${channel.target}: ${path.basename(channel.file)} ${channel.width}×${channel.height} ready`
+        : `❌ ${channel.target}: ${channel.problems.join('; ')}`);
+    }
+    const failed = channels.filter((channel) => !channel.ok);
+    if (failed.length) {
+      const msg = `channel output not ready: ${failed.map((c) => `${c.target} (${c.problems.join('; ')})`).join(', ')}`;
+      if (opts.json) writeJson(stdout, { ok: false, error: msg, code: 1, outDir, produced, channels });
+      else stderr.write(`[shotkit] FAILED: ${msg}\n`);
+      return 1;
+    }
+    if (opts.json) writeJson(stdout, { ok: true, outDir, produced, channels });
     return 0;
   } catch (err) {
     const msg = err && err.message ? err.message : String(err);
