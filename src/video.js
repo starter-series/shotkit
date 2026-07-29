@@ -75,6 +75,110 @@ function findFfmpeg(env = process.env) {
   return null;
 }
 
+function findFfprobe(env = process.env) {
+  const sibling = env.SHOTKIT_FFMPEG
+    ? path.join(path.dirname(env.SHOTKIT_FFMPEG), 'ffprobe')
+    : null;
+  for (const bin of [env.SHOTKIT_FFPROBE, sibling, 'ffprobe']) {
+    if (!bin) continue;
+    try {
+      const result = spawnSync(bin, ['-version'], {
+        stdio: ['ignore', 'pipe', 'ignore'],
+        encoding: 'utf8',
+        env,
+        timeout: 10_000,
+      });
+      if (result.status === 0 && /ffprobe version/i.test(result.stdout || '')) return bin;
+    } catch (_err) {
+      /* try the next candidate */
+    }
+  }
+  return null;
+}
+
+function parseProbeOutput(stdout) {
+  const data = JSON.parse(stdout);
+  const stream = data.streams && data.streams[0];
+  if (!stream) throw new Error('ffprobe returned no video stream');
+  const durationSeconds = Number(data.format && data.format.duration);
+  return {
+    ok: true,
+    codec: stream.codec_name,
+    pixelFormat: stream.pix_fmt,
+    width: stream.width,
+    height: stream.height,
+    durationSeconds: Number.isFinite(durationSeconds) ? durationSeconds : null,
+  };
+}
+
+function decodeVideo(filePath, env = process.env) {
+  const bin = findFfmpeg(env);
+  if (!bin) {
+    return {
+      ok: false,
+      error: 'final MP4 decode was not verified because ffmpeg was not found',
+    };
+  }
+  const result = spawnSync(bin, [
+    '-hide_banner',
+    '-loglevel', 'error',
+    '-xerror',
+    '-err_detect', 'explode',
+    '-i', filePath,
+    '-map', '0:v:0',
+    '-f', 'null',
+    '-',
+  ], {
+    stdio: ['ignore', 'ignore', 'pipe'],
+    encoding: 'utf8',
+    env,
+    timeout: ffmpegTimeoutMs(env),
+  });
+  if (result.status === 0) return { ok: true };
+  if (result.error && (result.error.code === 'ETIMEDOUT' || result.error.killed)) {
+    return {
+      ok: false,
+      error: `final MP4 decode timed out after ${Math.round(ffmpegTimeoutMs(env) / 1000)}s`,
+    };
+  }
+  const detail = String(result.stderr || (result.error && result.error.message) || `ffmpeg exited ${result.status}`)
+    .trim()
+    .slice(-2000);
+  return {
+    ok: false,
+    error: `final MP4 failed full decode${detail ? `: ${detail}` : ''}`,
+  };
+}
+
+function probeVideo(filePath, env = process.env) {
+  const bin = findFfprobe(env);
+  if (!bin) {
+    return { ok: false, error: 'no ffprobe found; install ffmpeg or set SHOTKIT_FFPROBE' };
+  }
+  const result = spawnSync(bin, [
+    '-v', 'error',
+    '-select_streams', 'v:0',
+    '-show_entries', 'stream=codec_name,pix_fmt,width,height:format=duration',
+    '-of', 'json',
+    filePath,
+  ], {
+    stdio: ['ignore', 'pipe', 'pipe'],
+    encoding: 'utf8',
+    env,
+    timeout: 20_000,
+  });
+  if (result.status !== 0) {
+    return { ok: false, error: (result.stderr || `ffprobe exited ${result.status}`).trim() };
+  }
+  try {
+    const media = parseProbeOutput(result.stdout);
+    const decode = decodeVideo(filePath, env);
+    return decode.ok ? media : { ...media, ok: false, error: decode.error };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+}
+
 /**
  * Build the ffmpeg argv. Pure (unit-tested).
  *
@@ -148,6 +252,17 @@ function buildThumbnailArgs({ input, output, at = 1 }) {
   return ['-hide_banner', '-loglevel', 'error', '-y', '-ss', String(at), '-i', input, '-frames:v', '1', output];
 }
 
+function replaceFile(tmpPath, finalPath) {
+  fs.rmSync(finalPath, { force: true });
+  fs.renameSync(tmpPath, finalPath);
+}
+
+function tempSibling(filePath) {
+  const ext = path.extname(filePath);
+  const base = filePath.slice(0, -ext.length);
+  return `${base}.tmp-${process.pid}-${Date.now()}${ext}`;
+}
+
 /**
  * Post-process a recorded demo webm per config:
  *   - mp4 requested → write `<name>.mp4` next to the webm (trim applied there)
@@ -176,7 +291,14 @@ function postProcessDemo({ webmPath, mp4, trim, crop, zoom, thumbnail, log, env 
   if (mp4 || crop || zoom) {
     const crf = typeof mp4 === 'object' && mp4.crf != null ? mp4.crf : undefined;
     const mp4Path = webmPath.replace(/\.webm$/, '.mp4');
-    runFfmpeg(bin, buildFfmpegArgs({ input: webmPath, output: mp4Path, trim, crf, crop, zoom }), timeoutMs);
+    const tmpMp4Path = tempSibling(mp4Path);
+    try {
+      runFfmpeg(bin, buildFfmpegArgs({ input: webmPath, output: tmpMp4Path, trim, crf, crop, zoom }), timeoutMs);
+      replaceFile(tmpMp4Path, mp4Path);
+    } catch (err) {
+      fs.rmSync(tmpMp4Path, { force: true });
+      throw err;
+    }
     produced.push(mp4Path);
     finalVideoPath = mp4Path;
     const notes = ['H.264'];
@@ -186,9 +308,14 @@ function postProcessDemo({ webmPath, mp4, trim, crop, zoom, thumbnail, log, env 
     log(`✓ ${path.basename(mp4Path)} (${notes.join(', ')})`);
   } else if (trim) {
     // Trim-only: stream-copy to a sibling temp file, then swap in place.
-    const tmp = `${webmPath}.trim.webm`;
-    runFfmpeg(bin, buildFfmpegArgs({ input: webmPath, output: tmp, trim, copy: true }), timeoutMs);
-    fs.renameSync(tmp, webmPath);
+    const tmp = tempSibling(webmPath);
+    try {
+      runFfmpeg(bin, buildFfmpegArgs({ input: webmPath, output: tmp, trim, copy: true }), timeoutMs);
+      replaceFile(tmp, webmPath);
+    } catch (err) {
+      fs.rmSync(tmp, { force: true });
+      throw err;
+    }
     log(`✓ ${path.basename(webmPath)} trimmed in place`);
   }
   // else: thumbnail-only (no mp4/crop/zoom/trim) — nothing to re-encode; the
@@ -198,7 +325,14 @@ function postProcessDemo({ webmPath, mp4, trim, crop, zoom, thumbnail, log, env 
     const thumbPath = typeof thumbnail === 'object' && thumbnail.name
       ? path.join(path.dirname(webmPath), thumbnail.name)
       : webmPath.replace(/\.webm$/, '-thumbnail.png');
-    runFfmpeg(bin, buildThumbnailArgs({ input: finalVideoPath, output: thumbPath, at }), timeoutMs);
+    const tmpThumbPath = tempSibling(thumbPath);
+    try {
+      runFfmpeg(bin, buildThumbnailArgs({ input: finalVideoPath, output: tmpThumbPath, at }), timeoutMs);
+      if (fs.existsSync(tmpThumbPath)) replaceFile(tmpThumbPath, thumbPath);
+    } catch (err) {
+      fs.rmSync(tmpThumbPath, { force: true });
+      throw err;
+    }
     // ffmpeg exits 0 even when `at` seeks past the end of a (trimmed) clip,
     // writing no file. Only record the thumbnail when it was actually produced,
     // so the manifest never references a phantom asset.
@@ -212,4 +346,15 @@ function postProcessDemo({ webmPath, mp4, trim, crop, zoom, thumbnail, log, env 
   return produced;
 }
 
-module.exports = { findFfmpeg, buildFfmpegArgs, buildThumbnailArgs, buildVideoFilter, postProcessDemo, INSTALL_HINT };
+module.exports = {
+  findFfmpeg,
+  findFfprobe,
+  decodeVideo,
+  parseProbeOutput,
+  probeVideo,
+  buildFfmpegArgs,
+  buildThumbnailArgs,
+  buildVideoFilter,
+  postProcessDemo,
+  INSTALL_HINT,
+};

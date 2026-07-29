@@ -26,16 +26,19 @@ const path = require('path');
 const { chromium } = require('playwright');
 
 /**
+ * Launch a capture context, with or without an extension.
+ *
  * @param {object} opts
- * @param {string} opts.extensionDir  unpacked extension dir to --load-extension
+ * @param {string|null} [opts.extensionDir]  unpacked extension dir to --load-extension;
+ *                                           null/omitted launches a plain browser (web-app capture)
  * @param {{width:number,height:number}} [opts.viewport]
  * @param {string} [opts.recordVideoDir]   when set, the context records video here
  * @param {{width:number,height:number}} [opts.recordVideoSize]
- * @returns {Promise<{context: import('playwright').BrowserContext, extensionId: string, userDataDir: string}>}
+ * @returns {Promise<{context: import('playwright').BrowserContext, extensionId: string|null, userDataDir: string}>}
  */
-async function launchWithExtension({ extensionDir, viewport, recordVideoDir, recordVideoSize }) {
-  if (!extensionDir || !fs.existsSync(path.join(extensionDir, 'manifest.json'))) {
-    throw new Error(`launchWithExtension: no manifest.json at ${extensionDir}`);
+async function launchBrowser({ extensionDir = null, viewport, recordVideoDir, recordVideoSize }) {
+  if (extensionDir != null && !fs.existsSync(path.join(extensionDir, 'manifest.json'))) {
+    throw new Error(`launchBrowser: no manifest.json at ${extensionDir}`);
   }
   const userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'store-profile-'));
 
@@ -46,17 +49,29 @@ async function launchWithExtension({ extensionDir, viewport, recordVideoDir, rec
     // Force 1:1 CSS↔device pixels so a 1280×800 viewport yields a 1280×800
     // PNG (a Retina default of 2 would produce 2560×1600 — too big for CWS).
     deviceScaleFactor: 1,
-    args: [
-      `--disable-extensions-except=${extensionDir}`,
-      `--load-extension=${extensionDir}`,
-      '--disable-features=DisableLoadExtensionCommandLineSwitch',
-    ],
+    args: extensionDir
+      ? [
+        `--disable-extensions-except=${extensionDir}`,
+        `--load-extension=${extensionDir}`,
+        '--disable-features=DisableLoadExtensionCommandLineSwitch',
+      ]
+      : [],
   };
   if (recordVideoDir) {
     launchOpts.recordVideo = { dir: recordVideoDir, size: recordVideoSize || launchOpts.viewport };
   }
 
-  const context = await chromium.launchPersistentContext(userDataDir, launchOpts);
+  let context;
+  try {
+    context = await chromium.launchPersistentContext(userDataDir, launchOpts);
+  } catch (err) {
+    if (userDataDir && fs.existsSync(userDataDir)) {
+      fs.rmSync(userDataDir, { recursive: true, force: true });
+    }
+    throw err;
+  }
+
+  if (!extensionDir) return { context, extensionId: null, userDataDir };
 
   // Wait for the service worker so we can read the extension ID off its URL.
   // A content-script-only extension (no MV3 worker) or a slow worker makes this
@@ -79,6 +94,18 @@ async function launchWithExtension({ extensionDir, viewport, recordVideoDir, rec
 }
 
 /**
+ * Back-compat strict wrapper: extension is mandatory.
+ * @param {object} opts  same as launchBrowser, but extensionDir is required
+ */
+async function launchWithExtension(opts) {
+  const extensionDir = opts && opts.extensionDir;
+  if (!extensionDir || !fs.existsSync(path.join(extensionDir, 'manifest.json'))) {
+    throw new Error(`launchWithExtension: no manifest.json at ${extensionDir}`);
+  }
+  return launchBrowser(opts);
+}
+
+/**
  * Close a context produced by launchWithExtension and remove its temp profile.
  * @param {{context: import('playwright').BrowserContext, userDataDir: string}} handle
  */
@@ -92,4 +119,4 @@ async function closeContext({ context, userDataDir }) {
   }
 }
 
-module.exports = { launchWithExtension, closeContext };
+module.exports = { launchBrowser, launchWithExtension, closeContext };

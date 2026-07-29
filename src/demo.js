@@ -11,58 +11,11 @@ const DEFAULT_CLICK_MOVE_MS = 360;
 const DEFAULT_CLICK_BEFORE_MS = 120;
 const DEFAULT_STEP_HOLD_MS = 800;
 
-function normalizeDelayMs(value, label) {
-  if (!Number.isFinite(value) || value < 0) {
-    throw new Error(`shotkit: demo ${label} must be a non-negative number of milliseconds`);
-  }
-  return Math.round(value);
-}
-
-function parseTimeToMs(value, label = 'time') {
-  if (typeof value === 'number' && Number.isFinite(value)) {
-    if (value < 0) throw new Error(`shotkit: demo caption ${label} must be >= 0`);
-    return Math.round(value * 1000);
-  }
-  if (typeof value !== 'string' || !value.trim()) {
-    throw new Error(`shotkit: demo caption ${label} must be a number of seconds or a time string`);
-  }
-
-  const raw = value.trim();
-  if (/^\d+(\.\d+)?$/.test(raw)) return parseTimeToMs(Number(raw), label);
-
-  const parts = raw.split(':');
-  if (parts.length < 2 || parts.length > 3) {
-    throw new Error(`shotkit: demo caption ${label} has invalid time string "${value}"`);
-  }
-  const nums = parts.map((part) => Number(part));
-  if (nums.some((n) => !Number.isFinite(n) || n < 0)) {
-    throw new Error(`shotkit: demo caption ${label} has invalid time string "${value}"`);
-  }
-  const [hours, minutes, seconds] = parts.length === 3 ? nums : [0, nums[0], nums[1]];
-  if (minutes >= 60 || seconds >= 60) {
-    throw new Error(`shotkit: demo caption ${label} has invalid time string "${value}"`);
-  }
-  return Math.round(((hours * 3600) + (minutes * 60) + seconds) * 1000);
-}
-
-function normalizeDemoCaptions(captions = []) {
-  if (!captions) return [];
-  if (!Array.isArray(captions)) throw new Error('shotkit: demo.captions must be an array');
-  return captions
-    .map((caption, index) => {
-      if (!caption || caption.at == null) {
-        throw new Error(`shotkit: demo.captions[${index}] needs an at time`);
-      }
-      if (caption.text == null) {
-        throw new Error(`shotkit: demo.captions[${index}] needs text`);
-      }
-      return {
-        atMs: parseTimeToMs(caption.at, `at for captions[${index}]`),
-        text: String(caption.text),
-      };
-    })
-    .sort((a, b) => a.atMs - b.atMs);
-}
+const { normalizeDelayMs, normalizeDemoCaptions, parseTimeToMs } = require('./demo-time');
+const { buildCaptionFrames, captionStyle } = require('./demo-caption-focus');
+const { analyzeDemoStoryboard, formatStoryboardLint, lintDemoStoryboard } = require('./demo-storyboard');
+const { expandDemoTargets } = require('./channels');
+const { hideDemoSelect, installDemoSelectOverlay, performDemoSelect } = require('./demo-select');
 
 function normalizeDemoConfigs(config = {}) {
   const demos = [];
@@ -72,8 +25,7 @@ function normalizeDemoConfigs(config = {}) {
     demos.push(...config.demos);
   }
 
-  const seen = new Set();
-  return demos.map((demo, index) => {
+  const validated = demos.map((demo, index) => {
     if (!demo || typeof demo !== 'object') {
       throw new Error(`shotkit: demo entry ${index} must be an object`);
     }
@@ -82,142 +34,15 @@ function normalizeDemoConfigs(config = {}) {
     if (demo.captions != null && !Array.isArray(demo.captions)) {
       throw new Error(`shotkit: demo "${demo.name}".captions must be an array`);
     }
-    if (seen.has(demo.name)) throw new Error(`shotkit: duplicate demo name "${demo.name}"`);
-    seen.add(demo.name);
     return demo;
   });
-}
-
-function storyboardWarning(code, message, fix, details) {
-  return {
-    code,
-    severity: 'warning',
-    message,
-    fix,
-    ...(details ? { details } : {}),
-  };
-}
-
-function formatStoryboardLint(item) {
-  return item.fix ? `${item.message}; ${item.fix}` : item.message;
-}
-
-function analyzeDemoStoryboard(demoConfig, { viewport, mp4Requested } = {}) {
-  if (demoConfig.storyboardLint === false) return [];
-  const warnings = [];
-  // Lint must never throw — a malformed caption time should surface AS a lint
-  // warning, not crash the whole capture run (this runs before any try/catch).
-  let captions = [];
-  try {
-    captions = Array.isArray(demoConfig.captions) ? normalizeDemoCaptions(demoConfig.captions) : [];
-  } catch (e) {
-    warnings.push(storyboardWarning('invalid-captions', e.message, 'fix the caption time/text so the storyboard can be linted'));
+  const expanded = validated.flatMap(expandDemoTargets);
+  const seen = new Set();
+  for (const demo of expanded) {
+    if (seen.has(demo.name)) throw new Error(`shotkit: duplicate demo name "${demo.name}"`);
+    seen.add(demo.name);
   }
-  if (!captions.length) {
-    warnings.push(storyboardWarning(
-      'no-captions',
-      'storyboard has no captions',
-      'add short captions for SNS context',
-    ));
-  }
-  if (captions.length === 1) {
-    warnings.push(storyboardWarning(
-      'single-caption',
-      'storyboard has only one caption',
-      'aim for before -> action -> result',
-    ));
-  }
-  if (captions[0] && captions[0].atMs > 3000) {
-    warnings.push(storyboardWarning(
-      'late-first-caption',
-      'first caption starts after 3s',
-      'show the result sooner',
-      { atMs: captions[0].atMs },
-    ));
-  }
-  for (const caption of captions) {
-    if (caption.text.length > 70) {
-      warnings.push(storyboardWarning(
-        'long-caption',
-        `caption is ${caption.text.length} chars`,
-        'keep captions under 70 chars when possible',
-        { text: caption.text, length: caption.text.length },
-      ));
-    }
-  }
-
-  const text = captions.map((caption) => caption.text).join(' ').toLowerCase();
-  if (captions.length && !/(restore|original|safe|undo|revert|reset|복구|원문|되돌)/i.test(text)) {
-    warnings.push(storyboardWarning(
-      'missing-safety-restore',
-      'storyboard has no visible safety/restore beat',
-      'show restore, undo, original text, or another safety path',
-    ));
-  }
-
-  // Honor an explicit mp4Requested (only the caller knows about the CLI --mp4
-  // flag) but also infer it from the demo config, so public callers like
-  // lintDemoStoryboard() don't emit a spurious warning when demo.mp4 is set.
-  const wantsMp4 = mp4Requested || !!(demoConfig.mp4 || demoConfig.crop || demoConfig.zoom);
-  if (!wantsMp4) {
-    warnings.push(storyboardWarning(
-      'missing-mp4',
-      'X/SNS demo clips should emit mp4',
-      'set demo.mp4 or run shotkit --mp4',
-    ));
-  }
-  if ((demoConfig.crop || demoConfig.zoom) && captions.length) {
-    warnings.push(storyboardWarning(
-      'edge-framing',
-      'crop/zoom can cut edge captions or badges',
-      'verify a frame after capture',
-    ));
-  }
-  if (viewport && (viewport.width % 2 || viewport.height % 2)) {
-    warnings.push(storyboardWarning(
-      'odd-viewport',
-      `viewport ${viewport.width}x${viewport.height} is not even`,
-      'use even dimensions for H.264',
-      { viewport },
-    ));
-  }
-
-  if (demoConfig.trim && demoConfig.trim.duration != null) {
-    let durationMs = null;
-    try {
-      durationMs = parseTimeToMs(demoConfig.trim.duration, 'trim.duration');
-    } catch (e) {
-      warnings.push(storyboardWarning('invalid-duration', e.message, 'use a number of seconds or an "mm:ss" string'));
-    }
-    if (durationMs != null && durationMs < 20000) {
-      warnings.push(storyboardWarning(
-        'short-duration',
-        'trim.duration is under 20s',
-        'make sure the story has enough context',
-        { durationMs },
-      ));
-    }
-    if (durationMs != null && durationMs > 40000) {
-      warnings.push(storyboardWarning(
-        'long-duration',
-        'trim.duration is over 40s',
-        'X clips usually perform better shorter',
-        { durationMs },
-      ));
-    }
-  } else {
-    warnings.push(storyboardWarning(
-      'missing-duration',
-      'no trim.duration set',
-      'target 20-40s for SNS clips',
-    ));
-  }
-
-  return warnings;
-}
-
-function lintDemoStoryboard(demoConfig, options = {}) {
-  return analyzeDemoStoryboard(demoConfig, options).map(formatStoryboardLint);
+  return expanded;
 }
 
 function demoCaptionInitScript(options = {}) {
@@ -226,7 +51,43 @@ function demoCaptionInitScript(options = {}) {
   const styleId = '__shotkit_demo_caption_style__';
   const baseOptions = {
     position: options.position || 'bottom-left',
+    typography: options.typography && typeof options.typography === 'object'
+      ? options.typography
+      : { enabled: false },
   };
+  let fontLoadPromise = null;
+
+  function loadCaptionFonts() {
+    const faces = Array.isArray(baseOptions.typography.fontFaces)
+      ? baseOptions.typography.fontFaces
+      : [];
+    if (!faces.length) return Promise.resolve({ configured: false, loaded: true, errors: [] });
+    if (fontLoadPromise) return fontLoadPromise;
+    fontLoadPromise = (async () => {
+      const startedAt = performance.now();
+      if (typeof FontFace !== 'function' || !document.fonts) {
+        return { configured: true, loaded: false, loadMs: 0, errors: ['FontFace API is unavailable'] };
+      }
+      const results = await Promise.allSettled(faces.map(async (face) => {
+        const loaded = await new FontFace(face.family, `url(${face.source})`, {
+          weight: face.weight || '400',
+          style: face.style || 'normal',
+        }).load();
+        document.fonts.add(loaded);
+        return face.family;
+      }));
+      const errors = results
+        .filter((result) => result.status === 'rejected')
+        .map((result) => String(result.reason && result.reason.message ? result.reason.message : result.reason));
+      return {
+        configured: true,
+        loaded: errors.length === 0,
+        loadMs: Math.round(performance.now() - startedAt),
+        errors,
+      };
+    })();
+    return fontLoadPromise;
+  }
 
   function ensureStyle() {
     if (document.getElementById(styleId)) return;
@@ -256,13 +117,77 @@ function demoCaptionInitScript(options = {}) {
         opacity: 1;
         transform: translateY(0);
       }
+      #${rootId}[data-mode="focus"] {
+        width: min(660px, calc(100vw - 56px));
+        min-height: 78px;
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: center;
+        column-gap: 0;
+        row-gap: .08em;
+        padding: 14px 22px 16px;
+        background: rgba(8,11,16,.86);
+        font-size: 32px;
+        font-weight: 800;
+        line-height: 1.15;
+        text-align: center;
+        overflow-wrap: anywhere;
+      }
+      #${rootId}[data-mode="focus"][data-condensed="true"] {
+        font-size: 26px;
+        line-height: 1.18;
+      }
+      #${rootId}[data-appearance="outline"] {
+        min-height: 0;
+        padding: 5px 0 7px;
+        border: 0;
+        background: transparent;
+        color: #fff;
+        box-shadow: none;
+        -webkit-text-stroke: 2px rgba(7,10,15,.92);
+        paint-order: stroke fill;
+        text-shadow: 0 2px 0 rgba(0,0,0,.58), 0 6px 12px rgba(0,0,0,.26);
+      }
+      #${rootId}[data-mode="focus"][data-appearance="outline"] {
+        font-size: 40px;
+        font-weight: 900;
+        line-height: 1.08;
+      }
+      #${rootId}[data-mode="focus"][data-appearance="outline"][data-condensed="true"] {
+        font-size: 32px;
+      }
+      #${rootId}[data-appearance="outline"] .shotkit-caption-word {
+        color: #fff;
+        -webkit-text-stroke: 2px rgba(7,10,15,.92);
+        paint-order: stroke fill;
+        text-shadow: inherit;
+      }
+      #${rootId}[data-appearance="outline"] .shotkit-caption-word[data-active="true"] {
+        color: var(--shotkit-caption-active-color, #facc15);
+        text-shadow: 0 2px 0 rgba(0,0,0,.62), 0 6px 13px rgba(0,0,0,.3);
+        animation-duration: 230ms;
+      }
+      #${rootId} .shotkit-caption-word {
+        display: inline-block;
+        color: rgba(255,255,255,.72);
+        transform-origin: center bottom;
+        white-space: pre-wrap;
+      }
+      #${rootId} .shotkit-caption-word::before { content: attr(data-before); }
+      #${rootId} .shotkit-caption-word::after { content: attr(data-after); }
+      #${rootId} .shotkit-caption-word[data-active="true"] {
+        color: var(--shotkit-caption-active-color, #facc15);
+        text-shadow: 0 2px 14px rgba(0,0,0,.52);
+        animation: shotkit-caption-focus-pop 180ms cubic-bezier(.2,.9,.3,1.2);
+      }
       #${rootId}[data-position="bottom-left"] {
         left: max(28px, env(safe-area-inset-left));
-        bottom: max(26px, env(safe-area-inset-bottom));
+        bottom: max(var(--shotkit-caption-bottom-offset, 26px), env(safe-area-inset-bottom));
       }
       #${rootId}[data-position="bottom"] {
         left: 50%;
-        bottom: max(26px, env(safe-area-inset-bottom));
+        bottom: max(var(--shotkit-caption-bottom-offset, 26px), env(safe-area-inset-bottom));
         transform: translate(-50%, 8px);
         text-align: center;
       }
@@ -277,24 +202,40 @@ function demoCaptionInitScript(options = {}) {
         }
         #${rootId}[data-position="bottom-left"] {
           left: max(18px, env(safe-area-inset-left));
-          bottom: max(18px, env(safe-area-inset-bottom));
+          bottom: max(var(--shotkit-caption-bottom-offset, 18px), env(safe-area-inset-bottom));
         }
         #${rootId}[data-position="bottom"] {
-          bottom: max(18px, env(safe-area-inset-bottom));
+          bottom: max(var(--shotkit-caption-bottom-offset, 18px), env(safe-area-inset-bottom));
+        }
+        #${rootId}[data-mode="focus"] {
+          width: calc(100vw - 220px);
+          max-width: 500px;
+          min-height: 88px;
+          padding: 15px 18px 17px;
+          font-size: 34px;
+        }
+        #${rootId}[data-mode="focus"][data-position="bottom-left"] {
+          left: max(48px, env(safe-area-inset-left));
+        }
+        #${rootId}[data-mode="focus"][data-condensed="true"] {
+          font-size: 25px;
+        }
+        #${rootId}[data-mode="focus"][data-appearance="outline"] {
+          font-size: 42px;
+        }
+        #${rootId}[data-mode="focus"][data-appearance="outline"][data-condensed="true"] {
+          font-size: 32px;
         }
       }
       #${pointerId} {
         position: fixed;
         left: 0;
         top: 0;
-        z-index: 2147483646;
-        width: 24px;
-        height: 24px;
-        margin: -12px 0 0 -12px;
-        border: 3px solid rgba(37,99,235,.96);
-        border-radius: 999px;
-        background: rgba(255,255,255,.94);
-        box-shadow: 0 8px 22px rgba(0,0,0,.32), 0 0 0 3px rgba(255,255,255,.82);
+        z-index: 2147483647;
+        width: 44px;
+        height: 52px;
+        margin: -9px 0 0 -9px;
+        background: radial-gradient(circle at 9px 9px, rgba(37,99,235,.42) 0 8px, rgba(37,99,235,.14) 9px 17px, transparent 18px);
         pointer-events: none;
         opacity: 0;
         transform: translate(-120px, -120px);
@@ -305,10 +246,29 @@ function demoCaptionInitScript(options = {}) {
       #${pointerId}[data-visible="true"] {
         opacity: 1;
       }
+      #${pointerId}::before {
+        content: "";
+        position: absolute;
+        left: 6px;
+        top: 5px;
+        width: 28px;
+        height: 38px;
+        background: #fff;
+        clip-path: polygon(0 0, 0 78%, 29% 62%, 50% 100%, 75% 91%, 53% 57%, 100% 57%);
+        filter: drop-shadow(-2px -1px 0 #0f172a) drop-shadow(2px 2px 0 #0f172a) drop-shadow(0 5px 5px rgba(0,0,0,.35));
+        transform-origin: 8px 8px;
+        transition: transform 90ms ease;
+      }
+      #${pointerId}[data-clicking="true"]::before {
+        transform: translate(1px, 1px) scale(.92);
+      }
       #${pointerId}::after {
         content: "";
         position: absolute;
-        inset: -16px;
+        left: -12px;
+        top: -12px;
+        width: 42px;
+        height: 42px;
         border: 3px solid rgba(37,99,235,.42);
         border-radius: 999px;
         opacity: 0;
@@ -321,6 +281,11 @@ function demoCaptionInitScript(options = {}) {
         0% { opacity: .95; transform: scale(.6); }
         100% { opacity: 0; transform: scale(1.9); }
       }
+      @keyframes shotkit-caption-focus-pop {
+        0% { opacity: .55; transform: translateY(4px) scale(.94); }
+        70% { opacity: 1; transform: translateY(-1px) scale(1.04); }
+        100% { opacity: 1; transform: translateY(0) scale(1); }
+      }
     `;
     document.head.appendChild(style);
   }
@@ -332,6 +297,8 @@ function demoCaptionInitScript(options = {}) {
     if (!root) {
       root = document.createElement('div');
       root.id = rootId;
+      root.className = 'notranslate';
+      root.setAttribute('translate', 'no');
       root.setAttribute('role', 'status');
       root.setAttribute('aria-live', 'polite');
       root.dataset.position = baseOptions.position;
@@ -352,13 +319,214 @@ function demoCaptionInitScript(options = {}) {
     return pointer;
   }
 
-  function show(text, nextOptions = {}) {
+  function captionLines(root) {
+    const words = Array.from(root.querySelectorAll('.shotkit-caption-word'));
+    const rects = words.length
+      ? words.map((word) => ({
+        top: word.offsetTop,
+        left: word.offsetLeft,
+        right: word.offsetLeft + word.offsetWidth,
+        width: word.offsetWidth,
+        height: word.offsetHeight,
+      }))
+      : (() => {
+        const range = document.createRange();
+        range.selectNodeContents(root);
+        return Array.from(range.getClientRects());
+      })();
+    const lines = [];
+    for (const rect of rects.filter((item) => item.width > 0 && item.height > 0)) {
+      let line = lines.find((item) => Math.abs(item.top - rect.top) <= 2);
+      if (!line) {
+        line = { top: rect.top, left: rect.left, right: rect.right };
+        lines.push(line);
+      } else {
+        line.left = Math.min(line.left, rect.left);
+        line.right = Math.max(line.right, rect.right);
+      }
+    }
+    return lines.sort((first, second) => first.top - second.top)
+      .map((line) => Math.max(0, line.right - line.left));
+  }
+
+  function captionMeasure(root) {
+    const lineWidths = captionLines(root);
+    const widest = lineWidths.length ? Math.max(...lineWidths) : 0;
+    const narrowest = lineWidths.length ? Math.min(...lineWidths) : 0;
+    return {
+      overflowX: root.scrollWidth > root.clientWidth + 1,
+      overflowY: root.scrollHeight > root.clientHeight + 1,
+      lineCount: lineWidths.length,
+      lineWidths: lineWidths.map((width) => Math.round(width * 100) / 100),
+      lineBalance: lineWidths.length > 1 && widest > 0 ? narrowest / widest : 1,
+    };
+  }
+
+  function fitCaption(root, typography) {
+    const computed = window.getComputedStyle(root);
+    const cssSize = Number.parseFloat(computed.fontSize) || 24;
+    const maximum = Number.isFinite(typography.maxFontSize) ? typography.maxFontSize : Math.round(cssSize);
+    const minimum = Math.min(maximum, Number.isFinite(typography.minFontSize) ? typography.minFontSize : maximum);
+    const maxLines = Number.isInteger(typography.maxLines) ? typography.maxLines : 2;
+    const setSize = (size) => {
+      root.style.fontSize = `${size}px`;
+      const measured = captionMeasure(root);
+      return {
+        ...measured,
+        fontSize: size,
+        fits: !measured.overflowX && !measured.overflowY && measured.lineCount <= maxLines,
+      };
+    };
+
+    if (!typography.enabled) {
+      const measured = captionMeasure(root);
+      return {
+        ...measured,
+        requestedFontSize: cssSize,
+        fontSize: cssSize,
+        minFontSize: null,
+        maxLines,
+        fitStatus: 'not-requested',
+      };
+    }
+    if (typography.fit !== 'shrink') {
+      const measured = setSize(maximum);
+      return {
+        ...measured,
+        requestedFontSize: maximum,
+        minFontSize: minimum,
+        maxLines,
+        fitStatus: measured.fits ? 'fit' : 'overflow',
+      };
+    }
+
+    let low = minimum;
+    let high = maximum;
+    let best = null;
+    while (low <= high) {
+      const size = Math.floor((low + high) / 2);
+      const measured = setSize(size);
+      if (measured.fits) {
+        best = measured;
+        low = size + 1;
+      } else {
+        high = size - 1;
+      }
+    }
+    const measured = best || setSize(minimum);
+    if (best) root.style.fontSize = `${best.fontSize}px`;
+    return {
+      ...measured,
+      requestedFontSize: maximum,
+      minFontSize: minimum,
+      maxLines,
+      fitStatus: measured.fits ? 'fit' : 'overflow',
+    };
+  }
+
+  async function show(text, nextOptions = {}) {
     const root = ensureRoot();
-    if (!root) return;
+    if (!root) return null;
     const position = nextOptions.position || baseOptions.position;
+    const typography = baseOptions.typography && baseOptions.typography.enabled
+      ? { ...baseOptions.typography, ...(nextOptions.typography || {}) }
+      : { enabled: false };
     root.dataset.position = position;
-    root.textContent = String(text);
+    root.dataset.mode = nextOptions.mode === 'focus' ? 'focus' : 'static';
+    root.dataset.appearance = nextOptions.appearance === 'outline' ? 'outline' : 'panel';
+    root.dataset.condensed = nextOptions.condensed || (!typography.enabled
+      && root.dataset.mode === 'focus' && String(text).length > 42) ? 'true' : 'false';
+    if (typography.enabled) {
+      root.lang = nextOptions.locale || typography.locale || 'und';
+      root.dir = nextOptions.direction || typography.direction || 'ltr';
+      root.style.fontFamily = typography.family;
+      if (typography.weight) root.style.fontWeight = typography.weight;
+    } else {
+      root.removeAttribute('lang');
+      root.removeAttribute('dir');
+      root.style.removeProperty('font-family');
+      root.style.removeProperty('font-weight');
+      root.style.removeProperty('font-size');
+    }
+    if (Number.isFinite(nextOptions.bottomOffset) && nextOptions.bottomOffset >= 0) {
+      root.style.setProperty('--shotkit-caption-bottom-offset', `${Math.round(nextOptions.bottomOffset)}px`);
+    } else {
+      root.style.removeProperty('--shotkit-caption-bottom-offset');
+    }
+    root.style.setProperty('--shotkit-caption-active-color', nextOptions.activeColor || '#facc15');
+    root.textContent = '';
+    if (root.dataset.mode === 'focus' && (Array.isArray(nextOptions.focusSegments)
+      || Array.isArray(nextOptions.focusWords))) {
+      const segments = Array.isArray(nextOptions.focusSegments)
+        ? nextOptions.focusSegments
+        : nextOptions.focusWords.map((word, index, words) => ({
+          before: '',
+          text: word,
+          after: index === words.length - 1 ? '' : ' ',
+        }));
+      segments.forEach((segment, index) => {
+        // Use an element most page translators do not scan. The root's
+        // translate=no marker covers standards-aware localization tools too.
+        const wordElement = document.createElement('b');
+        wordElement.className = 'shotkit-caption-word';
+        wordElement.dataset.active = index === nextOptions.activeWordIndex ? 'true' : 'false';
+        wordElement.dataset.before = String(segment.before || '');
+        wordElement.dataset.after = String(segment.after || '');
+        wordElement.textContent = String(segment.text);
+        root.appendChild(wordElement);
+      });
+      root.setAttribute('aria-label', String(nextOptions.fullText || text));
+      root.setAttribute('aria-live', 'off');
+    } else {
+      root.textContent = String(text);
+      root.removeAttribute('aria-label');
+      root.setAttribute('aria-live', 'polite');
+    }
     root.dataset.visible = text ? 'true' : 'false';
+    const fontState = await loadCaptionFonts();
+    const fit = fitCaption(root, typography);
+
+    const rect = root.getBoundingClientRect();
+    const rootStyle = window.getComputedStyle(root);
+    const firstWord = root.querySelector('.shotkit-caption-word');
+    const textStyle = firstWord ? window.getComputedStyle(firstWord) : rootStyle;
+    const stroke = textStyle.webkitTextStrokeWidth
+      || textStyle.getPropertyValue('-webkit-text-stroke-width')
+      || '0';
+    return {
+      text: String(text),
+      sourceText: String(nextOptions.fullText || text),
+      renderedAt: Date.now(),
+      mode: root.dataset.mode,
+      appearance: root.dataset.appearance,
+      rect: {
+        left: rect.left,
+        top: rect.top,
+        right: rect.right,
+        bottom: rect.bottom,
+        width: rect.width,
+        height: rect.height,
+      },
+      viewport: { width: window.innerWidth, height: window.innerHeight },
+      overflowX: fit.overflowX,
+      overflowY: fit.overflowY,
+      lineCount: fit.lineCount,
+      lineWidths: fit.lineWidths,
+      lineBalance: fit.lineBalance,
+      fitStatus: fit.fitStatus,
+      fontSize: fit.fontSize,
+      requestedFontSize: fit.requestedFontSize,
+      minFontSize: fit.minFontSize,
+      maxLines: fit.maxLines,
+      locale: typography.enabled ? root.lang : null,
+      direction: typography.enabled ? root.dir : null,
+      fontConfigured: fontState.configured,
+      fontLoaded: fontState.configured ? fontState.loaded : null,
+      fontLoadMs: Number.isFinite(fontState.loadMs) ? fontState.loadMs : null,
+      fontErrors: fontState.errors,
+      fontFamily: rootStyle.fontFamily,
+      strokeWidth: Number.parseFloat(stroke) || 0,
+    };
   }
 
   function hide() {
@@ -391,8 +559,9 @@ function demoCaptionInitScript(options = {}) {
     if (pointer) pointer.dataset.visible = 'false';
   }
 
-  window.__shotkitDemoCaption = { show, hide };
+  window.__shotkitDemoCaption = { show, hide, ready: loadCaptionFonts };
   window.__shotkitDemoPointer = { move: movePointer, pulse: pulsePointer, hide: hidePointer };
+  void loadCaptionFonts();
   const install = () => ensureRoot();
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', install, { once: true });
   else install();
@@ -400,17 +569,17 @@ function demoCaptionInitScript(options = {}) {
 
 async function installDemoCaptionOverlay(context, options = {}) {
   await context.addInitScript(demoCaptionInitScript, options);
+  await installDemoSelectOverlay(context);
 }
 
 async function ensureDemoCaptionOverlay(page, options = {}) {
   await page.evaluate(demoCaptionInitScript, options);
 }
 
-async function setDemoCaption(page, text, options = {}) {
-  await ensureDemoCaptionOverlay(page, options);
-  await page.evaluate(
+async function renderDemoCaption(page, text, options = {}) {
+  return page.evaluate(
     ({ captionText, captionOptions }) => {
-      window.__shotkitDemoCaption.show(captionText, captionOptions);
+      return window.__shotkitDemoCaption.show(captionText, captionOptions);
     },
     {
       captionText: String(text),
@@ -419,14 +588,24 @@ async function setDemoCaption(page, text, options = {}) {
   );
 }
 
+async function setDemoCaption(page, text, options = {}) {
+  await ensureDemoCaptionOverlay(page, options);
+  return renderDemoCaption(page, text, options);
+}
+
 async function hideDemoCaption(page) {
   await page.evaluate(() => {
     if (window.__shotkitDemoCaption) window.__shotkitDemoCaption.hide();
   });
 }
 
+function hasDemoPointerOverlay() {
+  return !!window.__shotkitDemoPointer;
+}
+
 async function moveDemoPointer(page, point, options = {}) {
-  await ensureDemoCaptionOverlay(page, options);
+  const installed = await page.evaluate(hasDemoPointerOverlay).catch(() => false);
+  if (!installed) await ensureDemoCaptionOverlay(page);
   await page.evaluate(
     ({ pointerPoint, pointerOptions }) => {
       window.__shotkitDemoPointer.move(pointerPoint, pointerOptions);
@@ -480,22 +659,53 @@ async function clickTarget(page, target, clickOptions) {
   throw new Error('shotkit: demo.click target must be a selector string, Locator, or { x, y } point');
 }
 
-function createDemoController({ page, captions = [], captionOptions = {} }) {
+function createDemoController({
+  page,
+  captions = [],
+  captionOptions = {},
+  runtimeCaptionOptions = captionOptions,
+  typographyReport = null,
+}) {
   const schedule = normalizeDemoCaptions(captions);
+  const captionFrames = buildCaptionFrames(schedule, captionOptions);
   const timers = [];
+  const captionSamples = [];
+  const startedAt = Date.now();
   let activeText = '';
   let activeOptions = {};
+  let activeExpectedAtMs = null;
+  let overlayReady = false;
   let stopped = false;
 
-  async function render(text, options = {}) {
+  async function render(text, options = {}, expectedAtMs = null) {
     if (stopped) return;
     activeText = String(text || '');
     activeOptions = options || {};
+    activeExpectedAtMs = expectedAtMs;
+    const authoredOptions = { ...captionOptions, ...activeOptions };
+    const nextOptions = { ...runtimeCaptionOptions, ...activeOptions };
+    captionStyle(authoredOptions);
     try {
-      const nextOptions = { ...captionOptions, ...activeOptions };
-      if (activeText) await setDemoCaption(page, activeText, nextOptions);
+      if (activeText) {
+        if (!overlayReady) {
+          await ensureDemoCaptionOverlay(page, nextOptions);
+          overlayReady = true;
+        }
+        const sample = await renderDemoCaption(page, activeText, nextOptions);
+        if (sample) {
+          const { renderedAt, ...metrics } = sample;
+          captionSamples.push({
+            ...metrics,
+            expectedAtMs,
+            actualAtMs: Number.isFinite(renderedAt)
+              ? Math.max(0, Math.round(renderedAt - startedAt))
+              : Date.now() - startedAt,
+          });
+        }
+      }
       else await hideDemoCaption(page);
     } catch (_e) {
+      overlayReady = false;
       // Navigations can briefly destroy the execution context. The next helper
       // call or DOMContentLoaded replay will render the latest caption.
     }
@@ -503,12 +713,13 @@ function createDemoController({ page, captions = [], captionOptions = {} }) {
 
   const replay = () => {
     if (!activeText || stopped) return;
-    setTimeout(() => render(activeText, activeOptions), 0);
+    overlayReady = false;
+    setTimeout(() => render(activeText, activeOptions, activeExpectedAtMs), 0);
   };
   page.on('domcontentloaded', replay);
 
-  for (const caption of schedule) {
-    timers.push(setTimeout(() => render(caption.text), caption.atMs));
+  for (const frame of captionFrames) {
+    timers.push(setTimeout(() => render(frame.text, frame.options, frame.atMs), frame.atMs));
   }
 
   return {
@@ -528,6 +739,18 @@ function createDemoController({ page, captions = [], captionOptions = {} }) {
 
     wait(ms) {
       return page.waitForTimeout(normalizeDelayMs(ms, 'wait ms'));
+    },
+
+    async select(target, value, options = {}) {
+      return performDemoSelect({
+        page,
+        target,
+        value,
+        options,
+        targetCenter,
+        movePointer: moveDemoPointer,
+        pulsePointer: pulseDemoPointer,
+      });
     },
 
     async click(target, options = {}) {
@@ -556,10 +779,19 @@ function createDemoController({ page, captions = [], captionOptions = {} }) {
     async hide() {
       await render('');
       await hideDemoPointer(page).catch(() => {});
+      await hideDemoSelect(page).catch(() => {});
     },
 
     hidePointer() {
       return hideDemoPointer(page);
+    },
+
+    captionMetrics() {
+      return {
+        expectedFrames: captionFrames.map((frame) => ({ atMs: frame.atMs, text: frame.text })),
+        samples: captionSamples.map((sample) => ({ ...sample, rect: { ...sample.rect } })),
+        typography: typographyReport ? { ...typographyReport } : null,
+      };
     },
 
     stop() {

@@ -2,9 +2,10 @@
 
 # shotkit
 
-**빌드된 브라우저 익스텐션에서 스토어 자산과 데모 handoff pack을 캡처 — Playwright 기반.**
+**에이전트가 만든 앱, shotkit이 돌아가는 모습을 보여줍니다.**
 
-스크린샷 · 프로모 이미지 · 데모 클립 · storyboard · handoff manifest. 한 커맨드.
+명령 한 줄로 아무 웹 앱의 캡션 달린 데모 클립을 녹화합니다 — 깨끗한
+체크아웃에서 실제로 렌더되고 동작한다는 영상 증거입니다.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Node ≥ 22](https://img.shields.io/badge/node-%E2%89%A522-brightgreen.svg)](.nvmrc)
@@ -15,14 +16,36 @@
 
 ---
 
-> **[Starter Series](https://github.com/starter-series)** — 클론 템플릿이 아니라 재사용 가능한 도구. `shotkit`은 이 캡처 엔진의 unscoped 패키지 이름입니다. 공개 npm 설치는 릴리스 게이트이며, README가 현재 게시 상태를 가정하지 않습니다.
+![shotkit demo — 명령 한 줄로 녹화한 캡션 데모 클립](docs/media/quick-demo.gif)
+
+```bash
+npm ci && npx playwright install chromium   # 클론에서 실행; npm 게시는 대기 중
+node bin/shotkit.js demo http://localhost:3000   # 개발 서버
+node bin/shotkit.js demo ./dist                  # 정적 빌드 디렉토리
+node bin/shotkit.js demo page.html               # 단일 파일
+```
+
+설정은 이것이 전부입니다. 약 30초 뒤 `shotkit-demo/demo.webm`이 나오고,
+ffmpeg가 있으면 `demo.mp4`와 썸네일까지 나옵니다. **설정 파일 없음** —
+캡션은 페이지 자신의 타이틀과 헤딩에서 나오고, 클립은 페이지를 일정한
+속도로 스크롤하며 보여줍니다. 코딩 에이전트는 `--json`(stdout에 JSON 객체
+정확히 1개)과 종료 코드 `0 ok · 1 실패 · 2 사용법` 계약을 그대로 씁니다.
+
+**여기서 더 자랍니다.** 같은 엔진이 브라우저 익스텐션용 출시 자산
+파이프라인 전체를 구동합니다: 결정적 Chrome Web Store 스크린샷, 프로모
+타일, 포인터 하이라이트가 있는 스토리보드 SNS 클립, 최종 파일 QA(ffprobe +
+전체 디코드), 그리고 해시 기반 사용자 승인 게이트 — 아래 전부입니다.
+
+---
+
+> **[Starter Series](https://github.com/starter-series)** — 재사용 가능한 출시 도구. `shotkit`은 unscoped 패키지 이름이며, 공개 npm 설치는 릴리스 게이트로 README가 게시 상태를 가정하지 않습니다.
 
 ## 상태와 범위 (Status & Scope)
 
-- **현재 구현된 것** — Playwright 캡처 **엔진**(빌드 → `--load-extension`으로 *빌드된* 익스텐션 로드 → scene 구동 → 스크린샷 → 캡션/면책 밴드 → HTML 프로모 타일 → DOM 캡션 오버레이가 들어간 데모 `webm` → `STORE_LISTING.md`에서 문안 추출 → `storyboard.json` / `captions.json` / `shotkit-manifest.json` handoff pack), **에이전트 계약**을 갖춘 **CLI**(`shotkit` — `--json` 머신 출력, 선택적 `path` 인자, `0/1/2` 종료 코드), 양쪽 용도 **사이즈 프리셋**(CWS `1280×800`/`440×280`, SNS `1200×675`/`1280×720`/`1200×630`/`1080×1080`), **path-traversal 안전** 로컬 픽스처 서버, 프로그램 API(`capture()`), **Claude Code skill**([`skills/capture/`](skills/capture/SKILL.md)), 셸을 가진 어떤 코딩 에이전트든 호출법을 읽을 수 있는 **AGENTS.md 실행 블록**.
-- **스토리 렌더러** — 데모 config는 단일 `demo` 또는 여러 `demos: []`, timed `captions`, click highlight, cursor pacing, 정적 zoom/crop, thumbnail frame, storyboard lint, 작은 `demo` helper(`caption`, `step`, `wait`, `click`)를 쓸 수 있습니다. 에이전트가 기능 체크리스트를 20~40초짜리 before → action → result → safety/restore 캠페인 컷으로 바꾸기 쉬운 정도까지만 제공합니다.
+- **현재 구현된 것** — Playwright로 *실제 출하 빌드*를 실행하고 하나의 story를 `cws-youtube`, `x`, `youtube-shorts` variant로 확장합니다. target별 viewport/H.264/trim/caption/thumbnail을 자동 적용하고, 최종 MP4의 ffprobe metadata와 ffmpeg 전체 decode를 검사하며, thumbnail 크기와 픽셀의 blank-frame 여부까지 확인해 기술 상태 `machineStatus`(`publish-ready`, `needs-fix`, `blocked`)를 산출합니다. 별도의 해시 기반 승인 게이트가 전달 상태 `awaiting-approval`, `changes-requested`, `approved`를 관리합니다. manifest에는 에이전트가 실행할 retry action, source evidence와 사용자 승인 상태가 함께 남습니다.
+- **스토리 렌더러** — 데모 config는 단일 `demo` 또는 여러 `demos: []`, timed `captions`, click highlight, 녹화 가능한 native select 변경, cursor pacing, 정적 zoom/crop, thumbnail frame, storyboard lint, 작은 `demo` helper(`caption`, `step`, `wait`, `click`, `select`)를 쓸 수 있습니다. 에이전트가 기능 체크리스트를 20~40초짜리 before → action → result → safety/restore 캠페인 컷으로 바꾸기 쉬운 정도까지만 제공합니다.
 - **설계 의도** — *엔진 1개, 표면 여러 개 — 단, 도구 성격에 맞는 표면.* shotkit은 무겁고 파일을 산출하는 빌드 도구라 표면이 CLI(+`--json`)·skill·CI입니다 — MCP가 아니라(하지 않기로 한 것 참고). 캡처는 **결정적**(로그인 불필요 픽스처, freeze된 데이터)이고, 실행이 **실제 빌드본 smoke test를 겸함** — 스크린샷이 나온다 = 그 기능이 출하 코드에서 렌더됨. 모든 샷에 면책 밴드를 합성해 **상표 안전**.
-- **하지 않기로 한 것** — shotkit 내부 **MCP 서버**(셸이 있는 에이전트에는 `--json` + skill이 더 나은 계약). repo별 **scene 설정** 제거(어떤 화면이 *당신의* money shot인지는 환원 불가한 의도 — `shotkit.config.js`에 둠). 범용 동영상 편집기나 호스티드 데모 플랫폼. shotkit은 source evidence와 handoff pack을 만들고, Screen Studio/Canva/Supademo/향후 MCP connector가 polish를 이어받게 합니다.
+- **하지 않기로 한 것** — shotkit 내부 MCP 서버, repo별 story/action 의도 제거, 범용 timeline editor, 호스티드 데모 플랫폼. 반복 가능한 채널 작업은 자동화하고 수동 편집기는 명시적으로 요청한 fallback일 때만 노출합니다.
 - **공개하지 않음** — 없음.
 
 ## 설치
@@ -53,48 +76,152 @@ npx shotkit
 
 ## 사용
 
-`shotkit.config.js`(repo별 이음새 — 영문 README의 contract 참고)를 두고:
+제로 컨피그 경로는 파일이 전혀 필요 없습니다:
+
+```bash
+shotkit demo http://localhost:3000   # 아무 웹 앱의 캡션 데모 클립
+shotkit demo ./dist --duration 30    # 정적 디렉토리, 더 긴 클립
+shotkit demo --help                  # 전체 옵션
+```
+
+전체 파이프라인은 `shotkit.config.js`(repo별 이음새 — 영문 README의
+contract 참고)를 두고:
 
 ```bash
 shotkit                         # outDir에 전부 산출
 shotkit --scene 01-feature      # 특정 scene/타일/데모/demos 항목 또는 "description"만
+shotkit --target x              # 설정된 X variant만 제작/재시도
+shotkit --attempt 2 --json      # 두 번째 자동 수정 시도
+shotkit --campaign              # Recipe 선택, 자동 제작, 최종 영상 검수
+shotkit --calibrate             # 로컬 구도 Calibrator 열기
 shotkit --no-video              # 스크린캐스트 생략
 shotkit --no-build              # 이미 빌드된 번들 사용
 shotkit ../my-extension --json  # 다른 체크아웃 대상 실행; 결과 JSON을 stdout에
 ```
 
-산출물은 `outDir`(기본 `store-assets/`): `<scene>.png`, `<promoTile>.png`, `<demo>.webm`, 선택적 `<demo>.mp4`, 선택적 `<demo>-thumbnail.png`, `description.md`, 그리고 기본값으로 `storyboard.json`, `captions.json`, `shotkit-manifest.json`입니다(`handoff: false`면 handoff 파일을 끕니다).
+산출물은 `outDir`(기본 `store-assets/`): `<scene>.png`, `<promoTile>.png`, `<demo>.webm`, 선택적 `<demo>.mp4`, 선택적 `<demo>-thumbnail.png`, `description.md`, 그리고 기본값으로 `storyboard.json`, `captions.json`, `shotkit-manifest.json`, `schemas/*.schema.json`입니다(`handoff: false`면 handoff pack을 끕니다). 첫 검수 결정 시 `shotkit-approval.json`이 생성됩니다.
+
+### 캠페인 대시보드
+
+`shotkit --campaign`은 로컬 Campaign Dashboard를 엽니다. 채널 target이 있는
+story는 기본적으로 하나의 Campaign Recipe가 되며, Recipe가 설정된 channel
+profile 전체를 소유합니다. 따라서 사용자는 채널 조합이나 영상 편집 설정을
+반복해서 고르지 않고 Recipe 하나를 선택한 뒤 최종 산출물만 검수합니다.
+
+선택한 Recipe는 `shotkit-campaign.json`에 별도로 기록됩니다. 이 파일은 config,
+manifest, calibration, approval 계약을 바꾸지 않습니다. `config.campaign.recipes`
+로 Recipe의 이름과 설명을 붙일 수 있으며, calibration을 사용하지 않는 repo도
+Campaign Dashboard에서 제작과 digest-bound 승인을 사용할 수 있습니다.
+구도 예외가 있을 때만 Advanced의 기존 Calibrator를 엽니다.
+
+Dashboard는 feedback과 산출물 상태를 기록하지만 소비자 repo의 source/config를
+직접 수정하지는 않습니다. 따라서 `needs-fix`나 Request changes가 발생하면 연결된
+코딩 에이전트가 manifest 또는 승인 메모를 읽고 수정·재촬영해야 합니다. UI는 이를
+대기 상태로 표시하며 실제 capture가 실행 중일 때만 작업 중이라고 표시합니다.
+자동 시도 횟수를 소진한 target은 활성 재시도처럼 보이지 않고 `blocked`로 유지됩니다.
+
+### 구도 Calibrator
+
+자동 재시도로 세로 구도가 해결되지 않는 repo는 `config.calibration`에 추적할
+`shotkit.calibration.json` 경로와 허용할 layout preset 목록을 선언할 수
+있습니다. `shotkit --calibrate`는 실제 캡처 MP4를 사용하는 로컬 대시보드를
+열며, 조정 범위를 layout preset, 1.00~1.20 framing, caption 위치/표현, 최대
+3개의 protected region으로 제한합니다. 저장은 CommonJS config를 고치지 않고
+JSON만 기록합니다. 현재 profile로 실제 story를 재촬영해 `publish-ready`가
+나오고 profile hash까지 일치할 때만 Verified가 됩니다.
+
+이는 상시 수동 검수나 범용 timeline/layer editor가 아니라 예외 구도용
+calibration surface입니다. 에이전트가 이 제어면에서 구도를 수정하고 기술 QA를
+통과시키면, 사용자는 Campaign Dashboard에서 최종 영상만 확인해 Approve 또는
+Request changes를 선택합니다. 기존 Calibrator는 Advanced/Debug 도구로 그대로
+남습니다.
 
 ### Handoff Pack
 
-shotkit은 영상 편집기를 이기려는 도구가 아닙니다. 편집기 앞단의 starter
-layer입니다. 실제 빌드된 확장을 캡처하고, source clip과 “이 클립이 무슨
-의도인지”를 같이 남깁니다.
+handoff pack은 에이전트가 target별 최종 파일을 검증하고 자동 수정·재촬영하는
+내부 machine boundary입니다. 사람이 JSON을 읽거나 영상을 편집하도록 넘기는
+단계가 아닙니다. 사용자는 수정 과정이 아니라 렌더링된 최종 후보를 검수합니다.
 
 - `storyboard.json` — demo 이름, audience, viewport, trim/framing hint, beats,
   구조화된 storyboard lint warning, 추천 next tool.
-- `captions.json` — demo별 caption timing/text.
-- `shotkit-manifest.json` — asset 목록, output path, role, project info,
-  추천 handoff flow와 다음 도구 후보 `adapterHints`.
+- `captions.json` — demo별 caption timing/text와 실제 렌더링 타이포그래피 QA.
+- `shotkit-manifest.json` — entrypoint. asset inventory/integrity, 실행·freshness
+  metadata, 로컬 schema path, `handoff.automation`의 target 검사/retry action,
+  `handoff.approval`의 최종 게시 게이트.
+- `shotkit-approval.json` — 첫 결정 후 생성되며 Approve 또는 Request changes를
+  정확한 미디어 SHA-256과 calibration profile hash에 결합합니다.
+- `schemas/*.schema.json` — 설치된 npm 패키지 없이도 검증할 수 있도록
+  모든 pack에 함께 복사되는 계약.
 
-이렇게 하면 에이전트나 MCP connector가 manifest를 읽고 mp4/webm,
-thumbnail, captions를 Screen Studio, Canva, Supademo 또는 다른 편집 도구로
-넘기기 쉽습니다. repo fixture와 storyboard는 반복 가능한 source of truth로
-남습니다.
+target workflow에서는 수동 editor hint를 기본으로 숨기며,
+`automation.manualFallback:true`일 때만 명시적으로 다시 노출합니다.
 
-manifest는 downstream 연결 후보도 제안합니다. 예를 들어 thumbnail/storyboard
-재료가 충분하면 `figma-mcp`가 나오고, AI video campaign variant에는
-`higgsfield`, avatar/presenter 계열에는 `longcat-video-avatar`가 나옵니다.
-추가 입력이 필요한 경우 `needs-input`으로 표시됩니다. shotkit은 다음 도구를
-제안하고, 실제 연결은 에이전트의 MCP/tool 환경이 수행합니다.
+다국어 campaign variant는 실행 환경의 시스템 폰트 대신 locale과 프로젝트 내부
+폰트를 명시할 수 있습니다. Shotkit은 작성된 글자의 glyph coverage를 먼저
+확인하고, 필요한 글자만 WOFF2로 줄여 녹화 페이지에 삽입한 뒤 브라우저 로드를
+기다립니다. 각 caption은 선언된 최소 크기와 최대 줄 수 안에서만 자동으로
+축소됩니다.
 
-handoff 규약은 버전과 schema를 갖습니다. `$schema` 값은 URN 식별자이고,
-실제 schema 파일은 설치된 패키지의 `schemas/`에서 읽으면 됩니다.
+```js
+captionOptions: {
+  mode: 'focus',
+  appearance: 'outline',
+  typography: {
+    locale: 'ko-KR',
+    family: '"Campaign Sans", sans-serif',
+    weight: 800,
+    minFontSize: 28,
+    maxFontSize: 44,
+    maxLines: 2,
+    fit: 'shrink',
+    fonts: [{
+      family: 'Campaign Sans',
+      from: '.shotkit/fonts/campaign-sans.woff2',
+      weight: '100 900',
+    }],
+  },
+}
+```
+
+폰트 경로는 consumer 프로젝트 내부여야 합니다. OTF, TTF, WOFF, WOFF2를
+최대 4개, 파일당 24 MB까지 사용할 수 있습니다. focus caption은 locale-aware
+word segmentation으로 원문의 문장부호와 구분자를 보존하므로 일본어·중국어에
+임의의 공백을 넣지 않습니다. 누락 glyph, 폰트 로드 실패, 최소 크기 overflow,
+불균형한 두 줄 구성은 에이전트가 수정할 구조화 warning이 됩니다.
+
+handoff 규약은 버전과 schema를 갖습니다. `$schema` 값은 안정적인 URN
+식별자이고, `handoff.schemaFiles`가 output pack 안의 실제 schema로 연결합니다.
+자기 자신을 참조하는 manifest를 제외한 실파일에는 byte 크기와 SHA-256이
+기록됩니다.
 [`docs/handoff-conventions.md`](docs/handoff-conventions.md)와
 [`schemas/`](schemas/)를 보세요.
 
 프로젝트별 적용 계획 문서는 repo-internal로 유지하며 npm 패키지에는 포함하지
 않습니다.
+
+### 자동 채널 target
+
+제품 동작과 caption은 하나의 story로 두고 목적지만 선언합니다.
+
+```js
+demo: {
+  name: 'skillbridge',
+  targets: ['cws-youtube', 'x', 'youtube-shorts'],
+  captions: [
+    { at: 0.5, text: 'Translate the lesson in place' },
+    { at: 18, text: 'Restore the original anytime' },
+  ],
+  async run({ page, env, demo, target }) { /* 재사용 가능한 제품 동작 */ },
+}
+```
+
+Shotkit은 이를 target별 이름으로 확장하고 가로형은 1280×720, Shorts는
+720×1280로 촬영합니다. H.264/yuv420p, 30초 cap, poster frame과 최종 파일
+검사를 자동 적용합니다. `needs-fix`는 사용자 검토 요청이 아니라 에이전트가
+config를 수정하고 `automation.retryScenes[]`를 다시 실행하라는 뜻입니다.
+기본 3회가 소진된 뒤에만 `blocked`로 기술 입력을 요청합니다. 기술 QA가 끝나면
+사용자는 최종 후보를 반드시 검수합니다. Request changes의 메모는 다음 에이전트
+수정 작업이 되고, Approve는 검수한 정확한 파일 해시에만 게시를 허용합니다.
 
 ### CWS 자산과 SNS 데모 클립
 
@@ -143,17 +270,22 @@ demo: {
 }
 ```
 
-`demo.click(selectorOrLocator)`는 녹화에 synthetic pointer와 click ripple을
+`demo.click(selectorOrLocator)`는 녹화에 고대비 화살표 cursor와 click ripple을
 보여줍니다. `{ moveMs, beforeMs, holdMs }`로 속도를 조절하고,
 `{ highlight: false }`로 끌 수 있습니다. selector가 어색한 경우 Playwright
 Locator나 `{ x, y }` point도 받을 수 있습니다. 영상 framing은 작게 유지합니다:
+
+native `<select>` popup은 OS/browser UI라 Playwright page 녹화에 잡히지 않습니다.
+`demo.select('#language', 'ko', { moveMs: 550, openMs: 900, holdMs: 700 })`를
+사용하면 실제 DOM option을 페이지 안에 미러링하고 cursor를 보여준 뒤 실제
+선택을 적용합니다.
 
 ```js
 demo: {
   crop: { x: 120, y: 0, width: 1040, height: 720 },
   zoom: { scale: 1.08 },
   thumbnail: { at: 1.5 },
-  storyboardLint: false,
+  storyboardLint: false, // legacy/짧은 smoke clip 전용
 }
 ```
 
@@ -162,7 +294,11 @@ storyboard lint는 기본으로 켜져 있으며 실패 대신 warning을 남깁
 형태로 기록되므로, 에이전트가 다음 패스에서 `shotkit.config.js`를 고치기
 쉽습니다. mp4 누락, 3초 이후 첫 캡션, 홀수 영상 크기, 너무 긴 캡션,
 safety/restore beat 누락, crop/zoom edge risk, 20~40초 바깥 trim을
-잡아줍니다.
+잡아줍니다. 실제 녹화 중에는 모든 caption frame의 위치, overflow, 줄 수,
+outline, 시간 오차와 함께 폰트 적용 여부, 적용된 글자 크기, 줄 균형도
+측정합니다.
+자동 channel target은 lint가 켜져 있어야 하며, `storyboardLint:false`이면
+automation status가 `needs-fix`가 됩니다.
 
 여러 홍보 컷이 필요하면 단일 `demo` 대신 `demos: []`를 쓰십시오. 각 항목은
 `<name>.webm`과 선택적 `<name>.mp4`를 만들고, `--scene <name>`으로 하나만
@@ -200,9 +336,15 @@ result → safety/restore, 짧은 캡션, 느린 cursor/click/typing, X용 mp4�
 ### 에이전트 계약 (`--json`)
 
 `shotkit [path] --json`은 stdout에 **정확히 하나의 JSON 객체**를 출력합니다
-(진행 로그는 stderr로 이동): `{ "ok": true, "outDir": …, "produced": [절대경로…] }`.
-종료 코드: `0` 정상 · `1` 런타임 실패(stderr에 `{"ok":false,"error":…}`) ·
-`2` 사용법 오류/설정 없음. 에이전트 연결은 [`AGENTS.md`](AGENTS.md) 실행 블록
+(진행 로그는 stderr로 이동): `{ "ok": true, "status": "awaiting-approval", "machineStatus": "publish-ready", "outDir": …, "manifest": …, "produced": [절대경로…] }`.
+종료 코드: `0` 정상 · `1` 런타임 실패 · `2` 사용법 오류/설정 없음입니다.
+`ok:true`는 실행 완료, `machineStatus:publish-ready`는 story lint, H.264/yuv420p,
+실제 해상도·길이, thumbnail, nonblank-frame, integrity와 target profile 검사를
+통과했다는 뜻입니다. 사용자가 영상을 검수하기 전 전달 `status`는
+`awaiting-approval`이며, 정확한 파일 해시를 승인해야 `approved`가 됩니다.
+재촬영이나 profile 변경은 이전 승인을 무효화합니다. 권한 있는 connector도
+`handoff.approval.publishable`이 true일 때만 게시할 수 있습니다. 실패
+payload도 stdout의 단일 JSON 객체(`{"ok":false,"error":…}`)를 사용합니다. 에이전트 연결은 [`AGENTS.md`](AGENTS.md) 실행 블록
 (Claude Code·Codex·Cursor·Gemini CLI 등이 읽음)과 [`skills/capture/`](skills/capture/SKILL.md)
 skill(Agent Skills 표준 — 호환 도구의 skills 디렉터리에 폴더째 복사)을 참고하십시오.
 

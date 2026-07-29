@@ -2,8 +2,9 @@
 /*
  * shotkit CLI — thin wrapper over capture().
  *
- *   shotkit [path] [--config <path>] [--scene <name>]... [--json]
+ *   shotkit [path] [--config <path>] [--scene <name>]... [--json|--calibrate]
  *           [--no-video] [--no-build] [--live-gt] [--freeze]
+ *   shotkit demo <url|dir|file.html> [--out <dir>] [--duration <s>] [--json]
  *
  * `path` (optional positional) is the repo to run against (default: cwd) —
  * lets an agent invoke shotkit against any checkout without cd'ing first.
@@ -15,42 +16,16 @@
  * to stderr, so agents can parse stdout blindly.
  */
 
-const fs = require('fs');
-const path = require('path');
-const { capture } = require('../src');
-const { parseArgs, resolveConfigPath, USAGE } = require('../src/cli');
+const { runCli } = require('../src/cli-runner');
 
 async function main() {
-  const opts = parseArgs(process.argv.slice(2));
-  if (opts.help) {
-    process.stdout.write(USAGE);
-    return;
-  }
-  if (opts.errors.length) {
-    const msg = opts.errors.join('; ');
-    if (opts.json) process.stderr.write(JSON.stringify({ ok: false, error: msg, code: 2 }) + '\n');
-    else console.error(`[shotkit] ${msg}\n\n${USAGE}`);
-    process.exit(2);
-  }
-  const cwd = path.resolve(process.cwd(), opts.path || '.');
-  const configPath = resolveConfigPath(opts.config, cwd);
-  if (!configPath || !fs.existsSync(configPath)) {
-    const msg = `No config found (looked for shotkit.config.js / store.config.js in ${cwd}). Pass --config <path>.`;
-    if (opts.json) process.stderr.write(JSON.stringify({ ok: false, error: msg, code: 2 }) + '\n');
-    else console.error(`[shotkit] ${msg}`);
-    process.exit(2);
-  }
-  const config = require(configPath);
-  // In JSON mode, route human-readable progress to stderr so stdout stays pure.
-  const log = opts.json ? (m) => process.stderr.write(`[shotkit] ${m}\n`) : undefined;
-  const { produced, outDir } = await capture(config, { ...opts, cwd, log });
-  if (opts.json) process.stdout.write(JSON.stringify({ ok: true, outDir, produced }) + '\n');
+  process.exitCode = await runCli(process.argv.slice(2));
 }
 
 main().catch((err) => {
-  const msg = err && err.message ? err.message : String(err);
   if (process.argv.includes('--json')) {
-    process.stderr.write(JSON.stringify({ ok: false, error: msg, code: 1 }) + '\n');
+    const msg = err && err.message ? err.message : String(err);
+    process.stdout.write(JSON.stringify({ ok: false, error: msg, code: 1 }) + '\n');
   } else {
     console.error('[shotkit] FAILED:', err && err.stack ? err.stack : err);
   }

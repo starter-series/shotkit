@@ -1,7 +1,7 @@
 {
   "name": "shotkit",
-  "version": "1.3.0",
-  "description": "Capture Chrome Web Store assets and SNS demo handoff packs from a built browser extension with Playwright.",
+  "version": "1.4.0",
+  "description": "Record a captioned demo video of any web app with one command — then grow into autonomous CWS/X/YouTube launch assets with final-file QA and a human approval gate.",
   "main": "src/index.js",
   "exports": {
     ".": "./src/index.js",
@@ -13,14 +13,18 @@
   "files": [
     "src",
     "bin",
+    "calibrator",
+    "campaign",
     "skills/capture",
+    "skills/demo",
     "docs/handoff-conventions.md",
     "schemas"
   ],
   "scripts": {
-    "lint": "eslint src/ bin/ scripts/ test/",
+    "lint": "eslint src/ bin/ calibrator/ campaign/ scripts/ test/",
     "research": "node scripts/research-to-product-fit.mjs",
-    "test": "jest --verbose --coverage",
+    "test": "npm run test:campaign && jest --verbose --coverage",
+    "test:campaign": "node --test test/campaign-ui.node.mjs",
     "pack:check": "node scripts/verify-pack.mjs",
     "install:browser": "playwright install chromium"
   },
@@ -29,6 +33,12 @@
     "url": "https://github.com/starter-series/shotkit.git"
   },
   "keywords": [
+    "screen-recording",
+    "proof",
+    "coding-agent",
+    "agent-skill",
+    "claude-code",
+    "codex",
     "playwright",
     "screenshot",
     "chrome-web-store",
@@ -37,6 +47,12 @@
     "og-image",
     "store-assets",
     "demo-video",
+    "launch-assets",
+    "agent-ready",
+    "json-schema",
+    "product-evidence",
+    "publish-ready",
+    "video-automation",
     "storyboard",
     "handoff"
   ],
@@ -46,31 +62,66 @@
     "node": ">=22"
   },
   "dependencies": {
-    "playwright": "^1.60.0"
+    "ajv": "^8.20.0",
+    "ajv-formats": "^3.0.1",
+    "fontkit": "^2.0.4",
+    "playwright": "^1.60.0",
+    "pngjs": "^7.0.0",
+    "subset-font": "^2.5.0"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
-    "ajv": "^8.20.0",
-    "ajv-formats": "^3.0.1",
     "eslint": "^10.4.1",
     "globals": "^17.5.0",
     "jest": "^30.3.0"
   },
   "jest": {
     "collectCoverageFrom": [
+      "src/channels.js",
+      "src/approval.js",
+      "src/calibration.js",
+      "src/calibrator-server.js",
+      "src/calibrator-http.js",
+      "src/calibrator-routes.js",
+      "src/calibrator-state.js",
+      "src/campaign.js",
+      "src/campaign-dashboard.js",
+      "src/calibration-verification.js",
       "src/presets.js",
       "src/describe.js",
       "src/extension.js",
       "src/serve.js",
       "src/cli.js",
+      "src/cli-runner.js",
+      "src/index.js",
+      "src/capture.js",
+      "src/capture-demo.js",
+      "src/capture-lifecycle.js",
+      "src/capture-plan.js",
+      "src/capture-static.js",
       "src/video.js",
       "src/demo.js",
+      "src/caption-language.js",
+      "src/caption-typography.js",
+      "src/demo-caption-focus.js",
+      "src/demo-caption-qa.js",
+      "src/demo-select.js",
+      "src/demo-time.js",
+      "src/demo-storyboard.js",
       "src/handoff.js",
-      "src/integrations.js"
+      "src/handoff-files.js",
+      "src/handoff-validator.js",
+      "src/image-qa.js",
+      "src/integrations.js",
+      "src/publish.js",
+      "src/review-request.js"
     ],
     "coverageReporters": [
       "text",
       "text-summary"
     ]
+  },
+  "overrides": {
+    "brace-expansion": "5.0.8"
   }
 }

@@ -1,0 +1,274 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="light">
+    <title>Shotkit Calibrator</title>
+    <link rel="stylesheet" href="./styles.css">
+  </head>
+  <body>
+    <div class="app" id="app" aria-busy="true">
+      <header class="toolbar">
+        <div class="brand-lockup">
+          <span class="brand-mark" aria-hidden="true">SK</span>
+          <div class="brand-copy">
+            <strong>Shotkit Calibrator</strong>
+            <span id="projectName">Loading project</span>
+          </div>
+        </div>
+
+        <div class="toolbar-status">
+          <span class="status-dot is-neutral" id="statusDot" aria-hidden="true"></span>
+          <span class="target-status" id="targetStatus" role="status" aria-live="polite">Loading</span>
+          <span class="operation-state" id="operationState" role="status" aria-live="polite">Connecting</span>
+        </div>
+
+        <div class="toolbar-actions">
+          <a class="icon-button toolbar-link" href="/campaign/" title="Open campaign dashboard" aria-label="Open campaign dashboard">
+            <svg class="icon" aria-hidden="true"><use href="#icon-grid"></use></svg>
+          </a>
+          <button class="button button-secondary" id="recaptureButton" type="button" title="Recapture selected target" disabled>
+            <svg class="icon" aria-hidden="true"><use href="#icon-rotate"></use></svg>
+            <span class="button-label">Recapture</span>
+          </button>
+          <button class="button button-primary" id="saveButton" type="button" title="Save profile" disabled>
+            <svg class="icon" aria-hidden="true"><use href="#icon-save"></use></svg>
+            <span class="button-label">Save</span>
+          </button>
+          <button class="button button-review" id="requestChangesButton" type="button" title="Request changes" disabled>
+            <svg class="icon" aria-hidden="true"><use href="#icon-message"></use></svg>
+            <span class="button-label">Request changes</span>
+          </button>
+          <button class="button button-success" id="approveButton" type="button" title="Approve this capture" disabled>
+            <svg class="icon" aria-hidden="true"><use href="#icon-check"></use></svg>
+            <span class="button-label">Approve</span>
+          </button>
+        </div>
+      </header>
+
+      <main class="workspace">
+        <aside class="left-rail" aria-label="Capture targets">
+          <section class="rail-section target-section">
+            <div class="section-heading">
+              <h2>Stories &amp; targets</h2>
+              <span id="targetCount">0</span>
+            </div>
+            <nav class="target-list" id="targetList" aria-label="Story and target list">
+              <div class="rail-placeholder" aria-hidden="true"></div>
+              <div class="rail-placeholder" aria-hidden="true"></div>
+              <div class="rail-placeholder" aria-hidden="true"></div>
+            </nav>
+          </section>
+
+          <section class="rail-section layout-section">
+            <div class="section-heading">
+              <h2>Layout preset</h2>
+              <span id="layoutCount">0</span>
+            </div>
+            <div class="layout-list" id="layoutList" role="group" aria-label="Layout presets"></div>
+          </section>
+        </aside>
+
+        <section class="stage-panel" aria-label="Target preview">
+          <header class="stage-header">
+            <div class="stage-title">
+              <strong id="captureName">No target selected</strong>
+              <span id="captureIdentity">--</span>
+            </div>
+            <div class="stage-meta">
+              <button class="warning-summary" id="warningSummary" type="button" title="View target warnings" aria-label="View target warnings" hidden>
+                <svg class="icon" aria-hidden="true"><use href="#icon-alert"></use></svg>
+                <span id="warningCount">0</span>
+              </button>
+              <span class="viewport-label" id="viewportLabel">-- x --</span>
+            </div>
+          </header>
+
+          <div class="stage-surface" id="stageSurface">
+            <div class="canvas-frame" id="canvasFrame">
+              <video id="previewVideo" controls playsinline preload="metadata" aria-label="Captured target video"></video>
+              <canvas class="preview-canvas" id="previewCanvas" aria-hidden="true" hidden></canvas>
+              <img class="preview-poster" id="previewPoster" alt="Captured target thumbnail" hidden>
+              <div class="media-empty" id="mediaEmpty">
+                <span class="empty-mark" aria-hidden="true">SK</span>
+                <strong>No capture available</strong>
+              </div>
+
+              <div class="safe-guides" aria-hidden="true">
+                <div class="safe-guide action-safe"><span>Action safe</span></div>
+                <div class="safe-guide title-safe"><span>Title safe</span></div>
+              </div>
+
+              <div class="caption-lane" id="captionLane" data-position="bottom" data-appearance="panel" aria-label="Caption lane preview">
+                <span id="captionPreview">Caption preview</span>
+              </div>
+
+              <div class="region-layer" id="regionLayer" aria-hidden="true"></div>
+              <div class="focus-point" id="focusPoint" aria-hidden="true" title="Drag to set focus point">
+                <span aria-hidden="true"></span>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <aside class="inspector" aria-label="Calibration profile inspector">
+          <header class="inspector-header">
+            <div>
+              <h2>Profile</h2>
+              <span id="profileName">No selection</span>
+            </div>
+            <span class="profile-state" id="profileState">Read only</span>
+          </header>
+
+          <form id="profileForm">
+            <section class="inspector-section review-section">
+              <div class="review-heading">
+                <h3>Final review</h3>
+                <span class="review-state" id="reviewState" role="status" aria-live="polite">Not ready</span>
+              </div>
+              <label class="field-label" for="reviewNote">Feedback</label>
+              <textarea id="reviewNote" maxlength="2000" rows="3" placeholder="What should the agent change?"></textarea>
+            </section>
+
+            <fieldset class="inspector-section">
+              <legend>Caption</legend>
+
+              <label class="field-label">Position</label>
+              <div class="segmented-control" id="captionPosition">
+                <input type="radio" name="captionPosition" id="positionLeft" value="bottom-left">
+                <label for="positionLeft">Lower left</label>
+                <input type="radio" name="captionPosition" id="positionCenter" value="bottom">
+                <label for="positionCenter">Lower center</label>
+              </div>
+
+              <label class="field-label">Appearance</label>
+              <div class="segmented-control" id="captionAppearance">
+                <input type="radio" name="captionAppearance" id="appearancePanel" value="panel">
+                <label for="appearancePanel"><span class="appearance-swatch panel-swatch" aria-hidden="true"></span>Panel</label>
+                <input type="radio" name="captionAppearance" id="appearanceOutline" value="outline">
+                <label for="appearanceOutline"><span class="appearance-swatch outline-swatch" aria-hidden="true"></span>Outline</label>
+              </div>
+
+              <div class="control-heading">
+                <label for="bottomOffsetRange">Bottom offset</label>
+                <span>px</span>
+              </div>
+              <div class="range-control">
+                <input id="bottomOffsetRange" type="range" min="0" max="1184" step="1" value="80">
+                <input id="bottomOffsetNumber" type="number" min="0" max="1184" step="1" value="80" aria-label="Bottom offset in pixels">
+              </div>
+            </fieldset>
+
+            <fieldset class="inspector-section">
+              <legend>Framing</legend>
+
+              <div class="control-heading">
+                <label for="zoomRange">Zoom</label>
+                <span>1.00-1.20</span>
+              </div>
+              <div class="range-control">
+                <input id="zoomRange" type="range" min="1" max="1.2" step="0.01" value="1">
+                <input id="zoomNumber" type="number" min="1" max="1.2" step="0.01" value="1" aria-label="Zoom scale">
+              </div>
+
+              <div class="field-label-row">
+                <label for="focusX">Focus point</label>
+                <span>percent</span>
+              </div>
+              <div class="coordinate-grid">
+                <label><span>X</span><input id="focusX" type="number" min="0" max="100" step="1" value="50" aria-label="Focus point X percent"></label>
+                <label><span>Y</span><input id="focusY" type="number" min="0" max="100" step="1" value="50" aria-label="Focus point Y percent"></label>
+              </div>
+            </fieldset>
+
+            <fieldset class="inspector-section regions-section">
+              <legend>Protected regions</legend>
+              <div class="region-toolbar">
+                <div class="region-tabs" id="regionTabs" role="group" aria-label="Protected regions"></div>
+                <div class="region-actions">
+                  <button class="icon-button" id="deleteRegionButton" type="button" title="Delete selected region" aria-label="Delete selected protected region" disabled>
+                    <svg class="icon" aria-hidden="true"><use href="#icon-trash"></use></svg>
+                  </button>
+                  <button class="icon-button" id="addRegionButton" type="button" title="Add protected region" aria-label="Add protected region">
+                    <svg class="icon" aria-hidden="true"><use href="#icon-plus"></use></svg>
+                  </button>
+                </div>
+              </div>
+
+              <div class="region-empty" id="regionEmpty">No protected regions</div>
+              <div class="region-fields" id="regionFields" hidden>
+                <label><span>X</span><input id="regionX" type="number" min="0" max="100" step="0.5" aria-label="Protected region X percent"></label>
+                <label><span>Y</span><input id="regionY" type="number" min="0" max="100" step="0.5" aria-label="Protected region Y percent"></label>
+                <label><span>W</span><input id="regionWidth" type="number" min="2" max="100" step="0.5" aria-label="Protected region width percent"></label>
+                <label><span>H</span><input id="regionHeight" type="number" min="2" max="100" step="0.5" aria-label="Protected region height percent"></label>
+              </div>
+            </fieldset>
+
+            <section class="inspector-section warnings-section" id="warningsSection">
+              <div class="warnings-heading">
+                <h3>Warnings</h3>
+                <span id="warningsBadge">0</span>
+              </div>
+              <ul class="warnings-list" id="warningsList">
+                <li class="no-warnings">No warnings</li>
+              </ul>
+            </section>
+          </form>
+        </aside>
+
+        <section class="beat-strip" aria-label="Story beats">
+          <header class="beat-header">
+            <div>
+              <h2>Beats</h2>
+              <span id="beatSummary">0 markers</span>
+            </div>
+            <output id="timeReadout" aria-live="off">00:00 / 00:00</output>
+          </header>
+          <div class="beat-list" id="beatList"></div>
+        </section>
+      </main>
+    </div>
+
+    <div class="notice" id="notice" role="alert" aria-live="assertive" hidden>
+      <strong id="noticeTitle">Request failed</strong>
+      <span id="noticeMessage"></span>
+      <button class="notice-close" id="noticeClose" type="button" aria-label="Dismiss message" title="Dismiss">&times;</button>
+    </div>
+
+    <svg class="icon-sprite" aria-hidden="true" focusable="false">
+      <symbol id="icon-save" viewBox="0 0 24 24">
+        <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2Z"></path>
+        <path d="M17 21v-8H7v8M7 3v5h8"></path>
+      </symbol>
+      <symbol id="icon-rotate" viewBox="0 0 24 24">
+        <path d="M21 12a9 9 0 1 1-2.64-6.36L21 8"></path>
+        <path d="M21 3v5h-5"></path>
+      </symbol>
+      <symbol id="icon-plus" viewBox="0 0 24 24">
+        <path d="M12 5v14M5 12h14"></path>
+      </symbol>
+      <symbol id="icon-trash" viewBox="0 0 24 24">
+        <path d="M3 6h18M8 6V4h8v2M19 6l-1 15H6L5 6M10 11v6M14 11v6"></path>
+      </symbol>
+      <symbol id="icon-alert" viewBox="0 0 24 24">
+        <path d="m21.73 18-8-14a2 2 0 0 0-3.46 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"></path>
+        <path d="M12 9v4M12 17h.01"></path>
+      </symbol>
+      <symbol id="icon-message" viewBox="0 0 24 24">
+        <path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4Z"></path>
+      </symbol>
+      <symbol id="icon-check" viewBox="0 0 24 24">
+        <path d="m5 12 4 4L19 6"></path>
+      </symbol>
+      <symbol id="icon-grid" viewBox="0 0 24 24">
+        <rect x="3" y="3" width="7" height="7" rx="1"></rect>
+        <rect x="14" y="3" width="7" height="7" rx="1"></rect>
+        <rect x="3" y="14" width="7" height="7" rx="1"></rect>
+        <rect x="14" y="14" width="7" height="7" rx="1"></rect>
+      </symbol>
+    </svg>
+
+    <script type="module" src="./app.js"></script>
+  </body>
+</html>

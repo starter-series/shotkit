@@ -17,11 +17,15 @@ module.exports = [
     },
   },
   {
-    files: ['test/**/*.js'],
+    files: ['test/**/*.{js,mjs}'],
     languageOptions: { globals: { ...globals.jest } },
   },
   {
     files: ['scripts/**/*.mjs'],
+    languageOptions: { sourceType: 'module' },
+  },
+  {
+    files: ['calibrator/**/*.js', 'campaign/**/*.js', 'test/**/*.mjs'],
     languageOptions: { sourceType: 'module' },
   },
   {

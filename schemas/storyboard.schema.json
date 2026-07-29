@@ -37,12 +37,41 @@
       "required": ["name", "audience", "viewport", "recommendedNextTool", "beats"],
       "properties": {
         "name": { "type": "string" },
+        "story": { "type": "string" },
+        "target": { "type": "string" },
+        "lintEnabled": { "type": "boolean" },
         "audience": { "type": "string" },
+        "channelProfile": {
+          "type": "object",
+          "additionalProperties": true,
+          "required": ["id", "label", "platform", "delivery", "specUrl"],
+          "properties": {
+            "id": { "type": "string" },
+            "label": { "type": "string" },
+            "platform": { "type": "string" },
+            "delivery": { "type": "string" },
+            "specUrl": { "type": "string", "format": "uri" }
+          }
+        },
         "preset": { "type": "string" },
         "viewport": { "$ref": "#/$defs/viewport" },
         "recommendedNextTool": { "type": "string" },
         "trim": { "type": ["object", "null"], "additionalProperties": true },
         "framing": { "type": "object", "additionalProperties": true },
+        "calibration": {
+          "type": ["object", "null"],
+          "required": ["profileHash", "protectedRegions"],
+          "properties": {
+            "profileHash": { "type": "string", "minLength": 1 },
+            "layoutPreset": { "type": "string" },
+            "protectedRegions": {
+              "type": "array",
+              "maxItems": 3,
+              "items": { "$ref": "#/$defs/protectedRegion" }
+            }
+          }
+        },
+        "captionStyle": { "$ref": "#/$defs/captionStyle" },
         "thumbnail": { "type": ["object", "boolean", "null"], "additionalProperties": true },
         "recommendedStory": { "type": "object", "additionalProperties": true },
         "beats": {
@@ -60,13 +89,58 @@
         "height": { "type": "integer", "minimum": 1 }
       }
     },
+    "captionStyle": {
+      "type": "object",
+      "required": ["mode", "position"],
+      "properties": {
+        "mode": { "enum": ["static", "focus"] },
+        "appearance": { "enum": ["panel", "outline"] },
+        "position": { "enum": ["bottom-left", "bottom"] },
+        "bottomOffset": { "type": "integer", "minimum": 0 },
+        "wordsPerChunk": { "type": "integer", "minimum": 1, "maximum": 6 },
+        "wordMs": { "type": "integer", "minimum": 120, "maximum": 2000 },
+        "activeColor": { "type": "string" },
+        "locale": { "type": "string", "minLength": 1 },
+        "direction": { "enum": ["ltr", "rtl"] },
+        "typography": {
+          "type": "object",
+          "additionalProperties": true,
+          "required": ["locale", "direction", "family", "minFontSize", "maxLines", "fit"],
+          "properties": {
+            "locale": { "type": "string", "minLength": 1 },
+            "direction": { "enum": ["ltr", "rtl"] },
+            "family": { "type": "string", "minLength": 1 },
+            "weight": { "type": "string" },
+            "minFontSize": { "type": "integer", "minimum": 12, "maximum": 96 },
+            "maxFontSize": { "type": "integer", "minimum": 12, "maximum": 120 },
+            "maxLines": { "type": "integer", "minimum": 1, "maximum": 3 },
+            "fit": { "enum": ["none", "shrink"] },
+            "minLineBalance": { "type": "number", "minimum": 0, "maximum": 1 },
+            "fontFamilies": { "type": "array", "maxItems": 4, "items": { "type": "string" } }
+          }
+        }
+      }
+    },
+    "protectedRegion": {
+      "type": "object",
+      "required": ["id", "x", "y", "width", "height"],
+      "properties": {
+        "id": { "type": "string" },
+        "label": { "type": "string" },
+        "x": { "type": "number", "minimum": 0 },
+        "y": { "type": "number", "minimum": 0 },
+        "width": { "type": "number", "exclusiveMinimum": 0 },
+        "height": { "type": "number", "exclusiveMinimum": 0 }
+      }
+    },
     "beat": {
       "type": "object",
       "required": ["at", "atMs", "text"],
       "properties": {
         "at": { "type": "number", "minimum": 0 },
         "atMs": { "type": "integer", "minimum": 0 },
-        "text": { "type": "string" }
+        "text": { "type": "string" },
+        "role": { "enum": ["result", "action", "proof", "safety", "restore", "cta"] }
       }
     },
     "lintSummary": {

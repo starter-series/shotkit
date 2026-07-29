@@ -1,7 +1,16 @@
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const { findFfmpeg, buildFfmpegArgs, buildThumbnailArgs, buildVideoFilter, INSTALL_HINT } = require('../src/video');
+const {
+  findFfmpeg,
+  probeVideo,
+  parseProbeOutput,
+  buildFfmpegArgs,
+  buildThumbnailArgs,
+  buildVideoFilter,
+  postProcessDemo,
+  INSTALL_HINT,
+} = require('../src/video');
 
 describe('buildFfmpegArgs', () => {
   test('mp4 conversion defaults: libx264, yuv420p, faststart, silent, even-dims', () => {
@@ -48,6 +57,96 @@ describe('buildFfmpegArgs', () => {
   });
 });
 
+describe('ffprobe metadata', () => {
+  test('normalizes final codec, dimensions, pixel format, and duration', () => {
+    expect(parseProbeOutput(JSON.stringify({
+      streams: [{ codec_name: 'h264', pix_fmt: 'yuv420p', width: 1280, height: 720 }],
+      format: { duration: '29.970000' },
+    }))).toEqual({
+      ok: true,
+      codec: 'h264',
+      pixelFormat: 'yuv420p',
+      width: 1280,
+      height: 720,
+      durationSeconds: 29.97,
+    });
+  });
+
+  test('rejects probe output without a video stream', () => {
+    expect(() => parseProbeOutput('{"streams":[],"format":{}}')).toThrow(/no video stream/);
+  });
+
+  test('fails closed when metadata is readable but the full MP4 decode is corrupt', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sk-probe-'));
+    const ffprobe = path.join(dir, 'ffprobe');
+    const ffmpeg = path.join(dir, 'ffmpeg');
+    const video = path.join(dir, 'truncated.mp4');
+    fs.writeFileSync(video, 'truncated');
+    fs.writeFileSync(ffprobe, `#!/usr/bin/env node
+if (process.argv.includes('-version')) {
+  console.log('ffprobe version fake');
+} else {
+  console.log(JSON.stringify({
+    streams: [{ codec_name: 'h264', pix_fmt: 'yuv420p', width: 720, height: 1280 }],
+    format: { duration: '21.680000' },
+  }));
+}
+`);
+    fs.writeFileSync(ffmpeg, `#!/usr/bin/env node
+if (process.argv.includes('-version')) {
+  console.log('ffmpeg version fake');
+  process.exit(0);
+}
+console.error('Invalid NAL unit: truncated input');
+process.exit(183);
+`);
+    fs.chmodSync(ffprobe, 0o755);
+    fs.chmodSync(ffmpeg, 0o755);
+
+    expect(probeVideo(video, {
+      SHOTKIT_FFPROBE: ffprobe,
+      SHOTKIT_FFMPEG: ffmpeg,
+      PATH: process.env.PATH,
+    })).toMatchObject({
+      ok: false,
+      codec: 'h264',
+      width: 720,
+      height: 1280,
+      error: expect.stringMatching(/failed full decode.*truncated input/i),
+    });
+  });
+
+  test('accepts a final MP4 only after metadata and full decode both pass', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sk-probe-'));
+    const ffprobe = path.join(dir, 'ffprobe');
+    const ffmpeg = path.join(dir, 'ffmpeg');
+    const video = path.join(dir, 'healthy.mp4');
+    fs.writeFileSync(video, 'healthy');
+    fs.writeFileSync(ffprobe, `#!/usr/bin/env node
+if (process.argv.includes('-version')) console.log('ffprobe version fake');
+else console.log('{"streams":[{"codec_name":"h264","pix_fmt":"yuv420p","width":1280,"height":720}],"format":{"duration":"30"}}');
+`);
+    fs.writeFileSync(ffmpeg, `#!/usr/bin/env node
+if (process.argv.includes('-version')) console.log('ffmpeg version fake');
+`);
+    fs.chmodSync(ffprobe, 0o755);
+    fs.chmodSync(ffmpeg, 0o755);
+
+    expect(probeVideo(video, {
+      SHOTKIT_FFPROBE: ffprobe,
+      SHOTKIT_FFMPEG: ffmpeg,
+      PATH: process.env.PATH,
+    })).toMatchObject({
+      ok: true,
+      codec: 'h264',
+      pixelFormat: 'yuv420p',
+      width: 1280,
+      height: 720,
+      durationSeconds: 30,
+    });
+  });
+});
+
 describe('video filter helpers', () => {
   test('default filter only enforces even dimensions', () => {
     expect(buildVideoFilter()).toBe('scale=trunc(iw/2)*2:trunc(ih/2)*2');
@@ -79,5 +178,34 @@ describe('findFfmpeg', () => {
 
   test('install hint names the env override', () => {
     expect(INSTALL_HINT).toMatch(/SHOTKIT_FFMPEG/);
+  });
+});
+
+describe('postProcessDemo cleanup', () => {
+  test('removes temp mp4 output when ffmpeg fails mid-encode', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sk-postprocess-'));
+    const fake = path.join(dir, 'fake-ffmpeg');
+    const webmPath = path.join(dir, 'demo.webm');
+    fs.writeFileSync(webmPath, 'webm');
+    fs.writeFileSync(fake, `#!/usr/bin/env node
+const fs = require('fs');
+if (process.argv.includes('-version')) {
+  console.log('ffmpeg version fake');
+  process.exit(0);
+}
+fs.writeFileSync(process.argv[process.argv.length - 1], 'partial');
+process.exit(1);
+`);
+    fs.chmodSync(fake, 0o755);
+
+    expect(() => postProcessDemo({
+      webmPath,
+      mp4: true,
+      log: () => {},
+      env: { SHOTKIT_FFMPEG: fake, PATH: '' },
+    })).toThrow();
+
+    expect(fs.existsSync(path.join(dir, 'demo.mp4'))).toBe(false);
+    expect(fs.readdirSync(dir).filter((name) => name.includes('.tmp-'))).toEqual([]);
   });
 });

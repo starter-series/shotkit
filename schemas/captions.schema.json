@@ -19,6 +19,25 @@
         "required": ["name", "captions"],
         "properties": {
           "name": { "type": "string" },
+          "story": { "type": "string" },
+          "target": { "type": "string" },
+          "style": {
+            "type": "object",
+            "required": ["mode", "position"],
+            "properties": {
+              "mode": { "enum": ["static", "focus"] },
+              "appearance": { "enum": ["panel", "outline"] },
+              "position": { "enum": ["bottom-left", "bottom"] },
+              "bottomOffset": { "type": "integer", "minimum": 0 },
+              "wordsPerChunk": { "type": "integer", "minimum": 1, "maximum": 6 },
+              "wordMs": { "type": "integer", "minimum": 120, "maximum": 2000 },
+              "activeColor": { "type": "string" },
+              "locale": { "type": "string", "minLength": 1 },
+              "direction": { "enum": ["ltr", "rtl"] },
+              "typography": { "$ref": "#/$defs/typography" }
+            }
+          },
+          "qa": { "$ref": "#/$defs/captionQa" },
           "captions": {
             "type": "array",
             "items": {
@@ -27,11 +46,117 @@
               "properties": {
                 "at": { "type": "number", "minimum": 0 },
                 "atMs": { "type": "integer", "minimum": 0 },
-                "text": { "type": "string" }
+                "text": { "type": "string" },
+                "role": { "enum": ["result", "action", "proof", "safety", "restore", "cta"] }
+              }
+            }
+          },
+          "timeline": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["at", "atMs", "text", "sourceText", "words", "activeWordIndex", "condensed"],
+              "properties": {
+                "at": { "type": "number", "minimum": 0 },
+                "atMs": { "type": "integer", "minimum": 0 },
+                "endAt": { "type": "number", "minimum": 0 },
+                "endMs": { "type": "integer", "minimum": 0 },
+                "text": { "type": "string" },
+                "sourceText": { "type": "string" },
+                "words": { "type": "array", "items": { "type": "string" } },
+                "activeWordIndex": { "type": ["integer", "null"], "minimum": 0 },
+                "condensed": { "type": "boolean" }
               }
             }
           }
         }
+      }
+    }
+  },
+  "$defs": {
+    "captionQa": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["scheduledFrameCount", "measuredFrameCount", "typography", "rendering"],
+      "properties": {
+        "scheduledFrameCount": { "type": "integer", "minimum": 0 },
+        "measuredFrameCount": { "type": "integer", "minimum": 0 },
+        "typography": {
+          "type": ["object", "null"],
+          "additionalProperties": true,
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "deterministic": { "type": "boolean" },
+            "locale": { "type": "string" },
+            "direction": { "enum": ["ltr", "rtl"] },
+            "fontFiles": { "type": "array", "maxItems": 4, "items": { "type": "string" } },
+            "fontOptimization": {
+              "type": "array",
+              "maxItems": 4,
+              "items": {
+                "type": "object",
+                "required": ["family", "sourceBytes", "embeddedBytes"],
+                "properties": {
+                  "family": { "type": "string" },
+                  "sourceBytes": { "type": "integer", "minimum": 1 },
+                  "embeddedBytes": { "type": "integer", "minimum": 1 }
+                }
+              }
+            },
+            "missingGlyphs": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": ["character", "codePoint"],
+                "properties": {
+                  "character": { "type": "string" },
+                  "codePoint": { "type": "string", "pattern": "^U\\+[0-9A-F]+$" }
+                }
+              }
+            }
+          }
+        },
+        "rendering": {
+          "type": "object",
+          "additionalProperties": true,
+          "required": ["fontLoaded", "maxFontLoadMs", "fitStatuses", "resolvedFontSize", "maxLineCount", "minLineBalance"],
+          "properties": {
+            "fontLoaded": { "type": ["boolean", "null"] },
+            "maxFontLoadMs": { "type": ["number", "null"], "minimum": 0 },
+            "fitStatuses": {
+              "type": "array",
+              "uniqueItems": true,
+              "items": { "enum": ["not-requested", "fit", "overflow"] }
+            },
+            "resolvedFontSize": {
+              "type": ["object", "null"],
+              "required": ["min", "max"],
+              "properties": {
+                "min": { "type": "number", "minimum": 1 },
+                "max": { "type": "number", "minimum": 1 }
+              }
+            },
+            "maxLineCount": { "type": "integer", "minimum": 0 },
+            "minLineBalance": { "type": ["number", "null"], "minimum": 0, "maximum": 1 }
+          }
+        }
+      }
+    },
+    "typography": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["locale", "direction", "family", "minFontSize", "maxLines", "fit"],
+      "properties": {
+        "locale": { "type": "string", "minLength": 1 },
+        "direction": { "enum": ["ltr", "rtl"] },
+        "family": { "type": "string", "minLength": 1 },
+        "weight": { "type": "string" },
+        "minFontSize": { "type": "integer", "minimum": 12, "maximum": 96 },
+        "maxFontSize": { "type": "integer", "minimum": 12, "maximum": 120 },
+        "maxLines": { "type": "integer", "minimum": 1, "maximum": 3 },
+        "fit": { "enum": ["none", "shrink"] },
+        "minLineBalance": { "type": "number", "minimum": 0, "maximum": 1 },
+        "fontFamilies": { "type": "array", "maxItems": 4, "items": { "type": "string" } }
       }
     }
   }

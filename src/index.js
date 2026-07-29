@@ -1,10 +1,10 @@
 /*
  * shotkit — public API.
  *
- * shotkit drives a BUILT browser extension (or any HTML) with Playwright and
- * captures store/social assets: screenshots, promo images, and captioned demo
- * screencasts. One engine, used via the CLI (`shotkit`), programmatically
- * (`capture()`), or through agent-readable docs/skills.
+ * shotkit turns a BUILT browser extension (or any HTML) into automatically
+ * validated channel assets. Playwright captures reusable stories; channel
+ * profiles, final-file QA, and agent-owned retry actions drive them to a
+ * technically verified candidate; an explicit user decision gates publication.
  *
  * Config authors typically use `capture` indirectly (via the CLI) and import
  * the helpers below inside their `shotkit.config.js` to set up scenes:
@@ -15,7 +15,8 @@
  */
 
 const { capture, DEFAULT_VIEWPORT } = require('./capture');
-const { launchWithExtension, closeContext } = require('./launch');
+const { launchBrowser, launchWithExtension, closeContext } = require('./launch');
+const { buildQuickDemoConfig, makeQuickDemoRun, resolveDemoTarget } = require('./quick-demo');
 const { serveDirectory, FIXTURE_CSP } = require('./serve');
 const { stageExtension, patchManifestForLocalhost, LOCALHOST_MATCHES } = require('./extension');
 const { compositeCaption, DEFAULT_BAND_HEIGHT } = require('./caption');
@@ -30,6 +31,15 @@ const {
   splitSections,
 } = require('./describe');
 const { PRESETS, resolveSize } = require('./presets');
+const { CHANNEL_PROFILES, resolveChannelProfile } = require('./channels');
+const {
+  applyCalibrationProfiles,
+  calibrationProfileHash,
+  loadCalibration,
+  updateCalibrationProfile,
+} = require('./calibration');
+const { startCalibrator } = require('./calibrator-server');
+const { buildPublishPlan } = require('./publish');
 const { findFfmpeg, buildFfmpegArgs, buildThumbnailArgs, buildVideoFilter, postProcessDemo } = require('./video');
 const { DEFAULT_TARGETS, buildHandoffRecommendations } = require('./integrations');
 const {
@@ -63,7 +73,12 @@ const {
 module.exports = {
   capture,
   DEFAULT_VIEWPORT,
+  // zero-config demo
+  buildQuickDemoConfig,
+  makeQuickDemoRun,
+  resolveDemoTarget,
   // launch
+  launchBrowser,
   launchWithExtension,
   closeContext,
   // fixtures
@@ -88,6 +103,13 @@ module.exports = {
   // sizes
   PRESETS,
   resolveSize,
+  CHANNEL_PROFILES,
+  resolveChannelProfile,
+  applyCalibrationProfiles,
+  calibrationProfileHash,
+  loadCalibration,
+  updateCalibrationProfile,
+  startCalibrator,
   // demo video post-processing
   findFfmpeg,
   buildFfmpegArgs,
@@ -97,6 +119,7 @@ module.exports = {
   // downstream handoff recommendations
   DEFAULT_TARGETS,
   buildHandoffRecommendations,
+  buildPublishPlan,
   // demo story rendering
   analyzeDemoStoryboard,
   createDemoController,

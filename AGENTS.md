@@ -1,7 +1,8 @@
 # shotkit
 
-A Playwright capture engine for store/social assets, used via the `shotkit` CLI,
-`capture()` programmatically, or the `skills/capture/` Claude Code skill.
+An autonomous launch asset pipeline with explicit final user approval for browser extensions.
+Playwright drives the shipped product; channel profiles, automated QA, the `shotkit` CLI, programmatic
+`capture()`, and `skills/capture/` Claude Code skill expose the same engine.
 Vanilla JS, CommonJS, no build step.
 
 ## Run this tool (for agents)
@@ -22,7 +23,12 @@ command must succeed. Headless works (`HEADED=0`; verified on macOS + Linux CI,
 video included); the local default is headed. Exit codes: `0` ok · `1` runtime
 failure · `2` usage / no config. In `--json` mode progress logs go to stderr;
 stdout is exactly one JSON object. Useful flags: `--scene <name>`,
-`--mp4`, `--no-video`, `--no-build`.
+`--target <id>`, `--attempt <n>`, `--mp4`, `--no-video`, `--no-build`.
+Success JSON carries a technical `machineStatus` plus delivery `status`:
+`approved`, `awaiting-approval`, `changes-requested`, `needs-fix`, `blocked`, or
+`not-requested`. Agents own `needs-fix` actions and retry without interrupting
+the user; after technical QA passes, the user reviews the final media and
+chooses Approve or Request changes.
 Every run also writes `storyboard.json`, `captions.json`, and
 `shotkit-manifest.json` unless `handoff:false` is set in config.
 
@@ -35,16 +41,26 @@ src/
   extension.js   → stageExtension / patchManifestForLocalhost
   serve.js       → serveDirectory (path-traversal-safe localhost fixture server)
   caption.js     → compositeCaption (disclaimer/caption band, stacked UNDER the shot)
-  demo.js        → demo story helpers (DOM caption overlay + demo.caption/step/wait/click)
+  demo.js        → demo story helpers (caption/pointer + demo.caption/step/wait/click/select)
+  demo-caption-focus.js → deterministic short-form caption chunks + active-word frames
+  demo-caption-qa.js → measured caption/protected-region composition QA
+  demo-select.js → recordable native-select mirror and real value-change action
+  calibration.js / calibrator-server.js → tracked profiles + local dashboard API
+  approval.js    → digest-bound user approval decisions + publication gate
+  channels.js    → autonomous CWS/YouTube, X, and Shorts target profiles
   promo.js       → renderPromoTile (HTML template → image)
   describe.js    → extractListing / renderDescriptionDoc (STORE_LISTING.md → copy)
   presets.js     → PRESETS / resolveSize (CWS + SNS sizes)
   video.js       → demo post-processing: mp4/trim/crop/zoom/thumbnail (real ffmpeg required)
   handoff.js     → storyboard/captions/shotkit-manifest JSON contract
+  handoff-files.js / handoff-validator.js → integrity, atomic IO, runtime schemas
+  image-qa.js    → nonblank thumbnail pixel checks
+  publish.js     → publish-ready/needs-fix/blocked target plan
   schemas/       → JSON schemas for the v1 handoff contract
   cli.js         → CLI arg parsing + config resolution (unit-tested)
   index.js       → public API (the contract — don't break exports)
 bin/shotkit.js   → CLI (thin wrapper over capture(); --json agent contract)
+calibrator/      → local constrained composition UI (actual capture media)
 skills/capture/  → Claude Code skill wrapping the CLI (Agent Skills format)
 test/            → unit tests for the pure/safe modules (no browser)
 ```
@@ -63,21 +79,46 @@ test/            → unit tests for the pure/safe modules (no browser)
   headless in CI.
 - **Caption band stacks UNDER the shot** (scene captured at `height - bandHeight`,
   band appended) so the final image is the exact preset size and no UI is hidden.
-- **Demo captions and pointer highlights overlay the recorded page**, while the
+- **Demo captions, arrow pointers, and select mirrors overlay the recorded page**, while the
   disclaimer badge stays top-left. Keep this lightweight: one `demo` or several
-  `demos[]` entries, timed captions, `demo.caption/step/wait/click`, static
+  `demos[]` entries, timed captions, `demo.caption/step/wait/click/select`, static
   `zoom`/`crop`, `thumbnail`, and storyboard lint — not a timeline editor.
-- **Handoff JSON is the product boundary**: shotkit creates source evidence and
-  metadata; external editors or MCP adapters do polish. Read
-  `shotkit-manifest.json` first, then use `assets[].role` and the packaged
-  `schemas/` files instead of filename guessing.
-- **Adapter hints are product guidance**: `handoff.adapterHints[]` should tell
-  agents which MCP/editor/video tool to try next and whether it is ready,
-  missing assets, or missing non-shotkit inputs. Do not call those tools from
-  shotkit itself.
+- **Shorts focus captions are authored-story animation, not transcription**:
+  `youtube-shorts` defaults to `captionOptions.mode:'focus'`, three-word chunks,
+  current-word emphasis, and a bottom safe offset. Keep CWS/X static by default.
+  Preserve every authored word; `dense-focus-caption` means the agent must
+  lengthen the beat or shorten its copy before publishing. `captions.json`
+  carries the resolved trim-relative frame timeline for downstream adapters.
+  Add Whisper-style alignment only as an optional future audio adapter; silent
+  product demos already have deterministic caption timing.
+- **Localized typography is measured, not guessed**: localized publishing
+  configs declare `captionOptions.typography.locale` and project-local font
+  files. Preserve authored separators during focus segmentation, verify glyph
+  coverage and browser font loading, fit only within declared size/line bounds,
+  and treat typography QA warnings as agent-owned fixes. A Skill may author
+  copy and emphasis, but the harness owns deterministic measurement.
+- **Handoff JSON is the machine boundary**: target workflows use
+  `handoff.automation` to fix and retry until technical `publish-ready`; users
+  do not read manifests or repair media. They review the resulting media in the
+  Calibrator and make the final Approve / Request changes decision. Use
+  `assets[].role` and bundled schemas instead of filename guessing.
+- **Exception-only automation**: every `needs-fix` action is owned by the agent.
+  Escalate only after `automation.maxAttempts` yields `blocked`. Manual editor
+  hints are disabled unless `automation.manualFallback:true` is explicit.
+- **User approval is the publication gate**: never treat machine
+  `publish-ready` as permission to publish. `shotkit-approval.json` binds each
+  decision to the exact deliverable SHA-256 and calibration profile hash; any
+  recapture or profile edit makes the old decision stale. Only an `approved`
+  current digest is publishable. Agents must not approve on the user's behalf.
 - **Storyboard lint is structured for agents**: runtime logs are human strings,
   but `storyboard.json` carries `code`, `severity`, `message`, and `fix` so the
   next config edit can be mechanical.
+- **Calibration is exception-only**: `shotkit --calibrate` may adjust only a
+  declared layout preset, bounded framing, caption lane/appearance, and up to
+  three protected regions. It writes `shotkit.calibration.json`, never config
+  source. A profile is verified only after a matching real recapture returns
+  `publish-ready`; stale profiles stay `needs-fix`. Do not grow this into a
+  free-layer, keyframe, or timeline editor.
 - **`promo.js` innerHTML** is trusted, build-time content only (the repo's own
   template + config replacements) rendered in a throwaway page — not user input.
 - **`config.build`** is a repo-committed command string run via shell on purpose
@@ -118,9 +159,21 @@ enough to read.
 Use `demos: []` for multiple campaign cuts such as `demo-translate`,
 `demo-restore`, or `demo-popup`; `--scene <name>` reruns just one clip.
 Use `demo.click(selectorOrLocator, { moveMs, beforeMs, holdMs })` for visible cursor
-pacing. Prefer `thumbnail: { at: 1.2 }`; use `zoom: { scale: 1.04 }` or a
-small `crop` only when the key UI is too small. Storyboard lint warns; set
-`storyboardLint:false` only for intentionally short smoke clips.
-Read `shotkit-manifest.json` before handing assets to Screen Studio, Canva,
-Supademo, or a connector. Use `handoff.adapterHints[]` to choose the next tool
-instead of making the user research the ecosystem first.
+pacing. Native select popups are outside page video; always use
+`demo.select(selectorOrLocator, value, { openMs, holdMs })` so real DOM options,
+the arrow cursor, and the real value change are recorded. Prefer
+`thumbnail: { at: 1.2 }`; use `zoom: { scale: 1.04 }` or a
+small `crop` only when the key UI is too small. Storyboard lint must stay on
+for channel targets; `storyboardLint:false` is only for legacy, non-publishing
+smoke clips and must produce `needs-fix` for a target.
+For a desktop product that does not reflow at 720×1280, use the Shorts
+`targetOptions` override for a narrower story and capture-only fixture layout.
+Do not squeeze the complete desktop page into 9:16. Runtime caption QA must pass
+actual bounds, overflow, line-count, stroke, presence, and timing checks.
+Prefer one story with `targets:['cws-youtube','x','youtube-shorts']`; shotkit
+replays the action script with target-specific framing. Read
+`handoff.automation`, apply agent-owned fixes, and rerun only
+`automation.retryScenes[]`. Once technical QA passes, open the final candidate
+in the Calibrator for the user's approval. Treat Request changes feedback as
+the next agent-owned edit and recapture. Do not propose iMovie or manual
+recapture unless the user explicitly requests fallback editing.

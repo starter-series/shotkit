@@ -2,9 +2,10 @@
 
 # shotkit
 
-**Capture browser-extension store assets and demo handoff packs — with Playwright.**
+**Your agent built it. shotkit shows it running.**
 
-Screenshots · promo images · demo clips · storyboard · handoff manifest. One command.
+One command records a captioned demo clip of any web app — video proof, from a
+clean checkout, that the thing actually renders and works.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Node ≥ 22](https://img.shields.io/badge/node-%E2%89%A522-brightgreen.svg)](.nvmrc)
@@ -15,16 +16,38 @@ Screenshots · promo images · demo clips · storyboard · handoff manifest. One
 
 ---
 
-> **Part of [Starter Series](https://github.com/starter-series)** — reusable tooling, not just clone-templates. `shotkit` is the unscoped package identity for this capture engine; public npm install is a release gate, not assumed by the repo README.
+![shotkit demo — a captioned proof clip recorded from one command](docs/media/quick-demo.gif)
+
+```bash
+npm ci && npx playwright install chromium   # in a clone; npm publish is pending
+node bin/shotkit.js demo http://localhost:3000   # a dev server
+node bin/shotkit.js demo ./dist                  # a static build dir
+node bin/shotkit.js demo page.html               # a single file
+```
+
+That's the whole setup. In about half a minute you get
+`shotkit-demo/demo.webm`, plus `demo.mp4` and a thumbnail when ffmpeg is
+installed. **No config file** — captions come from the page's own title and
+headings, and the clip walks the page with a paced scroll. Coding agents get
+the same contract as everywhere else in shotkit: `--json` prints exactly one
+JSON object on stdout, and exit codes are `0 ok · 1 failure · 2 usage`.
+
+**And it grows.** The same engine is a full launch-asset pipeline for browser
+extensions: deterministic Chrome Web Store screenshots, promo tiles,
+storyboarded SNS demo clips with pointer-highlighted actions, final-file QA
+(ffprobe + full decode), and a digest-bound human approval gate — everything
+below this line.
 
 ---
 
+> **Part of [Starter Series](https://github.com/starter-series)** — reusable launch tooling. `shotkit` is the unscoped package identity; public npm install is a release gate, not assumed by this README.
+
 ## Status & Scope
 
-- **Currently implemented** — A Playwright capture **engine** (build → launch the *built* extension via `launchPersistentContext(--load-extension)` → drive scenes → screenshot → caption/disclaimer band → promo tile from HTML → demo `webm` with DOM caption overlays → listing copy from `STORE_LISTING.md` or `product.manifest.json` → optional `privacy-disclosure.md` worksheet → `storyboard.json` / `captions.json` / `shotkit-manifest.json` handoff pack), a **CLI** (`shotkit`) with an **agent contract** (`--json` machine output, optional `path` argument, `0/1/2` exit codes), **size presets** for both audiences (CWS `1280×800`/`440×280`, SNS `1200×675`/`1280×720`/`1200×630`/`1080×1080`), a **path-traversal-safe** localhost fixture server, a programmatic API (`capture()`), a **Claude Code plugin + skill** ([`skills/capture/`](skills/capture/SKILL.md); `/plugin install shotkit@starter-series`), an **AGENTS.md run-block** so any shell-having coding agent can invoke it, and **demo post-processing** for SNS (`webm → H.264 mp4` with `+faststart`, frame-accurate **trim**, static crop/zoom framing, thumbnails — needs an ffmpeg on PATH or `SHOTKIT_FFMPEG`; GitHub ubuntu runners ship one).
-- **Story renderer** — Demo configs can use one `demo` or several `demos: []` entries, timed `captions`, pointer-highlighted clicks, paced cursor movement, static zoom/crop framing, thumbnail frames, storyboard lint, and a small `demo` helper (`caption`, `step`, `wait`, `click`) so an agent can turn a feature checklist into 20-40 second before → action → result stories without pulling in a general video editor.
+- **Currently implemented** — An autonomous launch asset **pipeline** whose Playwright engine builds and drives the *shipped* extension, expands one story into `cws-youtube`, `x`, and `youtube-shorts` variants, applies target viewport/H.264/trim/caption/thumbnail defaults, probes final MP4 metadata with ffprobe, fully decodes the delivered video with ffmpeg, checks poster dimensions and pixels for blank-frame failures, and emits a technical `machineStatus` of `publish-ready`, `needs-fix`, or `blocked`. A separate digest-bound approval gate returns `awaiting-approval`, `changes-requested`, or `approved` as the delivery status. The schema-backed pack carries source evidence, captions, run provenance, integrity, user decisions, and agent-owned retry actions. The same engine is exposed through the CLI, `capture()`, skill, and AGENTS.md run-block.
+- **Story renderer** — Demo configs can use one `demo` or several `demos: []` entries, timed static or Shorts-style focus captions, pointer-highlighted clicks, recordable native-select changes, paced cursor movement, static zoom/crop framing, thumbnail frames, storyboard lint, and a small `demo` helper (`caption`, `step`, `wait`, `click`, `select`) so an agent can turn a feature checklist into 20-40 second before → action → result stories without pulling in a general video editor.
 - **Design intent** — *One engine, many surfaces — matched to the tool's nature.* shotkit is a heavy, file-producing build tool, so its surfaces are CLI (+`--json`), skill, and CI — not MCP (see Non-goals). Captures are **deterministic** (login-free fixtures, frozen data) and the run **doubles as a real-bundle smoke test** — a screenshot only appears if that feature rendered from the shipped code. **Trademark-safe** by construction: a disclaimer band is composited onto every shot.
-- **Non-goals** — An **MCP server** inside shotkit (dropped by design: agents with a shell get a better contract from `--json` + the skill). Removing the per-repo **scene config** (which screens are *your* money shots is irreducible intent — it lives in your `shotkit.config.js`). A general-purpose video editor or hosted demo platform. shotkit creates source evidence and a handoff pack; Screen Studio, Canva, Supademo, or future MCP connectors can do polish later.
+- **Non-goals** — An **MCP server** inside shotkit (agents with a shell get a better contract from `--json` + the skill). Removing the per-repo **story/action config** (which product state proves the claim is irreducible intent). A general-purpose timeline editor or hosted demo platform. Repeatable channel work is automated; manual editors are fallback-only and disabled unless explicitly requested.
 - **Redacted** — none. Ships no private data, credentials, or third-party identifiers.
 
 ## Install
@@ -62,46 +85,216 @@ npx shotkit
 
 ## Usage
 
-Add a `shotkit.config.js` (the per-repo capture contract), then:
+The zero-config path needs no file at all:
+
+```bash
+shotkit demo http://localhost:3000   # captioned proof clip of any web app
+shotkit demo ./dist --duration 30    # static dir, longer clip
+shotkit demo --help                  # all options
+```
+
+For the full pipeline, add a `shotkit.config.js` (the per-repo capture
+contract), then:
 
 ```bash
 shotkit                         # produce everything into outDir
 shotkit --scene 01-feature      # just one scene/promoTile/demo/demos entry, "description", or "privacy"
+shotkit --target x              # render/retry only the configured X variants
+shotkit --attempt 2 --json      # next autonomous fix attempt
+shotkit --campaign              # choose a recipe, produce, and review final media
+shotkit --calibrate             # open the local composition calibrator
 shotkit --no-video              # skip the screencast (faster/CI)
 shotkit --no-build              # use an already-built bundle
 shotkit ../my-extension --json  # run against another checkout; JSON result on stdout
 ```
 
-Outputs land in `outDir` (default `store-assets/`): `<scene>.png`, `<promoTile>.png`, `<demo>.webm`, optional `<demo>.mp4`, optional `<demo>-thumbnail.png`, `description.md`, optional `privacy-disclosure.md`, and, by default, `storyboard.json`, `captions.json`, and `shotkit-manifest.json` (`handoff: false` disables the handoff files).
+Outputs land in `outDir` (default `store-assets/`): `<scene>.png`, `<promoTile>.png`, `<demo>.webm`, optional `<demo>.mp4`, optional `<demo>-thumbnail.png`, `description.md`, optional `privacy-disclosure.md`, and, by default, `storyboard.json`, `captions.json`, `shotkit-manifest.json`, plus four schemas under `schemas/` (`handoff: false` disables the handoff pack). The first review decision creates `shotkit-approval.json`.
+
+### Campaign Dashboard
+
+Run `shotkit --campaign` to open the local campaign dashboard. A channel-targeted
+story becomes a Campaign Recipe automatically; the recipe owns its configured
+channel profiles, so the user selects one story rather than assembling outputs
+one by one. The dashboard starts production, follows agent-owned capture and QA,
+and presents the resulting media for the user's digest-bound Approve or Request
+changes decision.
+
+Recipe labels can be added without changing the existing demo contract:
+
+```js
+module.exports = {
+  campaign: {
+    defaultRecipe: 'before-after-proof',
+    recipes: [{
+      id: 'before-after-proof',
+      name: 'Before / After Proof',
+      description: 'Show the original workflow, the product action, and the verified result.',
+      story: 'launch-story',
+      targets: ['cws-youtube', 'x', 'youtube-shorts'],
+    }],
+  },
+};
+```
+
+The existing Calibrator remains available through `shotkit --calibrate` and the
+dashboard's Advanced control. Campaign selection is stored separately in
+`shotkit-campaign.json`; it does not rewrite config source or replace the
+manifest, calibration, or approval contracts. Projects without
+`config.calibration` can still use the Campaign Dashboard; Advanced is exposed
+only when calibration is configured.
+
+The dashboard records feedback and follows output files, but it does not edit a
+consumer repo by itself. `needs-fix` and Request changes therefore mean that an
+attached coding agent must read the manifest/approval note, apply the source or
+config edit, and recapture. The UI reports these as waiting states; only an
+active capture is labeled as work in progress, and exhausted attempts remain
+`blocked` instead of being presented as an active retry.
+
+### Composition Calibrator
+
+When automated retries cannot settle a vertical composition, a repo can expose
+a small set of authored layout presets and a tracked calibration document:
+
+```js
+module.exports = {
+  calibration: {
+    from: 'shotkit.calibration.json',
+    layouts: ['focus-column', 'compact-column'],
+  },
+  demos: [{
+    name: 'launch-story',
+    targets: ['youtube-shorts'],
+    async run({ page, calibration }) {
+      // Apply calibration.layoutPreset to capture-only product layout CSS.
+    },
+  }],
+};
+```
+
+Run `shotkit --calibrate` to open the local-only dashboard. It previews the
+actual captured MP4 and intentionally limits adjustment to the declared layout
+preset, 1.00-1.20 framing, caption lane/appearance, and at most three protected
+UI regions. Save writes `shotkit.calibration.json`; it never rewrites the
+CommonJS config. Recapture replays the real story and current profile, and only
+a matching `publish-ready` result marks that profile verified. Changed or stale
+profiles remain `needs-fix`.
+
+This is an exception-only calibration surface, not a layer canvas, timeline,
+keyframe editor, or replacement for autonomous QA. Agents can operate the same
+controls while fixing composition. Once the exact recapture passes technical
+QA, the dashboard presents that final media to the user with Approve and
+Request changes controls.
 
 ### Handoff Pack
 
-shotkit is not trying to beat video editors. It is the starter layer before
-them: capture the real built extension, write source clips, and describe what
-the clips mean.
+The handoff pack is primarily an internal machine boundary: agents use it to
+fix and retry until channel assets are publish-ready. It is not a request for a
+human to inspect JSON or edit media. The human reviews the rendered candidate,
+not the repair mechanics.
 
 - `storyboard.json` — demo names, audience, viewport, trim/framing hints, beats,
   structured storyboard lint warnings, and suggested next tool.
 - `captions.json` — portable caption timings and text per demo.
-- `shotkit-manifest.json` — asset list, output paths, roles, project info, and
-  recommended handoff flow plus `adapterHints` for likely next tools.
+- `shotkit-manifest.json` — the entrypoint: asset inventory and integrity,
+  run/freshness metadata, bundled schema paths, and
+  `handoff.automation` with target checks and agent-owned retry actions, plus
+  `handoff.approval` with the final publication gate.
+- `shotkit-approval.json` — created after the first decision; binds Approve or
+  Request changes to the exact media SHA-256 and calibration profile hash.
+- `schemas/*.schema.json` — local validation contracts, copied into every pack
+  so a downstream agent does not need the installed npm package.
 
-This makes external polish easier: an agent or MCP connector can read the
-manifest, open the mp4/webm + thumbnail + captions in Screen Studio, Canva,
-Supademo, or another editor, and keep the repo fixture/storyboard as the source
-of truth.
+Target workflows omit manual editor recommendations by default. Targetless
+legacy runs may still expose `adapterHints`; setting
+`automation.manualFallback:true` restores them for an explicitly requested
+manual path. Repo fixtures and the story/action script remain the repeatable
+source of truth in either mode.
 
-The manifest also recommends possible downstream connections. For example,
-`figma-mcp` appears when the run has enough thumbnail/storyboard material for a
-design handoff, `higgsfield` appears for AI-video campaign variants, and
-`longcat-video-avatar` is marked as needing extra avatar/voice input when the
-captured assets are not enough by themselves. shotkit suggests the next tool;
-the agent's own MCP/tool environment performs the connection.
-
-The convention is versioned and schema-backed. `$schema` values are URN
-identifiers; load the actual schema files from the installed package. See
+The convention is versioned and schema-backed. `$schema` values are stable URN
+identifiers; `handoff.schemaFiles` resolves them to files inside the output pack.
+Every delivered file except the self-referential manifest carries byte size and
+SHA-256 integrity metadata. See
 [`docs/handoff-conventions.md`](docs/handoff-conventions.md) and the packaged
 schemas under [`schemas/`](schemas/).
+
+### Autonomous channel targets
+
+Keep one product story and declare destinations. Do not set viewport, codec,
+thumbnail, or duration mechanically unless a target genuinely needs an
+override:
+
+```js
+demo: {
+  name: 'skillbridge',
+  targets: ['cws-youtube', 'x', 'youtube-shorts'],
+  captions: [
+    { at: 0.5, text: 'Translate the lesson in place' },
+    { at: 18, text: 'Restore the original anytime' },
+  ],
+  async run({ page, env, demo, target }) {
+    // Reusable product actions. target contains the current channel profile.
+  },
+}
+```
+
+The story expands to `skillbridge-cws-youtube`, `skillbridge-x`, and
+`skillbridge-youtube-shorts`. Landscape targets use 1280×720; Shorts uses
+720×1280. All target variants receive H.264/yuv420p, a 30-second cap, a poster
+frame, and automated final-file checks. The Shorts profile also turns timed
+captions into three-word outline focus chunks, highlights the current word, and
+keeps the overlay inside YouTube's visual-guide safe region. CWS and X retain
+the quieter static panel style. `targetOptions.<id>` is available for a
+channel-specific story, framing, caption, or short video disclaimer override.
+
+A responsive product can replay one `run` function for every target. A desktop
+surface that does not reflow cleanly at 720×1280 needs a focused Shorts override:
+remove secondary panels, enlarge the one action/result pair, and use a
+target-specific `run` (plus capture-only fixture CSS when needed). Do not scale
+the full desktop story into a vertical canvas or treat a center crop as mobile
+composition.
+
+The default policy is exception-only: `needs-fix` actions belong to the agent,
+which edits the config and reruns `automation.retryScenes[]` with an incremented
+`--attempt`. Technical input is requested only when `blocked` is reached after
+`automation.maxAttempts` (default 3). After technical QA passes, the user always
+reviews the final candidate. Request changes sends the note back into the agent
+loop; Approve unlocks only the exact reviewed digest. Manual editor hints appear
+only with `automation: { manualFallback: true }`.
+
+Localized campaign variants can opt into deterministic, measured typography.
+Declare the authored locale and project-local font files; Shotkit embeds those
+fonts into the recorded page, verifies glyph coverage before launch, waits for
+the browser font load, and shrinks each rendered caption only as far as the
+declared minimum size and line count allow:
+
+```js
+captionOptions: {
+  mode: 'focus',
+  appearance: 'outline',
+  typography: {
+    locale: 'ko-KR',
+    family: '"Campaign Sans", sans-serif',
+    weight: 800,
+    minFontSize: 28,
+    maxFontSize: 44,
+    maxLines: 2,
+    fit: 'shrink',
+    fonts: [{
+      family: 'Campaign Sans',
+      from: '.shotkit/fonts/campaign-sans.woff2',
+      weight: '100 900',
+    }],
+  },
+}
+```
+
+Font paths must remain inside the consumer project. OTF, TTF, WOFF, and WOFF2
+files up to 24 MB are accepted, with at most four fallback faces. Focus chunks
+use locale-aware word segmentation and preserve the authored punctuation and
+separators, so Japanese and Chinese are not rebuilt with injected spaces.
+Runtime QA reports missing glyphs, failed font loads, minimum-size overflow,
+and severely unbalanced two-line captions as structured agent fixes. Existing
+configs without `typography` retain their legacy system-font behavior.
 
 Project-specific application plans stay repo-internal and are not included in
 the npm package.
@@ -114,9 +307,9 @@ legible at store dimensions.
 
 SNS demo clips are story surfaces: short, captioned walkthroughs that show the
 result quickly, then the action and safety/restore path. For X demo video,
-prefer `preset: 'sns-video'` (`1280×720`, 16:9) plus H.264 mp4 because H.264
-`yuv420p` wants even dimensions. Use `sns-twitter` (`1200×675`) for static X
-card images.
+the `x` target applies 1280×720 H.264 automatically. The lower-level
+`preset:'sns-video'` path remains available for legacy/custom captures. Use
+`sns-twitter` (`1200×675`) for static X card images.
 
 ### Demo → mp4 / trim (SNS)
 
@@ -148,12 +341,58 @@ Captions render as a DOM overlay while Playwright records the page. The default
 position is lower-left, with a translucent background, large text, safe padding,
 and no collision with the top-left disclaimer badge.
 
-Clicks made through `demo.click(selectorOrLocator)` show a synthetic pointer and
-click ripple in the recording. Tune pacing with `{ moveMs, beforeMs, holdMs }`,
-or turn it off with `{ highlight: false }`. A Playwright Locator or `{ x, y }`
-point also works when selectors are awkward.
+Timed captions can use the built-in short-form focus treatment without speech
+transcription. Shotkit derives a deterministic synthetic word schedule from the authored
+story, so silent product demos do not need Whisper, Python, or a second render
+engine. `youtube-shorts` enables this automatically; custom and target-specific
+captures can opt in or tune it directly:
 
-Use either timed captions, the helper API, or both:
+```js
+targetOptions: {
+  'youtube-shorts': {
+    captionOptions: {
+      position: 'bottom-left',
+      mode: 'focus',
+      appearance: 'outline',
+      wordsPerChunk: 3,
+      wordMs: 360,
+      activeColor: '#facc15',
+      bottomOffset: 380,
+    },
+  },
+}
+```
+
+`position` is intentionally limited to `bottom-left` and `bottom`. Set
+`mode: 'static'` to disable focus sequencing; `appearance` independently
+selects the `panel` or `outline` surface. The resolved style
+is also written to `storyboard.json` and `captions.json`; the latter includes a
+trim-relative `timeline[]` with rendered chunks, active-word indexes, and frame
+boundaries for downstream agents. When authored beats are too close for the
+requested pace, every word is preserved but storyboard lint returns
+`dense-focus-caption` so the agent lengthens the beat before publishing.
+
+Clicks made through `demo.click(selectorOrLocator)` show a high-contrast arrow
+pointer and click ripple in the recording. Tune pacing with
+`{ moveMs, beforeMs, holdMs }`, or turn it off with `{ highlight: false }`. A
+Playwright Locator or `{ x, y }` point also works when selectors are awkward.
+
+Native `<select>` popups are OS/browser UI and do not appear in Playwright's
+page screencast. Use `demo.select()` so shotkit mirrors the element's real DOM
+options inside the recorded page, shows the pointer, and then applies the real
+selection:
+
+```js
+await demo.select('#language', 'ko', {
+  moveMs: 550,
+  openMs: 900,
+  holdMs: 700,
+});
+```
+
+Legacy/custom clips can use timed captions, the helper API, or both. Autonomous
+channel targets must include timed `captions[]`: that authored schedule is the
+handoff and retry contract, while helper calls remain immediate runtime callouts.
 
 ```js
 demo: {
@@ -178,11 +417,17 @@ demo: {
       await page.waitForSelector('[data-demo-translated="true"]');
     });
     await demo.caption('Restore the original anytime');
-    await demo.click('[data-demo-restore]');
+    await demo.select('#language', 'en');
     await demo.wait(900);
   },
 }
 ```
+
+Focus sequencing applies to timed `captions[]`. Direct `demo.caption()` and
+`demo.step()` calls remain immediate full-phrase callouts so their existing
+control-flow timing does not change. Shotkit marks its caption and select
+overlays as non-translatable so a product localization feature cannot rewrite
+authored campaign copy.
 
 Framing options are intentionally small:
 
@@ -191,7 +436,7 @@ demo: {
   crop: { x: 120, y: 0, width: 1040, height: 720 }, // output a cropped mp4
   zoom: { scale: 1.08 },                            // center zoom, still 16:9
   thumbnail: { at: 1.5 },                           // poster frame
-  storyboardLint: false,                            // optional escape hatch
+  storyboardLint: false,                            // legacy/short smoke clips only
 }
 ```
 
@@ -199,8 +444,15 @@ Storyboard lint runs by default and logs warnings instead of failing the run.
 The same warnings are written to `storyboard.json` with `code`, `severity`,
 `message`, and `fix`, so an agent can revise `shotkit.config.js` on the next
 pass. Current checks cover missing mp4, first caption after 3 seconds, odd video
-dimensions, long captions, missing safety/restore beat, crop/zoom edge risk, and
-clips outside the 20-40 second target.
+dimensions, long captions, missing safety/restore beat, unsupported/offscreen
+caption placement, crop/zoom edge risk, and clips outside the 20-40 second
+target. During the real recording, Shotkit also measures every scheduled
+caption frame's bounding box, overflow, line count, computed outline stroke,
+presence, timing drift, configured font load, fitted size, and line balance.
+A mismatch becomes structured lint and prevents
+`publish-ready`.
+Autonomous channel targets require lint to remain enabled; setting
+`storyboardLint:false` makes their automation status `needs-fix`.
 
 For several campaign cuts, keep the old single `demo` field out and use
 `demos: []`. Each entry writes `<name>.webm` and optional `<name>.mp4`, and
@@ -241,11 +493,19 @@ move cursor/click/typing actions slowly, and use mp4 for X.
 logs move to stderr):
 
 ```json
-{ "ok": true, "outDir": "/abs/store-assets", "produced": ["/abs/store-assets/01-popup.png"] }
+{ "ok": true, "status": "awaiting-approval", "machineStatus": "publish-ready", "outDir": "/abs/store-assets", "manifest": "/abs/store-assets/shotkit-manifest.json", "produced": ["/abs/store-assets/skillbridge-x.mp4"] }
 ```
 
-Exit codes: `0` ok · `1` runtime failure (stderr carries `{"ok":false,"error":…}`) ·
-`2` usage / no config found. Drop-in agent wiring: the run-block in
+Exit codes: `0` ok · `1` runtime failure · `2` usage / no config found. Failure
+payloads also use the single stdout JSON object (`{"ok":false,"error":…}`).
+`ok:true` means execution completed. `machineStatus:publish-ready` means every
+requested target passed shotkit's story lint, H.264/yuv420p, actual
+dimensions, actual duration, thumbnail, nonblank-frame, integrity, and target
+profile checks. Delivery `status` remains `awaiting-approval` until the user
+reviews the media. It becomes `approved` only for that exact digest; a recapture
+or profile change makes the decision stale. An authorized connector may publish
+only when `handoff.approval.publishable` is true.
+Drop-in agent wiring: the run-block in
 [`AGENTS.md`](AGENTS.md) (read by Claude Code, Codex, Cursor, Gemini CLI, …) and
 the [`skills/capture/`](skills/capture/SKILL.md) skill (Agent Skills format —
 copy the folder into any compatible tool's skills directory).
@@ -277,15 +537,14 @@ module.exports = {
   promoTiles: [{ name: 'promo', template: 'path/to/promo.html', preset: 'cws-promo-small',
                  replacements: { NAME: 'My Ext' } }],
 
-  // Use `demo` for one canonical clip, or `demos: []` for campaign variants.
+  // One story can render several channel variants automatically.
   demos: [
-    { name: 'demo-feature', preset: 'sns-video', mp4: { crf: 18 },
-      trim: { start: 0, duration: '00:30' },
+    { name: 'demo-feature', targets: ['cws-youtube', 'x', 'youtube-shorts'],
       captions: [
         { at: 0.5, text: 'Show the result first' },
         { at: 18.0, text: 'Restore the original anytime' },
       ],
-      async run({ page, env, demo }) { /* walkthrough with demo.step/click/wait */ } },
+      async run({ page, env, demo, target }) { /* reusable walkthrough */ } },
   ],
 };
 ```
@@ -294,6 +553,8 @@ module.exports = {
 - The harness reduces a captioned scene's capture height by the band height and stacks the band under it, so the final image is exactly the preset size and **no UI is hidden**.
 - Demo captions are overlays inside the recorded page, not screenshot bands; they are meant for story clips, not CWS screenshots.
 - Demo names must be unique across `demo` and `demos` because they become output filenames.
+- Target demos expand to `<name>-<target>` filenames. Use `--target x` or
+  `--scene <expanded-name>` for an automatic retry pass.
 
 ### Product manifest listing/privacy
 
@@ -355,7 +616,8 @@ permission tables. It is intentionally not a privacy policy generator.
 `capture(config, opts)` · `serveDirectory` · `stageExtension` · `patchManifestForLocalhost` ·
 `launchWithExtension` · `closeContext` · `compositeCaption` · `renderPromoTile` ·
 `extractListing` · `extractProductManifest` · `renderDescriptionDoc` ·
-`renderPrivacyDisclosureDoc` · `PRESETS` · `resolveSize` ·
+`renderPrivacyDisclosureDoc` · `PRESETS` · `resolveSize` · `CHANNEL_PROFILES` ·
+`resolveChannelProfile` · `buildPublishPlan` ·
 `createDemoController` · `normalizeDemoConfigs` · `analyzeDemoStoryboard` ·
 `lintDemoStoryboard` · `installDemoCaptionOverlay` · `setDemoCaption` ·
 `buildVideoFilter` · `buildThumbnailArgs` · `HANDOFF_VERSION` ·
@@ -370,10 +632,10 @@ permission tables. It is intentionally not a privacy policy generator.
 | Claude Code skill ([`skills/capture/`](skills/capture/SKILL.md)) | ✅ now | Claude Code (portable to Codex/Cursor/Gemini via the Agent Skills format) |
 | `AGENTS.md` run-block | ✅ now | every agent that reads AGENTS.md |
 | npm package (`shotkit`) | release target | `npx` zero-install after publish |
-| Demo story rendering (`demo`, `demos[]`, captions, click highlight, pacing, crop/zoom, thumbnails, storyboard lint, `--mp4`, `trim`) | ✅ now | SNS clips |
+| Autonomous target rendering (`demo.targets`, CWS/YouTube, X, Shorts, ffprobe, pixel QA, retry actions) | ✅ now | publish-ready channel variants |
 | Capture-in-CI GitHub Action | ✅ now — ships in [`browser-extension-starter`](https://github.com/starter-series/browser-extension-starter)'s `capture.yml` (headless) | zero-local-browser runs + CI smoke test |
 | `starter-series` marketplace entry (`/plugin install shotkit@starter-series`) | ✅ now | discovery |
-| Timeline/audio/motion editing | non-goal | use a real editor after shotkit |
+| General timeline/audio editing | non-goal | explicit `automation.manualFallback:true` only |
 
 An MCP stdio tool was considered and **dropped** — see Non-goals: shotkit is a heavy, file-producing build tool, so a `--json` CLI + skill serves agents better than an MCP server's per-session context cost.
 

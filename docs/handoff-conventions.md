@@ -1,9 +1,11 @@
 # shotkit Handoff Conventions
 
-shotkit is the capture layer for browser-extension promotion assets. It should
-not try to become Screen Studio, Canva, Supademo, or a hosted demo editor.
-Instead, it writes repeatable source clips and a small JSON contract that other
-tools or MCP adapters can consume.
+shotkit is the autonomous launch asset pipeline for browser extensions. It
+turns a reusable product story into channel variants, validates the final files,
+and gives agents machine-readable fixes until the requested targets are
+technically publish-ready. The handoff pack is an internal machine boundary, not a request
+for a user to inspect JSON or edit media. The user reviews the final rendered
+candidate and records Approve or Request changes; agents own the repair loop.
 
 ## Files
 
@@ -12,11 +14,27 @@ Every successful run writes these files unless `handoff: false` is set:
 - `shotkit-manifest.json` — the entry point. Read this first.
 - `storyboard.json` — demo intent, beats, viewport, trim/framing hints, and
   structured storyboard lint.
-- `captions.json` — portable caption timing and text.
+- `captions.json` — portable caption timing, text, style, and measured rendering QA.
+- `schemas/shotkit-manifest.schema.json` — local manifest validation contract.
+- `schemas/storyboard.schema.json` — local storyboard validation contract.
+- `schemas/captions.schema.json` — local captions validation contract.
+- `schemas/approval.schema.json` — user decision validation contract.
+
+The first review decision also writes `shotkit-approval.json`. It is separate
+from generated evidence and binds the decision to the exact deliverable digest.
 
 Schema references are included in each file as `$schema` URNs, and the package
-ships matching schema files under `schemas/`. The URN is an identity key, not a
-network fetch requirement.
+ships matching schema files under `schemas/`. Each output pack also carries its
+own copies; resolve `handoff.schemaFiles` relative to the directory containing
+`shotkit-manifest.json`. The URN is an identity key, not a network fetch
+requirement. shotkit validates the finalized core handoff documents with these
+same schemas before writing the manifest and validates approval decisions when
+they are read or written.
+
+The CLI's `ok:true` means the requested stages completed. `machineStatus` is
+`publish-ready`, `needs-fix`, `blocked`, or `not-requested`. Delivery `status`
+also applies the approval gate and can be `awaiting-approval`,
+`changes-requested`, or `approved`.
 
 ## Manifest Roles
 
@@ -25,22 +43,110 @@ External tools should use `assets[].role`, not filename guessing:
 - `store-screenshot` — CWS screenshot PNG.
 - `promo-tile` — CWS promo image PNG.
 - `store-listing-copy` — generated listing copy.
+- `privacy-disclosure` — generated store-review worksheet.
 - `source-demo-webm` — Playwright's original recording, useful as evidence.
 - `sns-demo-mp4` — H.264 MP4 intended for X/SNS upload or editor import.
 - `thumbnail` — poster frame extracted from the final clip.
 - `storyboard-contract` — `storyboard.json`.
 - `captions-contract` — `captions.json`.
 - `handoff-manifest` — `shotkit-manifest.json`.
+- `handoff-schema` — one of the locally bundled JSON schemas.
 
 Each asset has a stable `id`, repo-relative `path`, `outPath`, `type`, `format`,
-`role`, and `source.kind`.
+`role`, and `source.kind`. Resolve `outPath` relative to the manifest directory;
+use `path` only when the consumer also knows the repository root. Delivered
+files other than the self-referential manifest carry byte size and SHA-256
+integrity metadata. Consumers must ignore unknown roles and fields for
+forward-compatible v1 processing.
 
-## Tool Handoff
+## Run and Review State
 
-`shotkit-manifest.json.handoff.adapterHints[]` is the recommendation layer. It
-lets an agent see likely next tools without the user researching the ecosystem.
-Hints are advisory; shotkit does not call external services, hold credentials,
-or install MCP servers.
+`manifest.run.id` identifies the current invocation. On a full run, every
+asset's `runId` matches it and its state is `produced`. A scene-filtered or
+`--no-video` run is `run.mode:"partial"`; untouched outputs keep their older
+`runId` and become `retained`. Missing files are pruned. A retained file whose
+digest changed becomes `modified`, is excluded from adapter readiness, and must
+be recaptured.
+
+`handoff.review` remains an additive v1 compatibility summary. Autonomous
+callers use `handoff.automation` instead; `needs-fix` never means "ask the user
+to review." `handoff.approval` is the distinct final-media decision gate.
+`handoff.summary` reports asset, demo, adapter, technically publish-ready, and
+approved target counts.
+
+## Autonomous Publishing
+
+One demo story can declare `targets: ['cws-youtube', 'x', 'youtube-shorts']`.
+Each expanded target records its profile in `storyboard.json` and receives
+mechanical defaults for viewport, H.264/yuv420p, duration cap, caption position,
+and thumbnail. `youtube-shorts` resolves timed story captions to the built-in
+`focus` + `outline` style: compact word chunks, current-word emphasis, and a
+bottom safe offset. The style is deterministic for silent demos and requires no transcript
+engine. CWS and X use `static` unless the config overrides `captionOptions`.
+
+`storyboard.demos[].captionStyle` and `captions.demos[].style` preserve the
+resolved `mode`, `appearance`, `position`, timing, chunk size, active color, and safe offset
+for downstream agents. `captions.demos[].timeline[]` is the reproducible
+trim-relative render plan: each frame includes its start/end, rendered chunk,
+source phrase, words, and active-word index.
+
+Localized variants may also declare `captionOptions.typography`. The resolved
+locale, direction, family stack, fitting bounds, and configured font families
+remain in the public style. Project-local font files are glyph-checked and
+subset before browser injection; data URLs never enter the handoff. Instead,
+`captions.demos[].qa` records project-relative font paths, source/subset byte
+counts, missing glyphs, scheduled/measured frame counts, browser font-load
+state, fitted sizes, line count, and line balance.
+
+When `config.calibration` is declared, `storyboard.demos[].calibration` records
+the applied profile hash, layout preset, and protected regions. The tracked
+calibration JSON remains the editable source; the storyboard is run evidence.
+Protected-region collisions become structured warnings, and a dashboard profile
+is considered verified only when its current hash has produced a real
+`publish-ready` recapture.
+
+`handoff.automation.targets[]` validates:
+
+- final MP4 presence and unchanged integrity;
+- ffprobe codec, pixel format, actual dimensions, and actual duration, plus a
+  bounded full-video ffmpeg decode that rejects truncated/corrupt MP4s;
+- poster-frame presence, exact target dimensions, and nonblank PNG pixel statistics;
+- measured caption presence, viewport bounds, overflow, line count, outline
+  stroke, schedule drift, font application, fitted size, and line balance from
+  the real recorded page;
+- storyboard lint being enabled for every publish target;
+- structured storyboard warnings, including early result and restore beats;
+- configured targets that were skipped or produced no output.
+
+Failures become `automation.actions[]` with `owner:"agent"`, an explicit `fix`,
+and a target/scene rerun instruction. Agents increment `--attempt`, apply every
+fix, and rerun `automation.retryScenes[]`. The default maximum is three. Only
+the exhausted `blocked` state sets technical
+`automation.userActionRequired:true`.
+
+Machine `publish-ready` means these automated checks passed. It does not mean
+the user approved the media. `handoff.approval.targets[]` compares the current
+deliverable SHA-256 and calibration profile hash with `shotkit-approval.json`:
+
+- `awaiting-approval` — show the final candidate to the user.
+- `changes-requested` — the agent owns the note, edit, and recapture.
+- `approved` — only this exact digest passed user review.
+
+Any recapture or profile change makes a prior decision stale. External
+publication has not happened yet; `targets[].upload` identifies the connector,
+and an authorized external write may proceed only when
+`handoff.approval.publishable` is true.
+
+Adapter `readiness` is tool-specific. `ready` means the required, unmodified
+asset roles and storyboard content are present for that recommendation; it does
+not mean the connector is installed or the user approved the assets.
+
+## Manual Fallback
+
+Target workflows omit `adapterHints[]` by default. They are available for
+legacy targetless captures or when `automation.manualFallback:true` is
+explicitly configured. Hints are advisory; shotkit does not hold credentials or
+install MCP servers.
 
 Each hint includes:
 
@@ -54,16 +160,20 @@ Each hint includes:
 - `missingRoles` / `missingInputs` — what to capture or provide next.
 - `nextStep` — the agent-facing action.
 
-Recommended downstream flow:
+Autonomous flow:
 
-1. Read `shotkit-manifest.json`.
-2. Select the MP4 asset for upload/editing; keep the WEBM as source evidence.
-3. Read `storyboard.json` for the beat list and lint warnings.
-4. Read `captions.json` for subtitle/caption timing.
-5. Import the MP4, thumbnail, and captions into the downstream tool.
-6. Keep repo fixtures and `shotkit.config.js` as the repeatable source of truth.
+1. Read the CLI `status` and manifest path.
+2. On `needs-fix`, execute every agent-owned action and rerun only the listed
+   scenes with the next `--attempt`.
+3. On `blocked`, report the exhausted technical blocker and attempted fixes.
+4. On `awaiting-approval`, present each final candidate in the Calibrator and
+   wait for the user's Approve or Request changes decision.
+5. On `changes-requested`, apply the decision note, recapture, and return the
+   new digest for review.
+6. On `approved`, let an authorized connector publish only the approved digest.
+7. Keep repo fixtures and the story/action script as the repeatable source.
 
-Tool-specific notes:
+Fallback tool notes:
 
 - Figma MCP: use the `figma-mcp` hint when the manifest has a thumbnail and
   storyboard. It is good for cover frames, social layout, and design-system
@@ -105,9 +215,12 @@ Tool-specific notes:
 
 Current warning codes:
 
+- `invalid-captions`
 - `no-captions`
 - `single-caption`
 - `late-first-caption`
+- `dense-focus-caption`
+- `invalid-caption-options`
 - `long-caption`
 - `missing-safety-restore`
 - `missing-mp4`
@@ -116,6 +229,22 @@ Current warning codes:
 - `short-duration`
 - `long-duration`
 - `missing-duration`
+- `invalid-duration`
+- `caption-locale-missing`
+- `caption-font-not-embedded`
+- `caption-missing-glyph`
+- `caption-font-load-failed`
+- `caption-typography-not-applied`
+- `caption-type-fit-failed`
+- `caption-unbalanced-lines`
+- `caption-outside-viewport`
+- `caption-overflow`
+- `caption-too-many-lines`
+- `caption-outline-missing`
+- `caption-protected-region-overlap`
+- `protected-region-outside-viewport`
+- `caption-frame-missing`
+- `caption-timing-drift`
 
 Lint warnings do not fail a capture. They tell the agent how to improve the next
 `shotkit.config.js` edit.
@@ -127,8 +256,11 @@ The handoff contract is versioned independently from the npm package:
 - Top-level `version: 1` means handoff contract v1.
 - Top-level `kind` identifies the document type.
 - `$schema` points at the matching schema URN.
+- Approval decisions use `kind: "shotkit.approval"` and are tied to an asset
+  digest, not a mutable filename.
 - New fields may be added in v1. Existing fields should keep their meaning.
 
 Downstream tools should ignore unknown fields and key off `kind`, `version`, and
-`assets[].role`. For validation, load the schema files from the installed
-`shotkit` package rather than fetching the URN.
+`assets[].role`. For validation, prefer the schemas copied into the handoff
+pack. The same files remain available through the installed `shotkit` package's
+`./schemas/*` export; never fetch the URN as a URL.

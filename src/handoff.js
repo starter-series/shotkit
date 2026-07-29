@@ -1,15 +1,34 @@
 /*
  * shotkit — handoff contract exports.
  *
- * These JSON files are the "starter pack" layer: not a video editor, but a
- * clean bundle of captured assets, captions, story intent, and next-tool hints
- * that Screen Studio / Canva / Supademo / future MCP adapters can consume.
+ * These files are the autonomous machine boundary: captured evidence,
+ * captions, integrity, target QA, agent-owned fix/retry actions, and the final
+ * user approval gate. Users review media, not manifests or repair mechanics.
  */
 
 const fs = require('fs');
 const path = require('path');
-const { normalizeDemoCaptions, parseTimeToMs } = require('./demo');
+const crypto = require('crypto');
+const { normalizeDemoCaptions, parseTimeToMs } = require('./demo-time');
+const { buildCaptionFrames, buildCaptionTimeline, captionStyle } = require('./demo-caption-focus');
 const { buildHandoffRecommendations } = require('./integrations');
+const { buildPublishPlan } = require('./publish');
+const {
+  APPROVAL_SCHEMA_ID,
+  emptyApprovalDocument,
+  loadApproval,
+  syncManifestApproval,
+} = require('./approval');
+const { isValidHandoffDocs, validateHandoffDocs } = require('./handoff-validator');
+const {
+  copyHandoffSchemas,
+  hydrateManifestAssets,
+  mergeByKey,
+  namesMatch,
+  readJsonIfExists,
+  validateFinalPack,
+  writeJson,
+} = require('./handoff-files');
 
 const HANDOFF_VERSION = 1;
 const HANDOFF_KINDS = Object.freeze({
@@ -21,6 +40,13 @@ const HANDOFF_SCHEMA_IDS = Object.freeze({
   manifest: 'urn:starter-series:shotkit:schema:shotkit-manifest:v1',
   storyboard: 'urn:starter-series:shotkit:schema:storyboard:v1',
   captions: 'urn:starter-series:shotkit:schema:captions:v1',
+  approval: APPROVAL_SCHEMA_ID,
+});
+const HANDOFF_SCHEMA_FILES = Object.freeze({
+  manifest: 'schemas/shotkit-manifest.schema.json',
+  storyboard: 'schemas/storyboard.schema.json',
+  captions: 'schemas/captions.schema.json',
+  approval: 'schemas/approval.schema.json',
 });
 
 function readProjectInfo(cwd) {
@@ -54,7 +80,7 @@ function stableIdPart(value) {
     .replace(/^-+|-+$/g, '') || 'asset';
 }
 
-function assetRecord({ cwd, outDir, filePath, name, type, role, width, height, source }) {
+function assetRecord({ cwd, outDir, filePath, name, type, role, width, height, source, target, channel, media, visual }) {
   const assetName = name || path.basename(filePath, path.extname(filePath));
   return {
     id: `${stableIdPart(role)}:${stableIdPart(assetName)}`,
@@ -66,6 +92,10 @@ function assetRecord({ cwd, outDir, filePath, name, type, role, width, height, s
     outPath: rel(outDir, filePath),
     width,
     height,
+    target,
+    channel,
+    media,
+    visual,
     source,
   };
 }
@@ -75,6 +105,9 @@ function demoAudience(demoConfig) {
 }
 
 function demoNextTool(demoConfig) {
+  if (demoConfig.targetProfile && demoConfig.targetProfile.connector) {
+    return `${demoConfig.targetProfile.connector}-upload`;
+  }
   if (demoConfig.nextTool) return demoConfig.nextTool;
   if (demoConfig.handoff && demoConfig.handoff.nextTool) return demoConfig.handoff.nextTool;
   return 'manual-editor';
@@ -93,14 +126,28 @@ function trimStartMs(demoConfig) {
   }
 }
 
-// Shift caption times by the trimmed-off prefix and drop captions that fall
-// before the clip starts (they are not in the deliverable). Output conforms to
-// the beat/caption schema: at >= 0 (number), atMs >= 0 (integer).
-function deliverableBeats(captions, startMs) {
+function trimEndMs(demoConfig, startMs) {
+  const trim = demoConfig.trim;
+  if (!trim || typeof trim !== 'object' || trim.duration == null) return null;
+  try {
+    return startMs + parseTimeToMs(trim.duration, 'trim.duration');
+  } catch (_e) {
+    return null;
+  }
+}
+
+// Shift caption times by the trimmed-off prefix and drop captions outside the
+// delivered trim window. Output conforms to the beat/caption schema: at >= 0
+// (number), atMs >= 0 (integer).
+function deliverableBeats(captions, startMs, endMs = null) {
   return captions
-    .map((caption) => ({ atMs: caption.atMs - startMs, text: caption.text }))
-    .filter((beat) => beat.atMs >= 0)
-    .map((beat) => ({ at: beat.atMs / 1000, atMs: beat.atMs, text: beat.text }));
+    .filter((caption) => caption.atMs >= startMs && (endMs == null || caption.atMs < endMs))
+    .map((caption) => ({
+      atMs: caption.atMs - startMs,
+      text: caption.text,
+      ...(caption.role == null ? {} : { role: caption.role }),
+    }))
+    .map((beat) => ({ at: beat.atMs / 1000, ...beat }));
 }
 
 // Coerce loosely-typed demo config into the storyboard schema's shape: preset
@@ -120,9 +167,20 @@ function storyboardThumbnail(thumbnail) {
 function demoStoryboard(demoConfig, viewport) {
   const captions = normalizeDemoCaptions(demoConfig.captions || []);
   const startMs = trimStartMs(demoConfig);
+  const endMs = trimEndMs(demoConfig, startMs);
   return {
     name: demoConfig.name,
+    story: demoConfig.story,
+    target: demoConfig.target,
+    lintEnabled: demoConfig.storyboardLint !== false,
     audience: demoAudience(demoConfig),
+    channelProfile: demoConfig.targetProfile ? {
+      id: demoConfig.targetProfile.id,
+      label: demoConfig.targetProfile.label,
+      platform: demoConfig.targetProfile.platform,
+      delivery: demoConfig.targetProfile.delivery,
+      specUrl: demoConfig.targetProfile.specUrl,
+    } : undefined,
     preset: storyboardPreset(demoConfig.preset),
     viewport,
     recommendedNextTool: demoNextTool(demoConfig),
@@ -131,21 +189,69 @@ function demoStoryboard(demoConfig, viewport) {
       crop: demoConfig.crop || null,
       zoom: demoConfig.zoom || null,
     },
+    calibration: demoConfig.calibrationProfile ? {
+      profileHash: demoConfig.calibrationProfile.profileHash,
+      layoutPreset: demoConfig.calibrationProfile.layoutPreset,
+      protectedRegions: demoConfig.calibrationProfile.protectedRegions || [],
+    } : null,
+    captionStyle: captionStyle(demoConfig.captionOptions || {}),
     thumbnail: storyboardThumbnail(demoConfig.thumbnail),
     recommendedStory: {
       durationSeconds: { min: 20, max: 40 },
       shape: ['result-first', 'action', 'proof', 'safety-restore'],
     },
-    beats: deliverableBeats(captions, startMs),
+    beats: deliverableBeats(captions, startMs, endMs),
     guidance: demoConfig.guidance || null,
   };
 }
 
-function demoCaptions(demoConfig) {
+function finiteSampleValues(samples, key) {
+  return samples.map((sample) => sample[key]).filter(Number.isFinite);
+}
+
+function captionQaReport(report) {
+  if (!report) return undefined;
+  const expectedFrames = Array.isArray(report.expectedFrames) ? report.expectedFrames : [];
+  const samples = Array.isArray(report.samples) ? report.samples : [];
+  const fontSamples = samples.filter((sample) => sample.fontConfigured);
+  const fontLoadTimes = finiteSampleValues(fontSamples, 'fontLoadMs');
+  const fontSizes = finiteSampleValues(samples, 'fontSize');
+  const lineCounts = finiteSampleValues(samples, 'lineCount');
+  const lineBalances = finiteSampleValues(samples, 'lineBalance');
+  const typographyEnabled = !!(report.typography && report.typography.enabled);
+  const allFramesLoaded = samples.length
+    ? samples.every((sample) => sample.fontConfigured === true && sample.fontLoaded === true)
+    : null;
+  return {
+    scheduledFrameCount: expectedFrames.length,
+    measuredFrameCount: samples.length,
+    typography: report.typography || null,
+    rendering: {
+      fontLoaded: typographyEnabled
+        ? allFramesLoaded
+        : fontSamples.length ? fontSamples.every((sample) => sample.fontLoaded === true) : null,
+      maxFontLoadMs: fontLoadTimes.length ? Math.max(...fontLoadTimes) : null,
+      fitStatuses: [...new Set(samples.map((sample) => sample.fitStatus).filter(Boolean))],
+      resolvedFontSize: fontSizes.length ? { min: Math.min(...fontSizes), max: Math.max(...fontSizes) } : null,
+      maxLineCount: lineCounts.length ? Math.max(...lineCounts) : 0,
+      minLineBalance: lineBalances.length ? Math.min(...lineBalances) : null,
+    },
+  };
+}
+
+function demoCaptions(demoConfig, captionReport) {
   const startMs = trimStartMs(demoConfig);
+  const endMs = trimEndMs(demoConfig, startMs);
+  const captions = normalizeDemoCaptions(demoConfig.captions || []);
+  const frames = buildCaptionFrames(captions, demoConfig.captionOptions);
   return {
     name: demoConfig.name,
-    captions: deliverableBeats(normalizeDemoCaptions(demoConfig.captions || []), startMs),
+    story: demoConfig.story,
+    target: demoConfig.target,
+    style: captionStyle(demoConfig.captionOptions || {}),
+    ...(captionReport ? { qa: captionQaReport(captionReport) } : {}),
+    captions: deliverableBeats(captions, startMs, endMs),
+    timeline: buildCaptionTimeline(frames, { startMs, endMs }),
   };
 }
 
@@ -157,10 +263,93 @@ function storyboardLintSummary(warnings) {
   }));
 }
 
-function buildHandoffDocs({ cwd, outDir, config, assets, demoConfigs, demoViewports, demoWarnings, flags }) {
+function handoffReview(storyboardLint, run = {}, assets = []) {
+  const warnings = (storyboardLint || []).flatMap((summary) => (
+    (summary.warnings || []).map((warning) => ({ demo: summary.name, ...warning }))
+  ));
+  const incomplete = (run.skippedDemos || []).map((name) => ({
+    code: 'demo-skipped',
+    demo: name,
+    reason: run.video ? 'not-captured' : 'video-disabled',
+    fix: run.video ? `capture the ${name} demo` : 'rerun without --no-video',
+  }));
+  for (const asset of assets.filter((item) => item.state === 'modified')) {
+    incomplete.push({
+      code: 'asset-integrity-mismatch',
+      asset: asset.id,
+      reason: 'retained-file-changed',
+      fix: `rerun the source for ${asset.id}`,
+    });
+  }
+  return {
+    status: incomplete.length ? 'incomplete' : warnings.length ? 'needs-review' : 'ready',
+    warningCount: warnings.length,
+    warnings,
+    incomplete,
+  };
+}
+
+function refreshManifestHandoff(manifest, storyboard, config, approvalDocument = emptyApprovalDocument()) {
+  const automation = buildPublishPlan({
+    assets: manifest.assets,
+    storyboard,
+    run: manifest.run,
+    config,
+  });
+  const adapterHints = automation.status !== 'not-requested' && !automation.manualFallback ? [] : buildHandoffRecommendations({
+    assets: manifest.assets,
+    config,
+    context: { storyboardDemoCount: storyboard.demos.length },
+  });
+  manifest.handoff.adapterHints = adapterHints;
+  manifest.handoff.automation = automation;
+  syncManifestApproval(manifest, approvalDocument);
+  manifest.handoff.review = handoffReview(storyboard.storyboardLint, manifest.run, manifest.assets);
+  manifest.handoff.summary = {
+    assetCount: manifest.assets.length,
+    demoCount: storyboard.demos.length,
+    readyAdapterCount: adapterHints.filter((hint) => hint.readiness === 'ready').length,
+    publishReadyTargetCount: automation.targets.filter((target) => target.status === 'publish-ready').length,
+    approvedTargetCount: manifest.handoff.approval.targets.filter((target) => target.status === 'approved').length,
+  };
+}
+
+function buildHandoffDocs({
+  cwd,
+  outDir,
+  config,
+  assets,
+  demoConfigs,
+  demoViewports,
+  demoWarnings,
+  demoCaptionReports = {},
+  flags,
+  run = {},
+}) {
   const generatedAt = new Date().toISOString();
   const project = readProjectInfo(cwd);
-  const adapterHints = buildHandoffRecommendations({ assets, config });
+  const runInfo = {
+    id: crypto.randomUUID(),
+    mode: run.mode || 'full',
+    requestedScenes: run.requestedScenes || [],
+    requestedTargets: run.requestedTargets || [],
+    attempt: run.attempt || 1,
+    video: run.video !== false,
+    noBuild: !!run.noBuild,
+    mp4: !!run.mp4,
+    configuredDemos: run.configuredDemos || [],
+    configuredTargets: run.configuredTargets || [],
+    configuredTargetDemos: run.configuredTargetDemos || [],
+    selectedDemos: run.selectedDemos || [],
+    capturedDemos: run.capturedDemos || [],
+    skippedDemos: run.skippedDemos || [],
+  };
+  const currentAssets = assets.map((asset) => ({
+    ...asset,
+    runId: runInfo.id,
+    capturedAt: generatedAt,
+    state: 'produced',
+  }));
   const storyboard = {
     $schema: HANDOFF_SCHEMA_IDS.storyboard,
     kind: HANDOFF_KINDS.storyboard,
@@ -177,7 +366,7 @@ function buildHandoffDocs({ cwd, outDir, config, assets, demoConfigs, demoViewpo
     version: HANDOFF_VERSION,
     generatedAt,
     project,
-    demos: demoConfigs.map((demoConfig) => demoCaptions(demoConfig)),
+    demos: demoConfigs.map((demoConfig) => demoCaptions(demoConfig, demoCaptionReports[demoConfig.name])),
   };
   const manifest = {
     $schema: HANDOFF_SCHEMA_IDS.manifest,
@@ -188,53 +377,79 @@ function buildHandoffDocs({ cwd, outDir, config, assets, demoConfigs, demoViewpo
     project,
     outDir: rel(cwd, outDir),
     flags,
+    run: runInfo,
     positioning: 'capture-and-handoff-kit',
+    category: 'agent-ready-launch-asset-pipeline',
     handoff: {
       contractVersion: HANDOFF_VERSION,
+      entrypoint: 'shotkit-manifest.json',
       schemas: HANDOFF_SCHEMA_IDS,
+      schemaFiles: HANDOFF_SCHEMA_FILES,
       storyboards: 'storyboard.json',
       captions: 'captions.json',
       recommendedFlow: [
-        'use shotkit outputs as source evidence',
-        'polish in Screen Studio, Canva, Supademo, or another editor',
+        'read handoff.automation and apply every agent-owned action',
+        'retry listed scenes until every requested target is publish-ready',
+        'present technically ready media to the user for final approval',
+        'upload only the exact deliverable digest the user approved',
         'keep repo fixtures and storyboard as the repeatable source of truth',
       ],
-      adapterHints,
+      adapterHints: [],
+      automation: null,
+      approval: null,
+      review: handoffReview(storyboard.storyboardLint, runInfo),
+      summary: {
+        assetCount: currentAssets.length,
+        demoCount: storyboard.demos.length,
+        readyAdapterCount: 0,
+        publishReadyTargetCount: 0,
+      },
     },
-    assets,
+    assets: currentAssets,
     config: {
       disclaimer: config.disclaimer || null,
       description: config.description || null,
     },
   };
+  refreshManifestHandoff(manifest, storyboard, config);
   return { storyboard, captions, manifest };
 }
 
-function writeJson(filePath, data) {
-  fs.writeFileSync(filePath, `${JSON.stringify(data, null, 2)}\n`);
+function compatiblePreviousPack(previous, current) {
+  const { manifest, storyboard, captions } = previous;
+  if (!manifest || !storyboard || !captions) return false;
+  if (!isValidHandoffDocs(previous)) return false;
+  if (manifest.kind !== HANDOFF_KINDS.manifest || manifest.version !== HANDOFF_VERSION) return false;
+  if (storyboard.kind !== HANDOFF_KINDS.storyboard || storyboard.version !== HANDOFF_VERSION) return false;
+  if (captions.kind !== HANDOFF_KINDS.captions || captions.version !== HANDOFF_VERSION) return false;
+  if (!Array.isArray(manifest.assets) || !Array.isArray(storyboard.demos)
+    || !Array.isArray(storyboard.storyboardLint) || !Array.isArray(captions.demos)) return false;
+  if (!namesMatch(storyboard.demos, captions.demos)) return false;
+  const previousProject = manifest.project && manifest.project.name;
+  const currentProject = current.manifest.project && current.manifest.project.name;
+  return !previousProject || !currentProject || previousProject === currentProject;
 }
 
-function readJsonIfExists(filePath) {
-  try {
-    return fs.existsSync(filePath) ? JSON.parse(fs.readFileSync(filePath, 'utf8')) : null;
-  } catch (_e) {
-    return null;
-  }
-}
-
-// Union by key, with the current run's entries winning — preserves prior
-// entries this run did not touch, so a partial re-run does not clobber them.
-function mergeByKey(prev, next, keyOf) {
-  if (!Array.isArray(prev) || !prev.length) return next;
-  const nextKeys = new Set(next.map(keyOf));
-  const kept = prev.filter((item) => item && !nextKeys.has(keyOf(item)));
-  return [...kept, ...next];
-}
-
-function writeHandoffDocs({ cwd, outDir, config, assets, demoConfigs, demoViewports, demoWarnings, flags, partial = false }) {
+function writeHandoffDocs({
+  cwd,
+  outDir,
+  config,
+  assets,
+  demoConfigs,
+  demoViewports,
+  demoWarnings,
+  demoCaptionReports = {},
+  flags,
+  partial = false,
+  run = {},
+}) {
   const storyboardPath = path.join(outDir, 'storyboard.json');
   const captionsPath = path.join(outDir, 'captions.json');
   const manifestPath = path.join(outDir, 'shotkit-manifest.json');
+  const refreshedAssetKeys = new Set(assets.map((asset) => (
+    (asset.source && asset.source.name) || asset.name
+  )));
+  const schemaPaths = copyHandoffSchemas(outDir, HANDOFF_SCHEMA_FILES);
   const contractAssets = [
     assetRecord({
       cwd, outDir, filePath: storyboardPath,
@@ -251,6 +466,15 @@ function writeHandoffDocs({ cwd, outDir, config, assets, demoConfigs, demoViewpo
       name: 'shotkit-manifest', type: 'json', role: 'handoff-manifest',
       source: { kind: 'handoff' },
     }),
+    ...schemaPaths.map((filePath) => assetRecord({
+      cwd,
+      outDir,
+      filePath,
+      name: path.basename(filePath, path.extname(filePath)),
+      type: 'json',
+      role: 'handoff-schema',
+      source: { kind: 'handoff-schema' },
+    })),
   ];
   const docs = buildHandoffDocs({
     cwd,
@@ -260,7 +484,9 @@ function writeHandoffDocs({ cwd, outDir, config, assets, demoConfigs, demoViewpo
     demoConfigs,
     demoViewports,
     demoWarnings,
+    demoCaptionReports,
     flags,
+    run: { ...run, mode: partial ? 'partial' : 'full' },
   });
   // A partial run (scene filter or --no-video) only re-captures a subset, so
   // merge into the existing contract instead of overwriting a prior full run's
@@ -269,21 +495,35 @@ function writeHandoffDocs({ cwd, outDir, config, assets, demoConfigs, demoViewpo
     const prevStoryboard = readJsonIfExists(storyboardPath);
     const prevCaptions = readJsonIfExists(captionsPath);
     const prevManifest = readJsonIfExists(manifestPath);
-    if (prevStoryboard) {
+    const previous = { manifest: prevManifest, storyboard: prevStoryboard, captions: prevCaptions };
+    if (compatiblePreviousPack(previous, docs)) {
       docs.storyboard.demos = mergeByKey(prevStoryboard.demos, docs.storyboard.demos, (d) => d.name);
       docs.storyboard.storyboardLint = mergeByKey(prevStoryboard.storyboardLint, docs.storyboard.storyboardLint, (l) => l.name);
-    }
-    if (prevCaptions) {
       docs.captions.demos = mergeByKey(prevCaptions.demos, docs.captions.demos, (d) => d.name);
-    }
-    if (prevManifest) {
-      docs.manifest.assets = mergeByKey(prevManifest.assets, docs.manifest.assets, (a) => a.id);
+      const previousRunId = prevManifest.run && prevManifest.run.id
+        ? prevManifest.run.id
+        : `legacy:${prevManifest.generatedAt}`;
+      const previousAssets = (prevManifest.assets || [])
+        .filter((asset) => !refreshedAssetKeys.has((asset.source && asset.source.name) || asset.name))
+        .map((asset) => ({
+          ...asset,
+          runId: asset.runId || previousRunId,
+          capturedAt: asset.capturedAt || prevManifest.generatedAt,
+          state: 'retained',
+        }));
+      docs.manifest.assets = mergeByKey(previousAssets, docs.manifest.assets, (a) => a.id);
     }
   }
   writeJson(storyboardPath, docs.storyboard);
   writeJson(captionsPath, docs.captions);
+  // Partial runs can inherit an older inventory. Prune entries whose files no
+  // longer exist, then recompute recommendations from the actual final bundle.
+  docs.manifest.assets = hydrateManifestAssets(docs.manifest.assets, outDir, manifestPath);
+  refreshManifestHandoff(docs.manifest, docs.storyboard, config, loadApproval(outDir).document);
+  validateHandoffDocs(docs);
+  validateFinalPack(docs, outDir, manifestPath);
   writeJson(manifestPath, docs.manifest);
-  return [storyboardPath, captionsPath, manifestPath];
+  return [storyboardPath, captionsPath, manifestPath, ...schemaPaths];
 }
 
 module.exports = {

@@ -8,7 +8,10 @@ const BIN = path.resolve(__dirname, '..', 'bin', 'shotkit.js');
 
 describe('parseArgs', () => {
   test('defaults', () => {
-    expect(parseArgs([])).toMatchObject({ scenes: [], errors: [], json: false, noVideo: false, help: false, path: null });
+    expect(parseArgs([])).toMatchObject({
+      scenes: [], targets: [], errors: [], json: false, noVideo: false,
+      campaign: false, calibrate: false, port: null, open: true, help: false, path: null,
+    });
   });
 
   test('positional path + flags', () => {
@@ -23,11 +26,47 @@ describe('parseArgs', () => {
     expect(parseArgs(['--scene=a,b']).scenes).toEqual(['a', 'b']);
   });
 
+  test('--target accepts comma lists and repeats', () => {
+    expect(parseArgs(['--target', 'x,cws-youtube', '--target', 'youtube-shorts']).targets)
+      .toEqual(['x', 'cws-youtube', 'youtube-shorts']);
+    expect(parseArgs(['--target=x']).targets).toEqual(['x']);
+  });
+
+  test('--attempt accepts positive integers for agent retries', () => {
+    expect(parseArgs(['--attempt', '2']).attempt).toBe(2);
+    expect(parseArgs(['--attempt=3']).attempt).toBe(3);
+    expect(parseArgs(['--attempt', '0']).errors).toEqual(['--attempt requires a positive integer']);
+  });
+
+  test('--calibrate accepts local server controls', () => {
+    expect(parseArgs(['--calibrate', '--port', '4312', '--no-open'])).toMatchObject({
+      calibrate: true,
+      port: 4312,
+      open: false,
+    });
+    expect(parseArgs(['--port=65536']).errors).toEqual(['--port requires an integer between 0 and 65535']);
+  });
+
+  test('--campaign is additive and cannot be combined with --calibrate', () => {
+    expect(parseArgs(['--campaign', '--port', '4312', '--no-open'])).toMatchObject({
+      campaign: true,
+      calibrate: false,
+      port: 4312,
+      open: false,
+    });
+    expect(parseArgs(['--campaign', '--calibrate']).errors)
+      .toEqual(['--campaign and --calibrate cannot be used together']);
+  });
+
   test('usage errors are explicit for missing values and unknown options', () => {
     expect(parseArgs(['--scene']).errors).toEqual(['--scene requires a scene name']);
     expect(parseArgs(['--scene=']).errors).toEqual(['--scene requires a scene name']);
     expect(parseArgs(['--config', '--json']).errors).toEqual(['--config requires a config path']);
     expect(parseArgs(['--config=']).errors).toEqual(['--config requires a config path']);
+    expect(parseArgs(['--target']).errors).toEqual(['--target requires a channel target']);
+    expect(parseArgs(['--target=']).errors).toEqual(['--target requires a channel target']);
+    expect(parseArgs(['--attempt=oops']).errors).toEqual(['--attempt requires a positive integer']);
+    expect(parseArgs(['--port=oops']).errors).toEqual(['--port requires an integer between 0 and 65535']);
     expect(parseArgs(['--wat']).errors).toEqual(['unknown option: --wat']);
   });
 
@@ -49,6 +88,8 @@ describe('parseArgs', () => {
 
   test('USAGE documents the agent contract', () => {
     expect(USAGE).toContain('--json');
+    expect(USAGE).toContain('--campaign');
+    expect(USAGE).toContain('--calibrate');
     expect(USAGE).toContain('Exit codes');
   });
 });
@@ -79,16 +120,38 @@ describe('shotkit CLI usage errors', () => {
     expect(res.stderr).toContain('Usage: shotkit');
   });
 
-  test('--json usage errors keep stdout empty and write JSON to stderr', () => {
+  test('--json usage errors write one JSON object to stdout', () => {
     const res = run(['--config', '--json']);
 
     expect(res.status).toBe(2);
-    expect(res.stdout).toBe('');
-    expect(JSON.parse(res.stderr)).toEqual({
+    expect(JSON.parse(res.stdout)).toEqual({
       ok: false,
       error: '--config requires a config path',
       code: 2,
     });
+    expect(res.stderr).toBe('');
+  });
+
+  test('--json unknown scenes fail with usage code 2 before capture work', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sk-cli-scene-'));
+    fs.writeFileSync(path.join(dir, 'shotkit.config.js'), `
+module.exports = {
+  prepareExtension() { throw new Error('prepareExtension should not run'); },
+  scenes: [{ name: 'known-scene', run: async () => {} }],
+};
+`);
+
+    const res = spawnSync(process.execPath, [BIN, dir, '--scene', 'missing-scene', '--json', '--no-build', '--no-video'], {
+      encoding: 'utf8',
+    });
+
+    expect(res.status).toBe(2);
+    expect(JSON.parse(res.stdout)).toEqual({
+      ok: false,
+      error: 'unknown scene: missing-scene. Known: known-scene',
+      code: 2,
+    });
+    expect(res.stderr).toBe('');
   });
 });
 
