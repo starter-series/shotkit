@@ -9,6 +9,7 @@ describe('npm package boundary', () => {
       'calibrator',
       'campaign',
       'skills/capture',
+      'skills/demo',
       'docs/handoff-conventions.md',
       'schemas',
     ]);

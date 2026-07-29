@@ -2,11 +2,10 @@
 
 # shotkit
 
-**Autonomous launch assets with a human approval gate for browser extensions.**
+**Your agent built it. shotkit shows it running.**
 
-Name the story and channels. Agents capture, edit, validate, and retry. Humans
-review the final target files and choose Approve or Request changes; they only
-enter the technical loop when automation reaches a blocker.
+One command records a captioned demo clip of any web app — video proof, from a
+clean checkout, that the thing actually renders and works.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Node ≥ 22](https://img.shields.io/badge/node-%E2%89%A522-brightgreen.svg)](.nvmrc)
@@ -17,9 +16,31 @@ enter the technical loop when automation reaches a blocker.
 
 ---
 
-> **Part of [Starter Series](https://github.com/starter-series)** — reusable tooling, not just clone-templates. `shotkit` is the unscoped package identity for this launch asset pipeline; public npm install is a release gate, not assumed by the repo README.
+![shotkit demo — a captioned proof clip recorded from one command](docs/media/quick-demo.gif)
+
+```bash
+npm ci && npx playwright install chromium   # in a clone; npm publish is pending
+node bin/shotkit.js demo http://localhost:3000   # a dev server
+node bin/shotkit.js demo ./dist                  # a static build dir
+node bin/shotkit.js demo page.html               # a single file
+```
+
+That's the whole setup. In about half a minute you get
+`shotkit-demo/demo.webm`, plus `demo.mp4` and a thumbnail when ffmpeg is
+installed. **No config file** — captions come from the page's own title and
+headings, and the clip walks the page with a paced scroll. Coding agents get
+the same contract as everywhere else in shotkit: `--json` prints exactly one
+JSON object on stdout, and exit codes are `0 ok · 1 failure · 2 usage`.
+
+**And it grows.** The same engine is a full launch-asset pipeline for browser
+extensions: deterministic Chrome Web Store screenshots, promo tiles,
+storyboarded SNS demo clips with pointer-highlighted actions, final-file QA
+(ffprobe + full decode), and a digest-bound human approval gate — everything
+below this line.
 
 ---
+
+> **Part of [Starter Series](https://github.com/starter-series)** — reusable launch tooling. `shotkit` is the unscoped package identity; public npm install is a release gate, not assumed by this README.
 
 ## Status & Scope
 
@@ -64,7 +85,16 @@ npx shotkit
 
 ## Usage
 
-Add a `shotkit.config.js` (the per-repo capture contract), then:
+The zero-config path needs no file at all:
+
+```bash
+shotkit demo http://localhost:3000   # captioned proof clip of any web app
+shotkit demo ./dist --duration 30    # static dir, longer clip
+shotkit demo --help                  # all options
+```
+
+For the full pipeline, add a `shotkit.config.js` (the per-repo capture
+contract), then:
 
 ```bash
 shotkit                         # produce everything into outDir

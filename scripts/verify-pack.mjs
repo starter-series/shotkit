@@ -27,6 +27,7 @@ const requiredFiles = [
   "campaign/styles.css",
   "campaign/app.js",
   "skills/capture/SKILL.md",
+  "skills/demo/SKILL.md",
   "docs/handoff-conventions.md",
   "schemas/shotkit-manifest.schema.json",
   "schemas/storyboard.schema.json",
@@ -58,7 +59,7 @@ for (const relpath of requiredFiles) {
 
 for (const packedPath of packedPaths) {
   assert.ok(
-    /^(package\.json|README\.md|README\.ko\.md|LICENSE|src\/|bin\/|calibrator\/|campaign\/|skills\/capture\/|docs\/handoff-conventions\.md|schemas\/)/.test(packedPath),
+    /^(package\.json|README\.md|README\.ko\.md|LICENSE|src\/|bin\/|calibrator\/|campaign\/|skills\/capture\/|skills\/demo\/|docs\/handoff-conventions\.md|schemas\/)/.test(packedPath),
     `unexpected file in npm pack output: ${packedPath}`,
   );
 }

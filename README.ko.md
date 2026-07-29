@@ -2,11 +2,10 @@
 
 # shotkit
 
-**최종 사용자 승인 게이트가 있는 브라우저 익스텐션 출시 자산 자동화.**
+**에이전트가 만든 앱, shotkit이 돌아가는 모습을 보여줍니다.**
 
-스토리와 채널만 정하면 에이전트가 촬영·편집·검증·재시도를 수행하고,
-사용자는 최종 파일을 검수해 승인하거나 수정 요청합니다. 기술적 판단은
-자동화가 소진되어 blocker가 생겼을 때만 사용자에게 요청합니다.
+명령 한 줄로 아무 웹 앱의 캡션 달린 데모 클립을 녹화합니다 — 깨끗한
+체크아웃에서 실제로 렌더되고 동작한다는 영상 증거입니다.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Node ≥ 22](https://img.shields.io/badge/node-%E2%89%A522-brightgreen.svg)](.nvmrc)
@@ -17,7 +16,29 @@
 
 ---
 
-> **[Starter Series](https://github.com/starter-series)** — 클론 템플릿이 아니라 재사용 가능한 도구. `shotkit`은 이 출시 자산 파이프라인의 unscoped 패키지 이름입니다. 공개 npm 설치는 릴리스 게이트이며, README가 현재 게시 상태를 가정하지 않습니다.
+![shotkit demo — 명령 한 줄로 녹화한 캡션 데모 클립](docs/media/quick-demo.gif)
+
+```bash
+npm ci && npx playwright install chromium   # 클론에서 실행; npm 게시는 대기 중
+node bin/shotkit.js demo http://localhost:3000   # 개발 서버
+node bin/shotkit.js demo ./dist                  # 정적 빌드 디렉토리
+node bin/shotkit.js demo page.html               # 단일 파일
+```
+
+설정은 이것이 전부입니다. 약 30초 뒤 `shotkit-demo/demo.webm`이 나오고,
+ffmpeg가 있으면 `demo.mp4`와 썸네일까지 나옵니다. **설정 파일 없음** —
+캡션은 페이지 자신의 타이틀과 헤딩에서 나오고, 클립은 페이지를 일정한
+속도로 스크롤하며 보여줍니다. 코딩 에이전트는 `--json`(stdout에 JSON 객체
+정확히 1개)과 종료 코드 `0 ok · 1 실패 · 2 사용법` 계약을 그대로 씁니다.
+
+**여기서 더 자랍니다.** 같은 엔진이 브라우저 익스텐션용 출시 자산
+파이프라인 전체를 구동합니다: 결정적 Chrome Web Store 스크린샷, 프로모
+타일, 포인터 하이라이트가 있는 스토리보드 SNS 클립, 최종 파일 QA(ffprobe +
+전체 디코드), 그리고 해시 기반 사용자 승인 게이트 — 아래 전부입니다.
+
+---
+
+> **[Starter Series](https://github.com/starter-series)** — 재사용 가능한 출시 도구. `shotkit`은 unscoped 패키지 이름이며, 공개 npm 설치는 릴리스 게이트로 README가 게시 상태를 가정하지 않습니다.
 
 ## 상태와 범위 (Status & Scope)
 
@@ -55,7 +76,16 @@ npx shotkit
 
 ## 사용
 
-`shotkit.config.js`(repo별 이음새 — 영문 README의 contract 참고)를 두고:
+제로 컨피그 경로는 파일이 전혀 필요 없습니다:
+
+```bash
+shotkit demo http://localhost:3000   # 아무 웹 앱의 캡션 데모 클립
+shotkit demo ./dist --duration 30    # 정적 디렉토리, 더 긴 클립
+shotkit demo --help                  # 전체 옵션
+```
+
+전체 파이프라인은 `shotkit.config.js`(repo별 이음새 — 영문 README의
+contract 참고)를 두고:
 
 ```bash
 shotkit                         # outDir에 전부 산출

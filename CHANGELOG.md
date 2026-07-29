@@ -7,6 +7,19 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 ## [Unreleased]
 
 ### Added
+- `shotkit demo <url|dir|file.html>` — a zero-config proof clip for any web
+  app. No `shotkit.config.js`: the clip is captioned from the page's own title
+  and headings, walks the page with a paced scroll, and lands as
+  `demo.webm` (+ `demo.mp4` and a thumbnail when ffmpeg exists). Static
+  directories and single files are served on a local loopback port. `--json`
+  emits exactly one machine-readable object.
+- `launchBrowser` — extension-optional Chromium launch. `config.prepareExtension`
+  is now optional: plain web apps capture with `extensionId: null`, and
+  `launchWithExtension` remains the strict wrapper.
+- Demo configs accept `lint: false` so runtime-captioned walkthroughs skip
+  static storyboard lint.
+- A `demo` agent skill (`skills/demo/SKILL.md`) so coding agents can record a
+  proof clip of what they just built without reading the full pipeline docs.
 - An explicit final user approval gate in the Calibrator. Approve and Request
   changes decisions are stored in `shotkit-approval.json`, bound to the exact
   deliverable SHA-256 and calibration profile hash, and exposed through the
