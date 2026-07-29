@@ -6,6 +6,14 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+### Fixed
+- Playwright's "browser not downloaded" failure is rewritten into an install
+  command that actually works. Its own hint (`npx playwright install`) can
+  resolve a different Playwright than the one shotkit runs under when shotkit
+  was started through a bare `npx`, downloading a build shotkit never looks
+  at. The docs now lead with `npm i -D demoshot && npx playwright install
+  chromium` for the same reason.
+
 ### Changed
 - The npm package name is `demoshot`: the registry rejects `shotkit` as too
   similar to the existing `shot-kit` package. The project, repository, and
