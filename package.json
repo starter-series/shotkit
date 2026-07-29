@@ -120,5 +120,8 @@
       "text",
       "text-summary"
     ]
+  },
+  "overrides": {
+    "brace-expansion": "5.0.8"
   }
 }
