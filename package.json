@@ -1,6 +1,6 @@
 {
   "name": "demoshot",
-  "version": "1.4.1",
+  "version": "1.5.0",
   "description": "Record a captioned demo video of any web app with one command — then grow into autonomous CWS/X/YouTube launch assets with final-file QA and a human approval gate.",
   "main": "src/index.js",
   "exports": {

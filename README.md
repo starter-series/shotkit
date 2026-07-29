@@ -95,6 +95,19 @@ shotkit demo ./dist --duration 30    # static dir, longer clip
 shotkit demo --help                  # all options
 ```
 
+Need a file you can actually upload? Name the channel and it comes out sized,
+trimmed, captioned, and **verified against that channel's published limits**:
+
+```bash
+shotkit demo http://localhost:3000 --for x                # 1280×720, ≤140s
+shotkit demo http://localhost:3000 --for youtube-shorts   # 720×1280, focus captions
+shotkit demo http://localhost:3000 --for x,cws-youtube    # both, one run
+```
+
+Each channel adds `demo-<channel>.mp4` plus a poster frame. The run fails if a
+delivered file misses its channel's dimensions, codec, or duration cap, so
+"ready to upload" is measured rather than assumed. `--for` needs ffmpeg.
+
 For the full pipeline, add a `shotkit.config.js` (the per-repo capture
 contract), then:
 

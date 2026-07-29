@@ -12,9 +12,11 @@
 const fs = require('fs');
 const path = require('path');
 
+const { CHANNEL_PROFILES, resolveChannelProfile } = require('./channels');
 const { serveDirectory } = require('./serve');
-const { findFfmpeg } = require('./video');
+const { INSTALL_HINT, findFfmpeg, probeVideo } = require('./video');
 
+const CHANNEL_IDS = Object.keys(CHANNEL_PROFILES);
 const DEFAULT_DEMO_NAME = 'demo';
 const DEFAULT_OUT_DIR = 'shotkit-demo';
 const DEFAULT_DURATION_S = 20;
@@ -58,6 +60,62 @@ function resolveDemoTarget(input, cwd = process.cwd()) {
   throw usageError(`demo target not found: ${input} (no such path, and not an http(s):// or localhost URL)`);
 }
 
+/**
+ * Validate and de-duplicate requested channel ids.
+ * @param {string[]|string} channels
+ * @returns {string[]}
+ */
+function normalizeChannels(channels) {
+  const list = Array.isArray(channels) ? channels : [channels];
+  const ids = [...new Set(list.flatMap((value) => String(value || '').split(',')).map((v) => v.trim()).filter(Boolean))];
+  const unknown = ids.filter((id) => !CHANNEL_IDS.includes(id));
+  if (unknown.length) {
+    throw usageError(`unknown channel for --for: ${unknown.join(', ')}. Known: ${CHANNEL_IDS.join(', ')}`);
+  }
+  return ids;
+}
+
+/**
+ * Check each delivered channel mp4 against its profile's published limits, so
+ * "channel-ready" is a measured claim rather than an assumption.
+ *
+ * @param {string[]} produced  file paths from capture()
+ * @param {string[]} channels  requested channel ids
+ * @param {string} [demoName]  base demo name used to build per-channel names
+ * @returns {Array<{target:string,file:string|null,ok:boolean,width?:number,height?:number,durationSeconds?:number|null,problems:string[]}>}
+ */
+function verifyChannelOutputs(produced, channels, demoName = DEFAULT_DEMO_NAME) {
+  return normalizeChannels(channels).map((id) => {
+    const profile = resolveChannelProfile(id);
+    const expected = `${demoName}-${profile.outputSuffix}.mp4`;
+    const file = (produced || []).find((filePath) => path.basename(filePath) === expected) || null;
+    if (!file) {
+      return { target: id, file: null, ok: false, problems: [`no ${expected} was produced`] };
+    }
+    const media = probeVideo(file);
+    if (!media.ok) return { target: id, file, ok: false, problems: [media.error || 'final mp4 failed verification'] };
+
+    const problems = [];
+    const size = profile.viewport;
+    if (media.width !== size.width || media.height !== size.height) {
+      problems.push(`is ${media.width}×${media.height}, expected ${size.width}×${size.height}`);
+    }
+    if (media.codec && media.codec !== 'h264') problems.push(`codec is ${media.codec}, expected h264`);
+    if (media.durationSeconds != null && media.durationSeconds > profile.maximumDurationSeconds) {
+      problems.push(`is ${media.durationSeconds.toFixed(1)}s, over the ${profile.maximumDurationSeconds}s limit`);
+    }
+    return {
+      target: id,
+      file,
+      ok: problems.length === 0,
+      width: media.width,
+      height: media.height,
+      durationSeconds: media.durationSeconds,
+      problems,
+    };
+  });
+}
+
 function trimText(value, max = 80) {
   return String(value || '').replace(/\s+/g, ' ').trim().slice(0, max);
 }
@@ -69,7 +127,7 @@ function trimText(value, max = 80) {
  */
 function makeQuickDemoRun({ url, durationS }) {
   const durationMs = durationS * 1000;
-  return async function quickDemoRun({ page, demo, baseUrl }) {
+  async function quickDemoRun({ page, demo, baseUrl }) {
     const startUrl = url || baseUrl;
     if (!startUrl) throw new Error('quick demo: no target URL (static server did not provide baseUrl)');
 
@@ -131,7 +189,11 @@ function makeQuickDemoRun({ url, durationS }) {
       await demo.wait(Math.max(OUTRO_HOLD_MS, durationMs - INTRO_HOLD_MS));
     }
     await demo.hide();
-  };
+  }
+  // Expose the resolved budget so callers (and tests) can see which duration
+  // won — the CLI default, an explicit --duration, or the channel's trim.
+  quickDemoRun.durationS = durationS;
+  return quickDemoRun;
 }
 
 /**
@@ -141,8 +203,12 @@ function makeQuickDemoRun({ url, durationS }) {
  * @param {{kind:string,url?:string,dir?:string,fallback?:string}} opts.target  from resolveDemoTarget()
  * @param {string} [opts.name]        demo/asset name (default "demo")
  * @param {string} [opts.outDir]      output dir (default "shotkit-demo")
- * @param {number} [opts.durationS]   clip length budget in seconds (default 20)
- * @param {boolean|'auto'} [opts.mp4] 'auto' = mp4+thumbnail when ffmpeg is found
+ * @param {number} [opts.durationS]   clip length budget in seconds (default 20,
+ *                                    or the channel's trim length with channels)
+ * @param {boolean|'auto'} [opts.mp4] 'auto' = mp4+thumbnail when ffmpeg is found;
+ *                                    ignored when channels are given (always mp4)
+ * @param {string[]} [opts.channels]  channel ids to deliver (see CHANNEL_IDS); each
+ *                                    supplies viewport/codec/trim/caption defaults
  * @param {{width:number,height:number}} [opts.viewport]
  * @param {object} [opts.env]         env for ffmpeg discovery (tests)
  */
@@ -150,14 +216,50 @@ function buildQuickDemoConfig({
   target,
   name = DEFAULT_DEMO_NAME,
   outDir = DEFAULT_OUT_DIR,
-  durationS = DEFAULT_DURATION_S,
+  durationS,
   mp4 = 'auto',
+  channels = [],
   viewport,
   env = process.env,
 } = {}) {
   if (!target || !target.kind) throw usageError('buildQuickDemoConfig: target required (use resolveDemoTarget)');
-  const clampedDurationS = Math.min(MAX_DURATION_S, Math.max(MIN_DURATION_S, Number(durationS) || DEFAULT_DURATION_S));
+  const profiles = normalizeChannels(channels).map((id) => resolveChannelProfile(id));
+  // A channel deliverable IS the H.264 file, so ffmpeg stops being optional.
+  if (profiles.length && !findFfmpeg(env)) {
+    throw usageError(`--for needs a channel-ready H.264 file, but ${INSTALL_HINT}`);
+  }
+  // With a channel, record long enough to fill its trim window; otherwise 20s.
+  const requestedDurationS = durationS != null
+    ? Number(durationS)
+    : (profiles.length
+      ? Math.max(...profiles.map((profile) => profile.trim.duration))
+      : DEFAULT_DURATION_S);
+  const clampedDurationS = Math.min(
+    MAX_DURATION_S,
+    Math.max(MIN_DURATION_S, requestedDurationS || DEFAULT_DURATION_S),
+  );
   const wantsMp4 = mp4 === 'auto' ? !!findFfmpeg(env) : !!mp4;
+
+  const demo = {
+    name,
+    captions: [],
+    // Captions are rendered at runtime from the page's own title/headings,
+    // so static storyboard lint has nothing to check.
+    lint: false,
+    run: makeQuickDemoRun({
+      url: target.kind === 'url' ? target.url : null,
+      durationS: clampedDurationS,
+    }),
+  };
+  if (profiles.length) {
+    // The channel profile owns viewport, preset, codec, trim, and thumbnail —
+    // expandDemoTargets applies them and emits one demo per channel.
+    demo.targets = profiles.map((profile) => profile.id);
+  } else {
+    demo.viewport = viewport || { width: 1280, height: 800 };
+    demo.mp4 = wantsMp4;
+    if (wantsMp4) demo.thumbnail = { at: 1.0 };
+  }
 
   const config = {
     outDir,
@@ -165,22 +267,7 @@ function buildQuickDemoConfig({
     disclaimer: false,
     // Keep the zero-config surface light: files, not the approval/handoff pack.
     handoff: false,
-    demos: [
-      {
-        name,
-        viewport: viewport || { width: 1280, height: 800 },
-        mp4: wantsMp4,
-        ...(wantsMp4 ? { thumbnail: { at: 1.0 } } : {}),
-        captions: [],
-        // Captions are rendered at runtime from the page's own title/headings,
-        // so static storyboard lint has nothing to check.
-        lint: false,
-        run: makeQuickDemoRun({
-          url: target.kind === 'url' ? target.url : null,
-          durationS: clampedDurationS,
-        }),
-      },
-    ],
+    demos: [demo],
   };
 
   if (target.kind === 'static') {
@@ -201,15 +288,22 @@ Arguments:
                     directory (served locally), or a single .html file
 
 Options:
+  --for <channel>   deliver a channel-ready file instead of a plain clip;
+                    repeatable or comma-separated. The channel owns viewport,
+                    codec, duration, and caption style, and the result is
+                    verified against its published limits. Needs ffmpeg.
+                    Channels: ${CHANNEL_IDS.join(', ')}
   --out <dir>       output directory (default: ${DEFAULT_OUT_DIR})
   --name <name>     clip name (default: ${DEFAULT_DEMO_NAME})
-  --duration <s>    clip length budget in seconds (default: ${DEFAULT_DURATION_S}, ${MIN_DURATION_S}-${MAX_DURATION_S})
+  --duration <s>    clip length budget in seconds (default: ${DEFAULT_DURATION_S},
+                    or the channel's trim length with --for; ${MIN_DURATION_S}-${MAX_DURATION_S})
   --no-mp4          keep only the webm (default: mp4 + thumbnail when ffmpeg exists)
   --json            machine-readable: stdout gets one JSON object
-                    {ok, outDir, produced[]}; logs go to stderr
+                    {ok, outDir, produced[], channels[]}; logs go to stderr
   -h, --help        show this help
 
-Output: <name>.webm, and with ffmpeg also <name>.mp4 + <name>-thumb.png.
+Output: <name>.webm, and with ffmpeg also <name>.mp4 + <name>-thumbnail.png.
+With --for, each channel adds <name>-<channel>.mp4 sized and trimmed for it.
 Captions come from the page's own title and headings.
 
 Exit codes: 0 ok · 1 runtime failure · 2 usage error
@@ -220,7 +314,8 @@ function parseDemoArgs(argv) {
     target: null,
     out: DEFAULT_OUT_DIR,
     name: DEFAULT_DEMO_NAME,
-    duration: DEFAULT_DURATION_S,
+    duration: null,
+    channels: [],
     mp4: 'auto',
     json: false,
     help: false,
@@ -241,6 +336,16 @@ function parseDemoArgs(argv) {
     else if (a === '--no-mp4') opts.mp4 = false;
     else if (a === '--out') { const v = takeValue(a, i); if (v != null) { opts.out = v; i++; } }
     else if (a === '--name') { const v = takeValue(a, i); if (v != null) { opts.name = v; i++; } }
+    else if (a === '--for') {
+      const v = takeValue(a, i);
+      if (v != null) {
+        i++;
+        const ids = v.split(',').map((id) => id.trim()).filter(Boolean);
+        const unknown = ids.filter((id) => !CHANNEL_IDS.includes(id));
+        if (unknown.length) opts.errors.push(`unknown channel for --for: ${unknown.join(', ')}. Known: ${CHANNEL_IDS.join(', ')}`);
+        else opts.channels.push(...ids);
+      }
+    }
     else if (a === '--duration') {
       const v = takeValue(a, i);
       if (v != null) {
@@ -254,13 +359,20 @@ function parseDemoArgs(argv) {
     else opts.errors.push(`unexpected argument: ${a}`);
   }
   if (!opts.help && !opts.target) opts.errors.push('demo target required (a URL, directory, or .html file)');
+  opts.channels = [...new Set(opts.channels)];
+  if (opts.channels.length && opts.mp4 === false) {
+    opts.errors.push('--no-mp4 cannot be combined with --for (a channel deliverable is the mp4)');
+  }
   return opts;
 }
 
 module.exports = {
+  CHANNEL_IDS,
   DEMO_USAGE,
   buildQuickDemoConfig,
   makeQuickDemoRun,
+  normalizeChannels,
   parseDemoArgs,
   resolveDemoTarget,
+  verifyChannelOutputs,
 };
