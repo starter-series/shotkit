@@ -66,14 +66,25 @@ async function runQuickDemo(argv, io, deps) {
         ? `✓ ${channel.target}: ${path.basename(channel.file)} ${channel.width}×${channel.height} ready`
         : `❌ ${channel.target}: ${channel.problems.join('; ')}`);
     }
+    // The run function records the script it executed. Report it so the clip's
+    // scene order and caption wording are inspectable without watching the file.
+    const script = config.demos[0] && config.demos[0].run && config.demos[0].run.script;
+    const scenes = script
+      ? script.beats.map((beat, index) => ({ n: index + 1, role: beat.role, caption: beat.text }))
+      : [];
+    for (const scene of scenes) report(`scene ${scene.n} (${scene.role}): ${scene.caption}`);
+    if (script && script.droppedHeadings) {
+      report(`normalized script: ${script.droppedHeadings} off-spec heading(s) dropped`);
+    }
+
     const failed = channels.filter((channel) => !channel.ok);
     if (failed.length) {
       const msg = `channel output not ready: ${failed.map((c) => `${c.target} (${c.problems.join('; ')})`).join(', ')}`;
-      if (opts.json) writeJson(stdout, { ok: false, error: msg, code: 1, outDir, produced, channels });
+      if (opts.json) writeJson(stdout, { ok: false, error: msg, code: 1, outDir, produced, channels, scenes });
       else stderr.write(`[shotkit] FAILED: ${msg}\n`);
       return 1;
     }
-    if (opts.json) writeJson(stdout, { ok: true, outDir, produced, channels });
+    if (opts.json) writeJson(stdout, { ok: true, outDir, produced, channels, scenes });
     return 0;
   } catch (err) {
     const msg = err && err.message ? err.message : String(err);

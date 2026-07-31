@@ -374,7 +374,57 @@ describe('runCli demo subcommand', () => {
       outDir: '/tmp/out',
       produced: ['/tmp/out/demo.webm'],
       channels: [],
+      // the stub never executes the demo, so no scenes were recorded
+      scenes: [],
     });
+  });
+
+  test('reports the recorded scene list so the clip spec is inspectable', async () => {
+    const stdout = streamBuffer();
+    const stderr = streamBuffer();
+    // Drive the synthesized run function the way the real capture engine does.
+    const capture = jest.fn(async (config) => {
+      const demo = config.demos[0];
+      const surveyed = {
+        title: 'Spec App',
+        scrollHeight: 4000,
+        viewportH: 800,
+        headings: [
+          { text: 'Menu', top: 100, visible: true },
+          { text: '1. Record.', top: 900, visible: true },
+          { text: 'Verify', top: 2200, visible: true },
+        ],
+      };
+      const page = {
+        async goto() {},
+        async waitForLoadState() {},
+        async evaluate() { return surveyed; },
+        async waitForTimeout() {},
+      };
+      await demo.run({
+        page,
+        baseUrl: null,
+        demo: { caption: async () => {}, wait: async () => {}, hide: async () => {} },
+      });
+      return { produced: ['/tmp/out/demo.webm'], outDir: '/tmp/out' };
+    });
+
+    const code = await runCli(['demo', 'http://localhost:3000', '--json', '--no-mp4'], {
+      stdout: stdout.stream,
+      stderr: stderr.stream,
+      processCwd: () => process.cwd(),
+    }, { capture });
+
+    expect(code).toBe(0);
+    const payload = JSON.parse(stdout.read());
+    expect(payload.scenes).toEqual([
+      { n: 1, role: 'open', caption: 'Spec App' },
+      { n: 2, role: 'body', caption: 'Record' },
+      { n: 3, role: 'body', caption: 'Verify' },
+      { n: 4, role: 'close', caption: 'Spec App' },
+    ]);
+    // the nav heading was dropped, and that is reported rather than silent
+    expect(stderr.read()).toContain('1 off-spec heading(s) dropped');
   });
 
   test('demo --help prints usage without requiring a target', async () => {
