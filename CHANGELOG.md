@@ -16,6 +16,20 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
   `channels[]`, so "ready to upload" is measured rather than assumed. The
   recording budget defaults to the channel's trim window instead of 20s, and
   `--for` requires ffmpeg (a channel deliverable *is* the H.264 file).
+- Zero-config clips now follow one scene spec instead of whatever the target's
+  markup happens to yield. `shotkit demo` rewrites the page's headings into a
+  fixed shape — open on the title, one beat per content heading in page order,
+  close back on the title, evenly paced — and normalizes each caption the way a
+  human editor would: nav furniture (`Menu`, `On this page`, `Skip to
+  content`, `목차`) is dropped, list numbering and trailing sentence
+  punctuation are stripped, case-insensitive repeats and title echoes are
+  merged, and long headings are cut on a word boundary at the same 70-char
+  ceiling the storyboard linter enforces. The planned script is verified before
+  recording starts, so an off-spec script fails the run instead of producing an
+  off-spec clip, and the recorded scenes are printed per run and returned in
+  `scenes[]` under `--json`. Beats are anchored to the headings themselves, so
+  a heading can no longer be skipped because a blind scroll step left it
+  outside the window.
 
 ### Fixed
 - Playwright's "browser not downloaded" failure is rewritten into an install

@@ -13,6 +13,12 @@ const fs = require('fs');
 const path = require('path');
 
 const { CHANNEL_PROFILES, resolveChannelProfile } = require('./channels');
+const {
+  CAPTION_MAX_CHARS,
+  MAX_BODY_BEATS,
+  planDemoScript,
+  verifyDemoScript,
+} = require('./demo-script');
 const { serveDirectory } = require('./serve');
 const { INSTALL_HINT, findFfmpeg, probeVideo } = require('./video');
 
@@ -25,7 +31,7 @@ const MAX_DURATION_S = 120;
 const INTRO_HOLD_MS = 2400;
 const OUTRO_HOLD_MS = 1600;
 const MIN_STEP_HOLD_MS = 1200;
-const MAX_SCROLL_STEPS = 8;
+
 
 function usageError(message) {
   const error = new Error(message);
@@ -116,17 +122,16 @@ function verifyChannelOutputs(produced, channels, demoName = DEFAULT_DEMO_NAME) 
   });
 }
 
-function trimText(value, max = 80) {
-  return String(value || '').replace(/\s+/g, ' ').trim().slice(0, max);
-}
-
 /**
- * The auto walkthrough: load → title caption → paced scroll with heading
- * captions → return to top. Runs inside the standard demo controller, so
- * captions land in the recorded clip and in caption QA metrics.
+ * The auto walkthrough: load → survey the page → run the planned script.
+ *
+ * The script itself (beat count, scene order, caption wording, pacing) is
+ * decided by planDemoScript so every zero-config clip has the same shape
+ * regardless of how the target is marked up. This function only executes it,
+ * inside the standard demo controller, so captions land in the recorded clip
+ * and in caption QA metrics.
  */
 function makeQuickDemoRun({ url, durationS }) {
-  const durationMs = durationS * 1000;
   async function quickDemoRun({ page, demo, baseUrl }) {
     const startUrl = url || baseUrl;
     if (!startUrl) throw new Error('quick demo: no target URL (static server did not provide baseUrl)');
@@ -157,38 +162,36 @@ function makeQuickDemoRun({ url, durationS }) {
       };
     });
 
-    const title = trimText(surveyed.title) || startUrl;
-    await demo.caption(title);
-    await demo.wait(INTRO_HOLD_MS);
+    const script = planDemoScript(
+      { ...surveyed, title: surveyed.title || startUrl },
+      {
+        durationS,
+        introHoldMs: INTRO_HOLD_MS,
+        outroHoldMs: OUTRO_HOLD_MS,
+        minStepHoldMs: MIN_STEP_HOLD_MS,
+        maxBodyBeats: MAX_BODY_BEATS,
+      },
+    );
+    // The plan is the contract for the clip; refuse to record a script that
+    // violates our own caption/scene spec rather than shipping an off-spec clip.
+    const check = verifyDemoScript(script);
+    if (!check.ok) {
+      throw new Error(`shotkit: generated demo script is off-spec: ${check.problems.join('; ')}`);
+    }
 
-    const scrollable = Math.max(0, surveyed.scrollHeight - surveyed.viewportH);
-    if (scrollable >= 40) {
-      const stride = Math.max(1, Math.round(surveyed.viewportH * 0.85));
-      const steps = Math.min(MAX_SCROLL_STEPS, Math.max(1, Math.ceil(scrollable / stride)));
-      const budget = Math.max(0, durationMs - INTRO_HOLD_MS - OUTRO_HOLD_MS);
-      const holdMs = Math.max(MIN_STEP_HOLD_MS, Math.floor(budget / steps));
-      let lastCaption = title;
-      for (let step = 1; step <= steps; step++) {
-        const top = Math.min(scrollable, Math.round((scrollable * step) / steps));
-        await page.evaluate((y) => window.scrollTo({ top: y, behavior: 'smooth' }), top);
-        const heading = surveyed.headings.find(
-          (h) => h.top >= top && h.top <= top + surveyed.viewportH * 0.8,
-        );
-        const captionText = heading ? trimText(heading.text) : null;
-        if (captionText && captionText !== lastCaption) {
-          await demo.caption(captionText);
-          lastCaption = captionText;
-        }
-        await demo.wait(holdMs);
+    for (const beat of script.beats) {
+      if (beat.role === 'close') {
+        await page.evaluate(() => window.scrollTo({ top: 0, behavior: 'smooth' }));
+      } else if (beat.scrollTop != null) {
+        await page.evaluate((y) => window.scrollTo({ top: y, behavior: 'smooth' }), beat.scrollTop);
       }
-      await page.evaluate(() => window.scrollTo({ top: 0, behavior: 'smooth' }));
-      await demo.caption(title);
-      await demo.wait(OUTRO_HOLD_MS);
-    } else {
-      // Single-screen app: hold the loaded state for the remaining budget.
-      await demo.wait(Math.max(OUTRO_HOLD_MS, durationMs - INTRO_HOLD_MS));
+      await demo.caption(beat.text);
+      await demo.wait(beat.holdMs);
     }
     await demo.hide();
+    // Hand the executed script back so the CLI can report what was recorded.
+    quickDemoRun.script = script;
+    return script;
   }
   // Expose the resolved budget so callers (and tests) can see which duration
   // won — the CLI default, an explicit --duration, or the channel's trim.
@@ -299,12 +302,17 @@ Options:
                     or the channel's trim length with --for; ${MIN_DURATION_S}-${MAX_DURATION_S})
   --no-mp4          keep only the webm (default: mp4 + thumbnail when ffmpeg exists)
   --json            machine-readable: stdout gets one JSON object
-                    {ok, outDir, produced[], channels[]}; logs go to stderr
+                    {ok, outDir, produced[], channels[], scenes[]}; logs go to stderr
   -h, --help        show this help
 
 Output: <name>.webm, and with ffmpeg also <name>.mp4 + <name>-thumbnail.png.
 With --for, each channel adds <name>-<channel>.mp4 sized and trimmed for it.
-Captions come from the page's own title and headings.
+
+Captions come from the page's own title and headings, rewritten to one scene
+spec: open on the title, one beat per content heading in page order, close back
+on the title. Nav headings are dropped, repeats are merged, and captions are
+capped at ${CAPTION_MAX_CHARS} chars on a word boundary, so two different apps
+produce clips with the same rhythm. The recorded scenes are printed per run.
 
 Exit codes: 0 ok · 1 runtime failure · 2 usage error
 `;
