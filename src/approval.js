@@ -4,9 +4,9 @@ const path = require('path');
 const { writeJson } = require('./handoff-files');
 
 const APPROVAL_VERSION = 1;
-const APPROVAL_KIND = 'shotkit.approval';
-const APPROVAL_SCHEMA_ID = 'urn:starter-series:shotkit:schema:approval:v1';
-const APPROVAL_FILE = 'shotkit-approval.json';
+const APPROVAL_KIND = 'take-a-repo.approval';
+const APPROVAL_SCHEMA_ID = 'urn:starter-series:take-a-repo:schema:approval:v1';
+const APPROVAL_FILE = 'take-a-repo-approval.json';
 const DECISION_STATUSES = new Set(['approved', 'changes-requested']);
 const UNSAFE_KEYS = new Set(['__proto__', 'prototype', 'constructor']);
 
@@ -24,30 +24,30 @@ function isObject(value) {
 }
 
 function nonEmptyString(value, name) {
-  if (typeof value !== 'string' || !value.trim()) throw new Error(`shotkit: ${name} must be a non-empty string`);
+  if (typeof value !== 'string' || !value.trim()) throw new Error(`take-a-repo: ${name} must be a non-empty string`);
   return value.trim();
 }
 
 function approvalKey(value, name) {
   const key = nonEmptyString(value, name);
-  if (UNSAFE_KEYS.has(key)) throw new Error(`shotkit: ${name} uses a reserved key`);
+  if (UNSAFE_KEYS.has(key)) throw new Error(`take-a-repo: ${name} uses a reserved key`);
   return key;
 }
 
 function normalizeDecision(decision, name = 'approval decision') {
-  if (!isObject(decision)) throw new Error(`shotkit: ${name} must be an object`);
+  if (!isObject(decision)) throw new Error(`take-a-repo: ${name} must be an object`);
   if (!DECISION_STATUSES.has(decision.status)) {
-    throw new Error(`shotkit: ${name}.status must be "approved" or "changes-requested"`);
+    throw new Error(`take-a-repo: ${name}.status must be "approved" or "changes-requested"`);
   }
   const assetDigest = nonEmptyString(decision.assetDigest, `${name}.assetDigest`);
-  if (!/^[a-f0-9]{64}$/i.test(assetDigest)) throw new Error(`shotkit: ${name}.assetDigest must be a SHA-256 digest`);
+  if (!/^[a-f0-9]{64}$/i.test(assetDigest)) throw new Error(`take-a-repo: ${name}.assetDigest must be a SHA-256 digest`);
   const decidedAt = nonEmptyString(decision.decidedAt, `${name}.decidedAt`);
-  if (Number.isNaN(Date.parse(decidedAt))) throw new Error(`shotkit: ${name}.decidedAt must be an ISO date-time`);
+  if (Number.isNaN(Date.parse(decidedAt))) throw new Error(`take-a-repo: ${name}.decidedAt must be an ISO date-time`);
   const note = decision.note == null ? '' : String(decision.note).trim();
   if (decision.status === 'changes-requested' && !note) {
-    throw new Error(`shotkit: ${name}.note is required when changes are requested`);
+    throw new Error(`take-a-repo: ${name}.note is required when changes are requested`);
   }
-  if (note.length > 2000) throw new Error(`shotkit: ${name}.note must be at most 2000 characters`);
+  if (note.length > 2000) throw new Error(`take-a-repo: ${name}.note must be at most 2000 characters`);
   return {
     status: decision.status,
     assetDigest: assetDigest.toLowerCase(),
@@ -58,15 +58,15 @@ function normalizeDecision(decision, name = 'approval decision') {
 }
 
 function normalizeApprovalDocument(document) {
-  if (!isObject(document)) throw new Error('shotkit: approval document must be an object');
-  if (document.$schema !== APPROVAL_SCHEMA_ID) throw new Error(`shotkit: approval $schema must be ${APPROVAL_SCHEMA_ID}`);
-  if (document.version !== APPROVAL_VERSION) throw new Error(`shotkit: approval version must be ${APPROVAL_VERSION}`);
-  if (document.kind !== APPROVAL_KIND) throw new Error(`shotkit: approval kind must be ${APPROVAL_KIND}`);
-  if (!isObject(document.decisions)) throw new Error('shotkit: approval decisions must be an object');
+  if (!isObject(document)) throw new Error('take-a-repo: approval document must be an object');
+  if (document.$schema !== APPROVAL_SCHEMA_ID) throw new Error(`take-a-repo: approval $schema must be ${APPROVAL_SCHEMA_ID}`);
+  if (document.version !== APPROVAL_VERSION) throw new Error(`take-a-repo: approval version must be ${APPROVAL_VERSION}`);
+  if (document.kind !== APPROVAL_KIND) throw new Error(`take-a-repo: approval kind must be ${APPROVAL_KIND}`);
+  if (!isObject(document.decisions)) throw new Error('take-a-repo: approval decisions must be an object');
   const decisions = {};
   for (const [story, targets] of Object.entries(document.decisions)) {
     const normalizedStory = approvalKey(story, 'approval story key');
-    if (!isObject(targets)) throw new Error(`shotkit: approval decisions.${story} must be an object`);
+    if (!isObject(targets)) throw new Error(`take-a-repo: approval decisions.${story} must be an object`);
     decisions[normalizedStory] = {};
     for (const [target, decision] of Object.entries(targets)) {
       const normalizedTarget = approvalKey(target, `approval decisions.${story} target key`);
@@ -89,13 +89,13 @@ function loadApproval(outDir) {
   try {
     return { path: filePath, document: normalizeApprovalDocument(JSON.parse(fs.readFileSync(filePath, 'utf8'))) };
   } catch (error) {
-    throw new Error(`shotkit: could not load approval file: ${error.message}`, { cause: error });
+    throw new Error(`take-a-repo: could not load approval file: ${error.message}`, { cause: error });
   }
 }
 
 function updateApprovalDecisions(outDir, updates, now = () => new Date()) {
   if (!Array.isArray(updates) || !updates.length) {
-    throw new Error('shotkit: approval updates must be a non-empty array');
+    throw new Error('take-a-repo: approval updates must be a non-empty array');
   }
   const decidedAt = now().toISOString();
   const normalizedUpdates = updates.map((update, index) => ({

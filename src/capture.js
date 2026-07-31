@@ -1,5 +1,5 @@
 /*
- * shotkit — the capture runner (programmatic API).
+ * take-a-repo — the capture runner (programmatic API).
  *
  * `capture(config, opts)` builds the project (if configured), loads the built
  * extension into Playwright, drives each scene into a money-shot state, and
@@ -8,7 +8,7 @@
  *   - <promoTile>.png  one promo tile per promoTiles entry
  *   - <demo>.webm      a captionable demo screencast (unless opts.noVideo)
  *   - <demo>.mp4       optional H.264 version for SNS
- *   - storyboard.json / captions.json / shotkit-manifest.json
+ *   - storyboard.json / captions.json / take-a-repo-manifest.json
  *   - description.md   listing copy extracted from STORE_LISTING.md or product.manifest.json
  *   - privacy-disclosure.md worksheet extracted from product.manifest.json
  *
@@ -16,7 +16,7 @@
  * a clean run doubles as a real-bundle smoke test: a screenshot only appears if
  * that feature rendered from the shipped code.
  *
- * The CLI (bin/shotkit.js), --json agent contract, and capture skill are thin
+ * The CLI (bin/take-a-repo.js), --json agent contract, and capture skill are thin
  * wrappers over this function.
  */
 
@@ -65,7 +65,7 @@ function normalizePreparedExtension(result) {
 }
 
 /**
- * @param {object} config  the project's shotkit config object (scenes, etc.)
+ * @param {object} config  the project's take-a-repo config object (scenes, etc.)
  * @param {object} [opts]
  * @param {string[]} [opts.scenes]   only capture these names (scenes/promoTiles/demo/demos/"description"/"privacy")
  * @param {string[]} [opts.targets]  only capture these configured channel targets
@@ -80,7 +80,7 @@ function normalizePreparedExtension(result) {
  */
 async function capture(config, opts = {}) {
   const cwd = opts.cwd || process.cwd();
-  const log = opts.log || ((msg) => console.log(`[shotkit] ${msg}`));
+  const log = opts.log || ((msg) => console.log(`[take-a-repo] ${msg}`));
   const calibration = loadCalibration(config, cwd);
   const demoConfigs = applyCalibrationProfiles(normalizeDemoConfigs(config), calibration.document);
   const plan = createCapturePlan({ config, opts, cwd, demoConfigs });
@@ -262,7 +262,7 @@ async function capture(config, opts = {}) {
       for (const warning of warnings) {
         log(`⚠️  ${demoConfig.name}: ${warning.message}${warning.fix ? `; ${warning.fix}` : ''}`);
       }
-      const videoDir = fs.mkdtempSync(path.join(os.tmpdir(), 'shotkit-video-'));
+      const videoDir = fs.mkdtempSync(path.join(os.tmpdir(), 'take-a-repo-video-'));
       tempDirs.push(videoDir);
       const demoCtx = await launchBrowser({ extensionDir, viewport, recordVideoDir: videoDir, recordVideoSize: viewport });
       const resources = { setup: normalizeSetup(null), page: null };
@@ -346,7 +346,7 @@ async function capture(config, opts = {}) {
         },
       });
       produced.push(...handoffPaths);
-      manifest = path.join(outDir, 'shotkit-manifest.json');
+      manifest = path.join(outDir, 'take-a-repo-manifest.json');
       const handoff = JSON.parse(fs.readFileSync(manifest, 'utf8'));
       machineStatus = handoff.handoff && handoff.handoff.automation
         ? handoff.handoff.automation.status

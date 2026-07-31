@@ -1,7 +1,7 @@
 /*
- * shotkit quick demo — zero-config proof clip for any web app.
+ * take-a-repo quick demo — zero-config proof clip for any web app.
  *
- * `shotkit demo <url|dir|file.html>` needs no shotkit.config.js: it
+ * `take-a-repo demo <url|dir|file.html>` needs no take-a-repo.config.js: it
  * synthesizes a one-demo config that loads the target, captions the clip with
  * the page's own title and headings, and walks the page with a paced scroll,
  * so the recording proves the app actually renders from a clean run. Video
@@ -24,7 +24,7 @@ const { INSTALL_HINT, findFfmpeg, probeVideo } = require('./video');
 
 const CHANNEL_IDS = Object.keys(CHANNEL_PROFILES);
 const DEFAULT_DEMO_NAME = 'demo';
-const DEFAULT_OUT_DIR = 'shotkit-demo';
+const DEFAULT_OUT_DIR = 'take-a-repo-demo';
 const DEFAULT_DURATION_S = 20;
 const MIN_DURATION_S = 5;
 const MAX_DURATION_S = 120;
@@ -40,7 +40,7 @@ function usageError(message) {
 }
 
 /**
- * Classify what the user pointed shotkit at.
+ * Classify what the user pointed take-a-repo at.
  * @returns {{kind:'url',url:string}|{kind:'static',dir:string,fallback:string}}
  */
 function resolveDemoTarget(input, cwd = process.cwd()) {
@@ -176,7 +176,7 @@ function makeQuickDemoRun({ url, durationS }) {
     // violates our own caption/scene spec rather than shipping an off-spec clip.
     const check = verifyDemoScript(script);
     if (!check.ok) {
-      throw new Error(`shotkit: generated demo script is off-spec: ${check.problems.join('; ')}`);
+      throw new Error(`take-a-repo: generated demo script is off-spec: ${check.problems.join('; ')}`);
     }
 
     for (const beat of script.beats) {
@@ -205,7 +205,7 @@ function makeQuickDemoRun({ url, durationS }) {
  * @param {object} opts
  * @param {{kind:string,url?:string,dir?:string,fallback?:string}} opts.target  from resolveDemoTarget()
  * @param {string} [opts.name]        demo/asset name (default "demo")
- * @param {string} [opts.outDir]      output dir (default "shotkit-demo")
+ * @param {string} [opts.outDir]      output dir (default "take-a-repo-demo")
  * @param {number} [opts.durationS]   clip length budget in seconds (default 20,
  *                                    or the channel's trim length with channels)
  * @param {boolean|'auto'} [opts.mp4] 'auto' = mp4+thumbnail when ffmpeg is found;
@@ -282,9 +282,9 @@ function buildQuickDemoConfig({
   return config;
 }
 
-const DEMO_USAGE = `shotkit demo — record a captioned proof clip of any web app, no config needed
+const DEMO_USAGE = `take-a-repo demo — record a captioned proof clip of any web app, no config needed
 
-Usage: shotkit demo <url|dir|file.html> [options]
+Usage: take-a-repo demo <url|dir|file.html> [options]
 
 Arguments:
   target            what to record: an http(s) URL (dev server), a static

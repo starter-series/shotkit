@@ -53,12 +53,12 @@ function targetPublishPlan({ demo, lint, assets, skipped }) {
   if (!mp4) {
     fail('missing-publish-mp4', 'final H.264 MP4 is missing', 'rerun the target; the channel profile enables MP4 automatically');
   } else if (mp4.state === 'modified') {
-    fail('modified-publish-mp4', 'the retained MP4 changed outside shotkit', 'recapture this target from the story script');
+    fail('modified-publish-mp4', 'the retained MP4 changed outside take-a-repo', 'recapture this target from the story script');
   } else {
     pass('publish-mp4-present', `final MP4 is ${mp4.state || 'available'}`);
     const media = mp4.media;
     if (!media || !media.ok) {
-      fail('media-probe-failed', media && media.error ? media.error : 'final MP4 was not probed', 'install ffprobe (bundled with ffmpeg) or set SHOTKIT_FFPROBE, then rerun');
+      fail('media-probe-failed', media && media.error ? media.error : 'final MP4 was not probed', 'install ffprobe (bundled with ffmpeg) or set TAKE_A_REPO_FFPROBE, then rerun');
     } else {
       if (media.codec === 'h264') pass('codec-h264', 'video codec is H.264');
       else fail('wrong-video-codec', `video codec is ${media.codec || 'unknown'}`, 'rerun with the channel profile H.264 encoder');
@@ -102,7 +102,7 @@ function targetPublishPlan({ demo, lint, assets, skipped }) {
   if (!thumbnail) {
     fail('missing-publish-thumbnail', 'poster/QA thumbnail is missing', 'rerun; the channel profile enables a thumbnail automatically');
   } else if (thumbnail.state === 'modified') {
-    fail('modified-publish-thumbnail', 'the retained thumbnail changed outside shotkit', 'regenerate the target thumbnail');
+    fail('modified-publish-thumbnail', 'the retained thumbnail changed outside take-a-repo', 'regenerate the target thumbnail');
   } else {
     pass('publish-thumbnail-present', 'poster/QA thumbnail is available');
     if (!thumbnail.visual || !thumbnail.visual.ok) {

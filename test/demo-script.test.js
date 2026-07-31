@@ -69,7 +69,7 @@ describe('isBoilerplateHeading', () => {
 
 describe('planDemoScript', () => {
   const longPage = {
-    title: 'Shotkit',
+    title: 'take-a-repo',
     scrollHeight: 4000,
     viewportH: 800,
     headings: [
@@ -81,10 +81,10 @@ describe('planDemoScript', () => {
   test('opens on the title, walks headings in document order, closes on the title', () => {
     const script = plan(longPage);
     expect(script.beats.map((beat) => [beat.role, beat.text])).toEqual([
-      ['open', 'Shotkit'],
+      ['open', 'take-a-repo'],
       ['body', 'Features'],
       ['body', 'Pricing'],
-      ['close', 'Shotkit'],
+      ['close', 'take-a-repo'],
     ]);
     // DOM query order was Pricing-first; the script re-sorts by position.
     expect(script.beats[1].scrollTop).toBeLessThan(script.beats[2].scrollTop);
@@ -108,14 +108,14 @@ describe('planDemoScript', () => {
 
   test('drops boilerplate headings, title echoes, and case-insensitive repeats', () => {
     const script = plan({
-      title: 'Shotkit',
+      title: 'take-a-repo',
       scrollHeight: 4000,
       viewportH: 800,
       headings: [
         { text: 'On this page', top: 100 },
         { text: 'Features', top: 900 },
         { text: 'FEATURES', top: 1500 },
-        { text: 'shotkit', top: 1800 },
+        { text: 'take-a-repo', top: 1800 },
         { text: 'Pricing.', top: 2200 },
       ],
     });

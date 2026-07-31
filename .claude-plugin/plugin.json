@@ -1,13 +1,13 @@
 {
-  "name": "shotkit",
-  "version": "1.3.0",
-  "description": "Capture Chrome Web Store + social promo assets (screenshots, promo tiles, demo screencast, listing copy) from a built browser extension — bundles the capture skill that drives the shotkit CLI.",
+  "name": "take-a-repo",
+  "version": "1.5.0",
+  "description": "Capture Chrome Web Store + social promo assets (screenshots, promo tiles, demo screencast, listing copy) from a built browser extension — bundles the capture skill that drives the take-a-repo CLI.",
   "author": {
     "name": "heznpc",
     "url": "https://github.com/heznpc"
   },
-  "homepage": "https://github.com/starter-series/shotkit",
-  "repository": "https://github.com/starter-series/shotkit",
+  "homepage": "https://github.com/starter-series/take-a-repo",
+  "repository": "https://github.com/starter-series/take-a-repo",
   "license": "MIT",
   "keywords": [
     "playwright",

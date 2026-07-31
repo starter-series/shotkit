@@ -83,7 +83,7 @@ function calibrationApprovalOptions(calibrationDocument) {
 }
 
 function syncApprovalManifest(outDir, approvalDocument, calibrationDocument) {
-  const manifestPath = path.join(outDir, 'shotkit-manifest.json');
+  const manifestPath = path.join(outDir, 'take-a-repo-manifest.json');
   const manifest = readJson(manifestPath);
   if (!manifest || !manifest.handoff || !manifest.handoff.automation) return null;
   if (calibrationDocument) applyCalibrationHashes(manifest, calibrationDocument);
@@ -104,7 +104,7 @@ function createStateReader({ cwd, config }) {
     const approval = loadApproval(outDir);
     const demos = applyCalibrationProfiles(normalizeDemoConfigs(config), calibration.document)
       .filter((demo) => demo.target);
-    const manifest = readJson(path.join(outDir, 'shotkit-manifest.json'), {});
+    const manifest = readJson(path.join(outDir, 'take-a-repo-manifest.json'), {});
     if (calibrationEnabled) applyCalibrationHashes(manifest, calibration.document);
     const storyboard = readJson(path.join(outDir, 'storyboard.json'), {});
     const captions = readJson(path.join(outDir, 'captions.json'), {});

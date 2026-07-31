@@ -6,9 +6,12 @@ import { spawnSync } from "node:child_process";
 const root = new URL("..", import.meta.url);
 const pkg = JSON.parse(readFileSync(new URL("package.json", root), "utf8"));
 
-assert.equal(pkg.name, "demoshot", "npm package name must stay unscoped (npm blocks 'shotkit' as too similar to shot-kit)");
-assert.equal(pkg.bin?.demoshot, "bin/shotkit.js", "demoshot bin must point at bin/shotkit.js");
-assert.equal(pkg.bin?.shotkit, "bin/shotkit.js", "shotkit bin alias must point at bin/shotkit.js");
+assert.equal(pkg.name, "take-a-repo", "npm package name must be take-a-repo");
+assert.deepEqual(
+  pkg.bin,
+  { "take-a-repo": "bin/take-a-repo.js" },
+  "take-a-repo must be the only published CLI",
+);
 assert.ok(Array.isArray(pkg.files), "package files allowlist is required");
 
 const requiredFiles = [
@@ -17,7 +20,7 @@ const requiredFiles = [
   "README.ko.md",
   "LICENSE",
   "src/index.js",
-  "bin/shotkit.js",
+  "bin/take-a-repo.js",
   "calibrator/index.html",
   "calibrator/styles.css",
   "calibrator/app.js",
@@ -30,7 +33,7 @@ const requiredFiles = [
   "skills/capture/SKILL.md",
   "skills/demo/SKILL.md",
   "docs/handoff-conventions.md",
-  "schemas/shotkit-manifest.schema.json",
+  "schemas/take-a-repo-manifest.schema.json",
   "schemas/storyboard.schema.json",
   "schemas/captions.schema.json",
   "schemas/calibration.schema.json",
@@ -52,7 +55,7 @@ if (packed.status !== 0) {
 }
 
 const [manifest] = JSON.parse(packed.stdout);
-assert.equal(manifest.name, "demoshot", "pack output must use the unscoped demoshot name");
+assert.equal(manifest.name, "take-a-repo", "pack output must use the unscoped take-a-repo name");
 const packedPaths = new Set(manifest.files.map((file) => file.path));
 for (const relpath of requiredFiles) {
   assert.ok(packedPaths.has(relpath), `npm pack output is missing ${relpath}`);
